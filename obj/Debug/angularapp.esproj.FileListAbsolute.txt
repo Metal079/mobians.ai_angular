@@ -1,0 +1,2 @@
+C:\Users\metal\source\repos\mobians_ai_ASPNET\angularapp\obj\Debug\angularapp.esproj.SuggestedBindingRedirects.cache
+C:\Users\metal\source\repos\mobians_ai_ASPNET\angularapp\obj\Debug\angularapp.esproj.CoreCompileInputs.cache
