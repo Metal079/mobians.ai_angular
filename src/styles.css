@@ -1,1 +1,14 @@
 /* You can add global styles to this file, and also import other style files */
+body {
+    background-color: #2fa5e9;
+  }
+
+  ::selection {
+    background-color: #fcbe14; /* Change this color to your desired selection background color */
+    color: #000; /* Change this color to your desired selected text color */
+  }
+
+  ::-moz-selection {
+    background-color: #fcbe14; /* Change this color to your desired selection background color */
+    color: #000; /* Change this color to your desired selected text color */
+  }

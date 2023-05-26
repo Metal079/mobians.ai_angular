@@ -1,0 +1,27 @@
+/* Includes prompt input box, generate button and advanced options */
+.input-button-container {
+  width: 5in;
+  padding-left: 10px;
+}
+
+/* Includes prompt input box and generate button */
+#prompt-input-box {
+  padding-left: 10px;
+  padding-bottom: 10px;
+}
+
+/* The input box itself where text is */
+#prompt-input {
+  height: 5vh;
+}
+
+#advanced-options {
+  padding-left: 10px;
+  z-index: 1;
+  width: 5in;
+}
+
+.card {
+  background-color: #3880ec;
+  border: 0;
+}

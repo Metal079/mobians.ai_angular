@@ -1,0 +1,71 @@
+.content-container {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-top: 3%;
+}
+
+.small-image {
+  width: 100%;
+  height: 100%;
+}
+
+/* Grid where images are */
+.image-grid {
+  /* Centers instructions in image grid */
+  box-sizing: border-box;
+  border: 1px solid #3880ec;
+  border-radius: 10px;
+  background-color: #3880ec;
+  position: relative;
+
+  /* Keeps image edges from going outside image-grid */
+  overflow: hidden;
+
+  /* Stops gap between images */
+  border: 0;
+}
+
+#loading-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  text-align: center;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+}
+
+#queue-position {
+  opacity: 70%;
+}
+
+#instructions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  text-align: center;
+  z-index: 3;
+  opacity: 70%;
+  transform: translate(
+    -50%,
+    -50%
+  ); /* This is to perfectly center the instructions */
+}
+
+.expanded-image {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  z-index: 10;
+  object-fit: cover;
+}
+
+.image-wrapper {
+  position: relative;
+  width: 50%;
+  height: 50%;
+  display: inline-block;
+  background-color: blueviolet;
+}
+
+/* .image-wrapper:hover .middle-button {
+    opacity: 0.7;
+  } */

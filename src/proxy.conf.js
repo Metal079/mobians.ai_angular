@@ -1,7 +1,7 @@
 const PROXY_CONFIG = [
   {
     context: [
-      "/weatherforecast",
+      "/weatherforecast", "/StableDiffusion/txt2img"
     ],
     target: "https://localhost:7246",
     secure: false

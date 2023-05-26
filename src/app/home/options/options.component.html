@@ -1,1 +1,197 @@
-<p>options works!</p>
+<!-- Prompt input box and advanced options button -->
+<div class="input-button-container">
+  <div id="prompt-input-box" class="input-group d-flex align-items-stretch">
+    <textarea
+      [(ngModel)]="prompt"
+      class="form-control resizable-textarea"
+      placeholder="Enter Prompt"
+      aria-label="Enter Prompt"
+      aria-describedby="generate-button"
+      id="prompt-input"
+      rows="3"
+    ></textarea>
+    <button
+      class="btn btn-primary d-flex align-items-center"
+      type="button"
+      id="generate-button"
+      (click)="txt2img()"
+    >
+      Generate!
+    </button>
+  </div>
+
+  <!-- Denoise strength -->
+  <div *ngIf="showStrength" id="denoise-strength">
+    <label for="custom-denoise" class="form-label"
+      >Strength: <span id="denoise-value">0.7</span>
+      <span
+        class="ms-1 text-primary"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        title="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
+        style="
+          background-color: rgba(255, 255, 255, 0.8);
+          padding: 2px 4px;
+          border-radius: 50%;
+          cursor: pointer;
+        "
+      >
+        ?
+      </span>
+    </label>
+    <input
+      type="range"
+      class="form-range"
+      min="0.1"
+      max="0.95"
+      value="0.7"
+      step="0.05"
+      id="custom-denoise"
+    />
+  </div>
+
+  <!-- inpaint switch -->
+  <div
+    *ngIf="showInpainting"
+    class="form-check form-switch"
+    id="enable-inpainting"
+  >
+    <input
+      class="form-check-input"
+      type="checkbox"
+      id="flexSwitchCheckDefault"
+      onclick="enableInpaintCanvas()"
+    />
+    <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
+    <span
+      class="ms-1 text-primary"
+      data-bs-toggle="tooltip"
+      data-bs-placement="top"
+      title="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
+      style="
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 2px 4px;
+        border-radius: 50%;
+        cursor: pointer;
+      "
+    >
+      ?
+    </span>
+  </div>
+
+  <!-- Advanced options -->
+  <div id="advanced-options">
+    <button
+      class="btn btn-primary dropdown-toggle"
+      data-bs-toggle="collapse"
+      href="#collapseExample"
+      role="button"
+      aria-expanded="false"
+      aria-controls="collapseExample"
+    >
+      Options
+    </button>
+
+    <!-- Re-generate with reference button -->
+    <button
+      class="btn btn-success"
+      type="button"
+      onclick="redoWithSameReference()"
+      id="redo-with-reference-button"
+      style="display: none"
+    >
+      Regenerate W/Prev Reference
+    </button>
+
+    <div class="collapse w-100" id="collapseExample">
+      <label for="floatingSelect">Image aspect-ratio</label>
+      <select class="form-select" id="floatingSelect" aria-label="Floating label select example" (change)="changeAspectRatio($event)">
+        <option value="square">Square</option>
+        <option value="landscape">Landscape</option>
+        <option value="portrait">Portrait</option>
+      </select>
+
+      <!-- Negative Prompt -->
+      <div class="mb-3">
+        <label for="negative-prompt-input" class="form-label"
+          >Negative Prompt
+          <span
+            class="ms-1 text-primary"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
+            title="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
+            style="
+              background-color: rgba(255, 255, 255, 0.8);
+              padding: 2px 4px;
+              border-radius: 50%;
+              cursor: pointer;
+            "
+          >
+            ?
+          </span>
+        </label>
+        <textarea class="form-control" id="negative-prompt-input" rows="3">
+nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background</textarea
+        >
+      </div>
+
+      <!-- Seed -->
+      <div class="mb-3">
+        <label for="seedInput" class="form-label"
+          >Seed
+          <span
+            class="ms-1 text-primary"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
+            title="Each generated image has a specific seed, if that seed is entered with the same prompt,
+            you can regenerate the same or very similar images. By default a random seed is used with each generation."
+            style="
+              background-color: rgba(255, 255, 255, 0.8);
+              padding: 2px 4px;
+              border-radius: 50%;
+              cursor: pointer;
+            "
+          >
+            ?
+          </span>
+        </label>
+        <input
+          type="text"
+          class="form-control"
+          id="seedInput"
+          placeholder="-1"
+          [(ngModel)]="seed"
+        />
+      </div>
+
+      <!-- CFG -->
+      <label for="customRange1" class="form-label"
+        >CFG: <span id="cfg-value">{{ cfg }}</span>
+        <span
+          class="ms-1 text-primary"
+          data-bs-toggle="tooltip"
+          data-bs-placement="top"
+          title="CFG refers to how closely a image tries follow to a prompt, too high values may fry
+            images, while too low of a value will result in an unrelated photo being generated. By default 7 is used but this can be experimented with."
+          style="
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 2px 4px;
+            border-radius: 50%;
+            cursor: pointer;
+          "
+        >
+          ?
+        </span>
+      </label>
+      <input
+        type="range"
+        class="form-range"
+        min="2"
+        max="15"
+        value="7"
+        id="customRange1"
+        [(ngModel)]="cfg"
+      />
+    </div>
+  </div>
+</div>

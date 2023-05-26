@@ -1,1 +1,39 @@
-<p>image-grid works!</p>
+<div class="image-grid" ondragover="allowDrop(event)" [style.width.px]="aspectRatio.width" [style.height.px]="aspectRatio.height">
+    <!-- Prompt instructions -->
+    <div *ngIf="showInstructions" id="instructions">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a
+      reference!</div>
+
+    <!-- Loading container -->
+    <div *ngIf="showLoading" id="loading-container">
+      <!-- Loading bar -->
+      <div id="loading-bar">
+          <div class="spinner-border text-primary" role="status"></div>
+        <!-- Loading text -->
+        <div id="queue-position">
+          Generating images...
+        </div>
+      </div>
+    </div>
+
+  <!-- Images -->
+  <div class="image-wrapper" *ngIf="images.length > 0 && showImages[0]" id="wrapper1">
+    <img [src]="images[1]" class="small-image" alt="Image goes here">
+    <!-- <button class="btn btn-primary" type="button" id="reference-top-left"
+      onclick="setReferenceImage('img-top-left')">Reference</button> -->
+  </div>
+  <div class="image-wrapper" *ngIf="images.length > 1 && showImages[1]" id="wrapper2">
+    <img [src]="images[2]" class="small-image" alt="Image goes here">
+    <!-- <button class="btn btn-primary middle-button reference-buttons" type="button" id="reference-top-right"
+      onclick="setReferenceImage('img-top-right')">Reference</button> -->
+  </div>
+  <div class="image-wrapper" *ngIf="images.length > 2 && showImages[2]" id="wrapper3">
+    <img [src]="images[3]" class="small-image" alt="Image goes here">
+    <!-- <button class="btn btn-primary middle-button" type="button" id="reference-bottom-left"
+      onclick="setReferenceImage('img-bottom-left')">Reference</button> -->
+  </div>
+  <div class="image-wrapper"  *ngIf="images.length > 3 && showImages[3]" id="wrapper4">
+    <img [src]="images[4]" class="small-image" alt="Image goes here">
+    <!-- <button class="btn btn-primary middle-button" type="button" id="reference-bottom-right"
+      onclick="setReferenceImage('img-bottom-right')">Reference</button> -->
+  </div>
+</div>
