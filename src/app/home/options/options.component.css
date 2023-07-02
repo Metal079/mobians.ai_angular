@@ -25,3 +25,51 @@
   background-color: #3880ec;
   border: 0;
 }
+
+
+@media (max-width: 480px) {
+  .input-button-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100vw;
+    flex-grow: 1;
+    padding-left: 0;
+    padding-bottom: 5%;
+    height: auto;
+  }
+
+  #prompt-input-box {
+    padding-bottom: 5%;
+    padding-left: 0;
+  }
+
+  .resizable-textarea {
+    min-height: 100px;
+    min-width: 100%;
+  }
+
+  .resizable-textarea::-webkit-resizer {
+    background-color: rgba(0, 0, 0, 0.5);
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+  }
+
+  #prompt-input {
+    height: 6vh;
+  }
+
+  #denoise-strength {
+    padding: 2vw;
+    width: 100vw;
+  }
+
+  #enable-inpainting {
+    display: none;
+  }
+
+  #advanced-options {
+    width: 97vw;
+  }
+}

@@ -66,6 +66,41 @@
   background-color: blueviolet;
 }
 
+.reference-image {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: inline-block;
+  background-color: rgb(43, 226, 58);
+  z-index: 2;
+}
+
+img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+
 /* .image-wrapper:hover .middle-button {
     opacity: 0.7;
   } */
+
+@media (max-width: 480px) {
+  .content-container {
+    flex-direction: column;
+    padding: 0%;
+  }
+
+  .image-grid {
+    width: 100vw;
+    height: 100vw;
+    max-width: max-content;
+    max-height: max-content;
+    aspect-ratio: 1 / 1;
+    margin-left: 0%;
+    margin-right: 0%;
+    border: 0;
+  }
+
+}

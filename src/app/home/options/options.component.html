@@ -2,7 +2,7 @@
 <div class="input-button-container">
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch">
     <textarea
-      [(ngModel)]="prompt"
+      [(ngModel)]="generationRequest.prompt"
       class="form-control resizable-textarea"
       placeholder="Enter Prompt"
       aria-label="Enter Prompt"
@@ -14,7 +14,7 @@
       class="btn btn-primary d-flex align-items-center"
       type="button"
       id="generate-button"
-      (click)="txt2img()"
+      (click)="generateImages()"
     >
       Generate!
     </button>
@@ -105,7 +105,7 @@
 
     <div class="collapse w-100" id="collapseExample">
       <label for="floatingSelect">Image aspect-ratio</label>
-      <select class="form-select" id="floatingSelect" aria-label="Floating label select example" (change)="changeAspectRatio($event)">
+      <select class="form-select" id="floatingSelect" aria-label="Floating label select example" (change)="changeAspectRatioSelector($event)">
         <option value="square">Square</option>
         <option value="landscape">Landscape</option>
         <option value="portrait">Portrait</option>
@@ -160,13 +160,13 @@ nsfw, worst quality, low quality, watermark, signature, simple background, bad a
           class="form-control"
           id="seedInput"
           placeholder="-1"
-          [(ngModel)]="seed"
+          [(ngModel)]="generationRequest.seed"
         />
       </div>
 
       <!-- CFG -->
       <label for="customRange1" class="form-label"
-        >CFG: <span id="cfg-value">{{ cfg }}</span>
+        >CFG: <span id="cfg-value">{{ generationRequest.guidance_scale }}</span>
         <span
           class="ms-1 text-primary"
           data-bs-toggle="tooltip"
@@ -190,7 +190,7 @@ nsfw, worst quality, low quality, watermark, signature, simple background, bad a
         max="15"
         value="7"
         id="customRange1"
-        [(ngModel)]="cfg"
+        [(ngModel)]="generationRequest.guidance_scale"
       />
     </div>
   </div>

@@ -6,13 +6,25 @@ import { Observable } from 'rxjs';
   providedIn: 'root',
 })
 export class StableDiffusionService {
-  private apiBaseUrl = 'https://localhost:7246';  // replace with your base API url
+  //private apiBaseUrl = 'http://76.157.184.213:8000 ';  // replace with your base API url
+  private apiBaseUrl = 'http://127.0.0.1:8080';
+
 
   constructor(private http: HttpClient) {}
 
-  txt2Img(data: any): Observable<any> {
-    const url = `${this.apiBaseUrl}/StableDiffusion/txt2img`;
-    return this.http.post(url, data);
+  submitJob(data: any): Observable<any> {
+    const url = `${this.apiBaseUrl}/submit_job/`;  // note the trailing slash
+    const headers = { 'content-type': 'application/json' };
+    const body = JSON.stringify(data);
+    return this.http.post(url, body, {'headers':headers});
   }
+
+  getJob(data: any): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_job/`;  // note the trailing slash
+    const headers = { 'content-type': 'application/json' };
+    const body = JSON.stringify(data);
+    return this.http.post(url, body, {'headers':headers});
+  }
+  
 
 }

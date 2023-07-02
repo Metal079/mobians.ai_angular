@@ -4,11 +4,13 @@
     [showInstructions]="showInstructions"
     [showLoading]="showLoading"
     [aspectRatio]="aspectRatio"
+    (referenceImageChange)="onReferenceImageChange($event)"
   ></app-image-grid>
   <app-options
     (imagesChange)="onImagesChange($event)"
     (loadingChange)="onShowLoadingChange($event)"
     (aspectRatioChange)="onAspectRatioChange($event)"
+    [referenceImage]="referenceImage"
   ></app-options>
 </div>
 <app-faq></app-faq>

@@ -6,3 +6,26 @@
 .card-body {
   background-color: #2fa5e9;
 }
+
+@media (max-width: 480px) {
+  .FAQ {
+    padding: 0vw;
+    width: 95vw;
+  }
+
+  .row {
+    width: 100vw;
+  }
+
+  .card-body {
+    padding-right: 0;
+    padding-left: 0;
+    padding-bottom: 0;
+  }
+
+  .mb-0 {
+    padding-left: 2vw;
+    padding-right: 2vw;
+  }
+
+}
