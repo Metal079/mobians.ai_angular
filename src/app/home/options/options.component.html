@@ -14,7 +14,7 @@
       class="btn btn-primary d-flex align-items-center"
       type="button"
       id="generate-button"
-      (click)="generateImages()"
+      (click)="this.submitJob()"
     >
       Generate!
     </button>
@@ -105,7 +105,7 @@
 
     <div class="collapse w-100" id="collapseExample">
       <label for="floatingSelect">Image aspect-ratio</label>
-      <select class="form-select" id="floatingSelect" aria-label="Floating label select example" (change)="changeAspectRatioSelector($event)">
+      <select class="form-select" id="floatingSelect" aria-label="Floating label select example" [(ngModel)]="aspectRatio['aspectRatio']" (change)="changeAspectRatioSelector($event)">
         <option value="square">Square</option>
         <option value="landscape">Landscape</option>
         <option value="portrait">Portrait</option>
@@ -130,9 +130,7 @@
             ?
           </span>
         </label>
-        <textarea class="form-control" id="negative-prompt-input" rows="3">
-nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background</textarea
-        >
+        <textarea class="form-control" id="negative-prompt-input" rows="3" [(ngModel)]="generationRequest.negative_prompt"></textarea>
       </div>
 
       <!-- Seed -->

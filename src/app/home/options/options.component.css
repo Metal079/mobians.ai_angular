@@ -42,6 +42,7 @@
   #prompt-input-box {
     padding-bottom: 5%;
     padding-left: 0;
+    position: relative;
   }
 
   .resizable-textarea {

@@ -19,10 +19,10 @@ export class OptionsComponent {
   showStrength: boolean = false;
   showInpainting: boolean = false;
   images: string[] = [];
-  aspectRatio: AspectRatio = {width: 512, height: 512, model: "testSonicBeta4__dynamic"};
+  aspectRatio: AspectRatio = {width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square"};
   generationRequest: GenerationRequest = {
     prompt: "",
-    image: undefined,
+    image: this.referenceImage?.base64,
     negative_prompt: "nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background",
     scheduler: 7,
     steps: 20,
@@ -48,9 +48,14 @@ export class OptionsComponent {
   constructor(private stableDiffusionService: StableDiffusionService) {
   }
 
+  ngOnInit() {
+    this.loadSettings();
+  }
+
   ngOnChanges(changes: SimpleChanges) {
     if (changes['referenceImage'] && changes['referenceImage'].currentValue != null) {
       this.referenceImage = changes['referenceImage'].currentValue;
+      this.generationRequest.image = this.referenceImage!.base64;
       this.onReferenceImageChange(this.referenceImage!.aspectRatio);
       this.mode = "img2img";
       this.generationRequest.job_type = "img2img";
@@ -68,25 +73,85 @@ export class OptionsComponent {
 
   changeAspectRatio(aspectRatio: string) {
     if (aspectRatio == 'square') {
-      this.aspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic" };
+      this.aspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square" };
+      this.generationRequest.width = 512;
+      this.generationRequest.height = 512;
     }
     else if (aspectRatio == 'portrait') {
-      this.aspectRatio = { width: 512, height: 768, model: "testSonicBeta4__dynamic" };
+      this.aspectRatio = { width: 512, height: 768, model: "testSonicBeta4__dynamic", aspectRatio: "portrait" };
+      this.generationRequest.width = 512;
+      this.generationRequest.height = 768;
     }
     else if (aspectRatio == 'landscape') {
-      this.aspectRatio = { width: 768, height: 512, model: "testSonicBeta4__dynamic"};
+      this.aspectRatio = { width: 768, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "landscape" };
+      this.generationRequest.width = 768;
+      this.generationRequest.height = 512;
     }
 
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
   }
 
-  generateImages() {
-    this.submitJob();
+  // Save session storage info of changed settings
+  saveSettings() {
+    localStorage.setItem("prompt-input", this.generationRequest.prompt);
+    localStorage.setItem("negative-prompt-input", this.generationRequest.negative_prompt);
+    if (this.generationRequest.strength != undefined){
+      localStorage.setItem("custom-denoise", this.generationRequest.strength.toString());
+    }
+    if (this.generationRequest.seed != undefined){
+      localStorage.setItem("seed-input", this.generationRequest.seed.toString());
+    }
+    if (this.generationRequest.steps != undefined){
+      localStorage.setItem("cfg", this.generationRequest.guidance_scale.toString());
+    }
+    localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
+    //localStorage.setItem("flexSwitchCheckDefault", document.getElementById("flexSwitchCheckDefault").checked);    
+
+    // //localStorage.setItem("flexSwitchCheckDefault", document.getElementById("flexSwitchCheckDefault").checked);
+    // localStorage.setItem("floatingSelect", document.getElementById("floatingSelect").value);
+
+    // localStorage.setItem("customRange1", document.getElementById("customRange1").value);
+  }
+
+  // Load session storage info of changed settings
+  loadSettings() {
+    if (localStorage.getItem("prompt-input") != null){
+      this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
+    }
+    if (localStorage.getItem("negative-prompt-input") != null){
+      this.generationRequest.negative_prompt = localStorage.getItem("negative-prompt-input")!;
+    }
+    if (localStorage.getItem("custom-denoise") != null){
+      this.generationRequest.strength = parseFloat(localStorage.getItem("custom-denoise")!);
+    }
+    if (localStorage.getItem("seed-input") != null){
+      this.generationRequest.seed = parseInt(localStorage.getItem("seed-input")!);
+    }
+    if (localStorage.getItem("cfg") != null){
+      this.generationRequest.guidance_scale = parseInt(localStorage.getItem("cfg")!);
+    }
+    if (localStorage.getItem("aspect-ratio") != null){
+      this.changeAspectRatio(localStorage.getItem("aspect-ratio")!);
+      
+    }
   }
 
   // Send job to django api and retrieve job id.
   submitJob() {
+    // Save settings to session storage
+    this.saveSettings();
+
+    // Change seed to random number if default seed is selected
+    let defaultSeed: boolean;
+    if (this.generationRequest.seed == -1){
+      defaultSeed = true;
+      this.generationRequest.seed = Math.floor(Math.random() * 100000000);
+    }
+    else{
+      defaultSeed = false;
+    }
+
     this.loadingChange.emit(true);
     this.stableDiffusionService.submitJob(this.generationRequest)
       .subscribe(
@@ -94,15 +159,14 @@ export class OptionsComponent {
           console.log(response);  // handle the response
 
           this.getJob(response.job_id, response.API_IP);
-
-          // this.images = response.images;
-          // this.imagesChange.emit(this.images);
-          // this.loadingChange.emit(false);
         },
         error => {
           console.error(error);  // handle error
         }
-      );
+      ).add(() => {
+        if (defaultSeed){
+          this.generationRequest.seed = -1;
+        }});
   }
 
 // check for status of job
@@ -141,38 +205,4 @@ getJob(job_id: string, API_URL: string) {
       error => console.error(error)
     );
 }
-
-
-  // img2img() {
-  //   const data = {
-  //     "data": {
-  //         "prompt": this.prompt,
-  //         "image": this.referenceImage!.base64,
-  //         "scheduler": 7,
-  //         "steps": 20,
-  //         "negative_prompt": this.negative_prompt,
-  //         "width":  this.aspectRatio.width,
-  //         "height":  this.aspectRatio.height,
-  //         "guidance_scale": this.cfg,
-  //         "seed": this.seed ?? -1,
-  //         "batch_size": 4,
-  //         "strength": 0.5,
-  //       },
-  //       "model": 'testSonicBeta4',
-  //       "save_image": false  // replace with the data you want to send
-  //     }
-  //   this.loadingChange.emit(true);
-  //   this.stableDiffusionService.submitJob(data)
-  //     .subscribe(
-  //       response => {
-  //         console.log(response);  // handle the response
-  //         this.images = response.images;
-  //         this.imagesChange.emit(this.images);
-  //         this.loadingChange.emit(false);
-  //       },
-  //       error => {
-  //         console.error(error);  // handle error
-  //       }
-  //     );
-  // }
 }

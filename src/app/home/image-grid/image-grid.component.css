@@ -34,6 +34,16 @@
   transform: translate(-50%, -50%);
 }
 
+.expanded {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  object-fit: cover;
+}
+
+
 #queue-position {
   opacity: 70%;
 }
@@ -90,17 +100,6 @@ img {
   .content-container {
     flex-direction: column;
     padding: 0%;
-  }
-
-  .image-grid {
-    width: 100vw;
-    height: 100vw;
-    max-width: max-content;
-    max-height: max-content;
-    aspect-ratio: 1 / 1;
-    margin-left: 0%;
-    margin-right: 0%;
-    border: 0;
   }
 
 }

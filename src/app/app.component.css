@@ -4,4 +4,13 @@
   height: auto;
   margin: auto;
   margin-top: 3%;
+  flex-direction: row;
+}
+
+@media screen and (max-width: 600px) {
+  #generation-space {
+    flex-direction: column;
+    width: 100%;
+    margin-top: 0%;
+  }
 }

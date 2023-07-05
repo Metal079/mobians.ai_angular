@@ -16,7 +16,7 @@ export class AppComponent {
   images: string[] = [];
   showInstructions: boolean = true;
   showLoading: boolean = false;
-  aspectRatio: AspectRatio = {width: 512, height: 512, model: "test"};
+  aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
   referenceImage?: ReferenceImage;
 
   constructor(private cdRef: ChangeDetectorRef) {}  // Inject the ChangeDetectorRef service
