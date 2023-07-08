@@ -21,9 +21,9 @@
   </div>
 
   <!-- Denoise strength -->
-  <div *ngIf="showStrength" id="denoise-strength">
+  <div *ngIf="referenceImage" id="denoise-strength">
     <label for="custom-denoise" class="form-label"
-      >Strength: <span id="denoise-value">0.7</span>
+      >Strength: <span id="denoise-value">{{ generationRequest.strength }}</span>
       <span
         class="ms-1 text-primary"
         data-bs-toggle="tooltip"
@@ -47,12 +47,13 @@
       value="0.7"
       step="0.05"
       id="custom-denoise"
+      [(ngModel)]="generationRequest.strength"
     />
   </div>
 
   <!-- inpaint switch -->
   <div
-    *ngIf="showInpainting"
+    *ngIf="referenceImage"
     class="form-check form-switch"
     id="enable-inpainting"
   >
@@ -81,16 +82,30 @@
 
   <!-- Advanced options -->
   <div id="advanced-options">
-    <button
-      class="btn btn-primary dropdown-toggle"
-      data-bs-toggle="collapse"
-      href="#collapseExample"
-      role="button"
-      aria-expanded="false"
-      aria-controls="collapseExample"
-    >
-      Options
-    </button>
+    <div id="buttons-container" style="display: flex;">
+      <button
+        class="btn btn-primary dropdown-toggle"
+        data-bs-toggle="collapse"
+        href="#collapseExample"
+        role="button"
+        aria-expanded="false"
+        aria-controls="collapseExample"
+      >
+        Options
+      </button>
+  
+      <span style="padding-left: 5%;">
+        <button
+          class="btn btn-success"
+          type="button"
+          id="testbutton"
+          (click)="this.submitJob()"
+        >
+          Generate with reference!
+        </button>
+      </span>
+    </div>
+    
 
     <!-- Re-generate with reference button -->
     <button
@@ -103,7 +118,7 @@
       Regenerate W/Prev Reference
     </button>
 
-    <div class="collapse w-100" id="collapseExample">
+    <div class="collapse w-100" id="collapseExample" >
       <label for="floatingSelect">Image aspect-ratio</label>
       <select class="form-select" id="floatingSelect" aria-label="Floating label select example" [(ngModel)]="aspectRatio['aspectRatio']" (change)="changeAspectRatioSelector($event)">
         <option value="square">Square</option>
@@ -192,4 +207,6 @@
       />
     </div>
   </div>
+
+
 </div>

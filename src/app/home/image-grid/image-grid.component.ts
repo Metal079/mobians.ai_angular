@@ -11,6 +11,7 @@ import { ReferenceImage } from 'src/_shared/reference-image.interface';
 })
 export class ImageGridComponent {
   showImages: boolean[] = [];
+  showReferenceImage: boolean = false;
   referenceImage?: ReferenceImage;
   imageExpanded: boolean = false;
   screenWidth: number;
@@ -22,6 +23,7 @@ export class ImageGridComponent {
   @Input() aspectRatio!: AspectRatio;
 
   @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
+  @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
 
   constructor() {
     this.screenWidth = window.innerWidth;
@@ -115,6 +117,7 @@ export class ImageGridComponent {
   
       // Turn off the instructions
       this.showInstructions = false;
+      this.showReferenceImage = true;
   
       // Convert the image to base64
       let reader = new FileReader();
@@ -154,8 +157,8 @@ export class ImageGridComponent {
       this.showImages[1] = !this.showImages[1];
       this.showImages[2] = !this.showImages[2];
     }
-    
     // Add a CSS class to the clicked image
+    this.showReferenceImage = !this.showReferenceImage;
     target.classList.toggle('expanded');
 
     this.imageExpanded = !this.imageExpanded;

@@ -31,7 +31,7 @@ export class OptionsComponent {
     guidance_scale: 7,
     seed: -1,
     batch_size: 4,
-    strength: 0.5,
+    strength: 0.7,
     job_type: "txt2img",
     model: "testSonicBeta4__dynamic"
   };
@@ -40,6 +40,7 @@ export class OptionsComponent {
   API_URL: string = "";
 
   @Input() referenceImage?: ReferenceImage;
+  @Input() showGenerateWithReferenceImage: boolean = false;
 
   @Output() imagesChange  = new EventEmitter<any>();
   @Output() loadingChange  = new EventEmitter<any>();
@@ -106,12 +107,6 @@ export class OptionsComponent {
       localStorage.setItem("cfg", this.generationRequest.guidance_scale.toString());
     }
     localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
-    //localStorage.setItem("flexSwitchCheckDefault", document.getElementById("flexSwitchCheckDefault").checked);    
-
-    // //localStorage.setItem("flexSwitchCheckDefault", document.getElementById("flexSwitchCheckDefault").checked);
-    // localStorage.setItem("floatingSelect", document.getElementById("floatingSelect").value);
-
-    // localStorage.setItem("customRange1", document.getElementById("customRange1").value);
   }
 
   // Load session storage info of changed settings
