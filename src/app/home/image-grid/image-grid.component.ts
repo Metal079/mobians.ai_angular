@@ -137,6 +137,11 @@ export class ImageGridComponent {
     if (this.referenceImage) {
       this.referenceImage = undefined;
       this.referenceImageChange.emit(this.referenceImage);
+
+      // if there are no regular images, show the instructions
+      if (this.images.length == 0) {
+        this.showInstructions = true;
+      }
     }
     else {
       // Create new image element to get dimensions
