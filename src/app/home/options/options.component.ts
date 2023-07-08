@@ -7,6 +7,8 @@ import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { interval } from 'rxjs';
 import { switchMap, takeWhile, finalize, concatMap, tap } from 'rxjs/operators';
 import { AfterViewInit } from '@angular/core';
+import { SharedService } from 'src/app/shared.service';
+import { Subscription } from 'rxjs';
 
 
 @Component({
@@ -15,6 +17,8 @@ import { AfterViewInit } from '@angular/core';
   styleUrls: ['./options.component.css']
 })
 export class OptionsComponent {
+  private subscription!: Subscription;
+
   showLoading: boolean = false;
   showStrength: boolean = false;
   showInpainting: boolean = false;
@@ -47,11 +51,20 @@ export class OptionsComponent {
   @Output() loadingChange  = new EventEmitter<any>();
   @Output() aspectRatioChange  = new EventEmitter<AspectRatio>();
 
-  constructor(private stableDiffusionService: StableDiffusionService) {
-  }
+  constructor(
+    private stableDiffusionService: StableDiffusionService
+    , private sharedService: SharedService
+    ) {}
 
   ngOnInit() {
     this.loadSettings();
+    this.subscription = this.sharedService.getPrompt().subscribe(value => {
+      this.generationRequest.prompt = value;
+    });
+  }
+
+  ngOnDestroy() {
+    this.subscription.unsubscribe();
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -92,6 +105,11 @@ export class OptionsComponent {
 
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
+  }
+
+  // Update the prompt to the shared service
+  updateSharedPrompt() {
+    this.sharedService.setPrompt(this.generationRequest.prompt);
   }
 
   // Save session storage info of changed settings
