@@ -23,4 +23,5 @@ import { FaqComponent } from 'src/app/home/faq/faq.component';
     FaqComponent
   ]
 })
-export class home { }
+export class HomeModule { }  // PascalCase
+

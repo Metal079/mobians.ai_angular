@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef  } from '@angular/core';
+import { Component  } from '@angular/core';
 import { ImageGridComponent } from './home/image-grid/image-grid.component';
 import { Input } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -19,7 +19,9 @@ export class AppComponent {
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
   referenceImage?: ReferenceImage;
 
-  constructor(private cdRef: ChangeDetectorRef) {}  // Inject the ChangeDetectorRef service
+  constructor(
+    //private cdRef: ChangeDetectorRef
+    ) {}  // Inject the ChangeDetectorRef service
 
 
   onImagesChange(images: string[]) {
@@ -40,6 +42,6 @@ export class AppComponent {
     this.referenceImage = referenceImage;
 
     // Manually trigger change detection
-    this.cdRef.detectChanges();
+    //this.cdRef.detectChanges();
   }
 }

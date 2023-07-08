@@ -147,6 +147,7 @@ export class OptionsComponent {
       defaultSeed = false;
     }
 
+    // set loading to true and submit job
     this.loadingChange.emit(true);
     this.stableDiffusionService.submitJob(this.generationRequest)
       .subscribe(

@@ -43,17 +43,13 @@
     padding-bottom: 5%;
     padding-left: 0;
     position: relative;
-  }
-
-  .resizable-textarea {
-    min-height: 100px;
-    min-width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .resizable-textarea::-webkit-resizer {
     background-color: rgba(0, 0, 0, 0.5);
     width: 20px;
-    height: 20px;
     border-radius: 10px;
   }
 
@@ -64,10 +60,6 @@
   #denoise-strength {
     padding: 2vw;
     width: 100vw;
-  }
-
-  #enable-inpainting {
-    display: none;
   }
 
   #advanced-options {

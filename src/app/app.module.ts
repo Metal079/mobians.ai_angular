@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { HttpClientModule } from '@angular/common/http';
 import { BrowserModule } from '@angular/platform-browser';
-import { home } from '../modules/home.module';
+import { HomeModule } from '../modules/home.module';  // updated import
 import { FormsModule } from '@angular/forms';
 
 
@@ -15,7 +15,7 @@ import { AppComponent } from './app.component';
     BrowserModule,
     HttpClientModule,
     FormsModule,
-    home
+    HomeModule  
   ],
   providers: [],
   bootstrap: [AppComponent]

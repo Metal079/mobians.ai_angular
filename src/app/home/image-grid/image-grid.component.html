@@ -18,19 +18,19 @@
   </div>
 
   <!-- Images -->
-  <div class="image-wrapper" *ngIf="images.length > 0 && showImages[0] && !showLoading" id="wrapper1">
-    <img [src]="'data:image/png;base64,' + images[0]" class="small-image" alt="Image1 goes here" (click)="expandImage($event)" id="image0">
+  <div class="image-wrapper" *ngIf="images.length > 0 && showImages[0] && !showLoading && !referenceImage" id="wrapper1">
+    <img [src]="'data:image/png;base64,' + images[0]" class="small-image" alt="Image1 goes here" (click)="expandImage(images[0], $event)" id="image0">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 1 && showImages[1] && !showLoading" id="wrapper2">
-    <img [src]="'data:image/png;base64,' + images[1]" class="small-image" alt="Image2 goes here" (click)="expandImage($event)" id="image1">
+  <div class="image-wrapper" *ngIf="images.length > 1 && showImages[1] && !showLoading && !referenceImage" id="wrapper2">
+    <img [src]="'data:image/png;base64,' + images[1]" class="small-image" alt="Image2 goes here" (click)="expandImage(images[1], $event)" id="image1">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 2 && showImages[2] && !showLoading" id="wrapper3">
-    <img [src]="'data:image/png;base64,' + images[2]" class="small-image" alt="Image3 goes here" (click)="expandImage($event)" id="image2">
+  <div class="image-wrapper" *ngIf="images.length > 2 && showImages[2] && !showLoading && !referenceImage" id="wrapper3">
+    <img [src]="'data:image/png;base64,' + images[2]" class="small-image" alt="Image3 goes here" (click)="expandImage(images[2], $event)" id="image2">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 3 && showImages[3] && !showLoading" id="wrapper4">
-    <img [src]="'data:image/png;base64,' + images[3]" class="small-image" alt="Image4 goes here" (click)="expandImage($event)" id="image3">
+  <div class="image-wrapper" *ngIf="images.length > 3 && showImages[3] && !showLoading && !referenceImage" id="wrapper4">
+    <img [src]="'data:image/png;base64,' + images[3]" class="small-image" alt="Image4 goes here" (click)="expandImage(images[3], $event)" id="image3">
   </div>
-  <div class="reference-image" *ngIf="referenceImage && !showLoading && showReferenceImage" id="wrapper5">
-    <img [src]="referenceImage.url" alt="Reference Image goes here" id="referenceImage">
+  <div class="reference-image" *ngIf="referenceImage && !showLoading" id="wrapper5">
+    <img [src]="referenceImage.url" alt="Reference Image goes here" (click)="expandImage(images[3], $event)" id="referenceImage">
   </div>
 </div>

@@ -11,7 +11,6 @@ import { ReferenceImage } from 'src/_shared/reference-image.interface';
 })
 export class ImageGridComponent {
   showImages: boolean[] = [];
-  showReferenceImage: boolean = false;
   referenceImage?: ReferenceImage;
   imageExpanded: boolean = false;
   screenWidth: number;
@@ -41,7 +40,9 @@ export class ImageGridComponent {
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['images']) {
+      // Reset the showImages array and reset reference image
       this.showImages = this.images.map(() => true);
+      this.referenceImage = undefined;
     }
     if (changes['aspectRatio']){
       if (this.aspectRatio.aspectRatio == 'square'){
@@ -117,7 +118,6 @@ export class ImageGridComponent {
   
       // Turn off the instructions
       this.showInstructions = false;
-      this.showReferenceImage = true;
   
       // Convert the image to base64
       let reader = new FileReader();
@@ -132,35 +132,41 @@ export class ImageGridComponent {
     }
   }
 
-  expandImage(event: Event) {
-    // Get the target element
-    let target = event.target as HTMLElement;
+  expandImage(base64: string, event: Event) {
+    // If a reference image is set, don't expand the image and delete it
+    if (this.referenceImage) {
+      this.referenceImage = undefined;
+      this.referenceImageChange.emit(this.referenceImage);
+    }
+    else {
+      // Create new image element to get dimensions
+      let img = new Image();
+      img.src = 'data:image/png;base64,' + base64;
+    
+      img.onload = () => {
+        // Calculate the aspect ratio (Square, Portrait, Landscape)
+        let tempAspectRatio = img.naturalWidth / img.naturalHeight;
+    
+        // Set the reference image
+        this.referenceImage = {
+          url: img.src,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
+          base64: base64
+        };
+    
+        // Hide images and show reference image
+        this.images.forEach(element => {
+          
+        });
+        this.referenceImageChange.emit(this.referenceImage);
+        console.log(this.referenceImage);
 
-    // hide other images besides the one clicked
-    if (target.id == "image0"){
-      this.showImages[1] = !this.showImages[1];
-      this.showImages[2] = !this.showImages[2];
-      this.showImages[3] = !this.showImages[3];
-    }
-    else if (target.id == "image1"){
-      this.showImages[0] = !this.showImages[0];
-      this.showImages[2] = !this.showImages[2];
-      this.showImages[3] = !this.showImages[3];
-    }
-    else if (target.id == "image2"){
-      this.showImages[0] = !this.showImages[0];
-      this.showImages[1] = !this.showImages[1];
-      this.showImages[3] = !this.showImages[3];
-    }
-    else if (target.id == "image3"){
-      this.showImages[0] = !this.showImages[0];
-      this.showImages[1] = !this.showImages[1];
-      this.showImages[2] = !this.showImages[2];
-    }
-    // Add a CSS class to the clicked image
-    this.showReferenceImage = !this.showReferenceImage;
-    target.classList.toggle('expanded');
-
-    this.imageExpanded = !this.imageExpanded;
+      }
+  }
 }
+
+
+
 }
