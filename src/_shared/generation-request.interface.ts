@@ -7,7 +7,7 @@ export interface GenerationRequest {
     width: number;
     height: number;
     guidance_scale: number;
-    seed: number;
+    seed?: number;
     batch_size: number;
     strength: number | undefined;
     job_type: string;

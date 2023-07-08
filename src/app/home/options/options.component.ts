@@ -20,16 +20,17 @@ export class OptionsComponent {
   showInpainting: boolean = false;
   images: string[] = [];
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square"};
+  defaultNegativePrompt: string = "nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
   generationRequest: GenerationRequest = {
     prompt: "",
     image: this.referenceImage?.base64,
-    negative_prompt: "nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background",
+    negative_prompt: this.defaultNegativePrompt,
     scheduler: 7,
     steps: 20,
     width: 512,
     height: 512,
     guidance_scale: 7,
-    seed: -1,
+    seed: undefined,
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
@@ -132,6 +133,27 @@ export class OptionsComponent {
     }
   }
 
+  // Reset session storage info of changed settings and reset view
+  resetSessionStorage(){
+    localStorage.removeItem("prompt-input");
+    localStorage.removeItem("negative-prompt-input");
+    localStorage.removeItem("custom-denoise");
+    localStorage.removeItem("seed-input");
+    localStorage.removeItem("cfg");
+    localStorage.removeItem("aspect-ratio");
+    this.generationRequest.prompt = "";
+    this.generationRequest.negative_prompt = this.defaultNegativePrompt;
+    this.generationRequest.strength = 0.7;
+    this.generationRequest.seed = -1;
+    this.generationRequest.guidance_scale = 7;
+    this.changeAspectRatio("square");
+
+    this.loadSettings();
+
+    // reset images
+    this.imagesChange.emit([]);
+  }
+
   // Send job to django api and retrieve job id.
   submitJob() {
     // Save settings to session storage
@@ -139,7 +161,7 @@ export class OptionsComponent {
 
     // Change seed to random number if default seed is selected
     let defaultSeed: boolean;
-    if (this.generationRequest.seed == -1){
+    if (this.generationRequest.seed == undefined || this.generationRequest.seed == -1){
       defaultSeed = true;
       this.generationRequest.seed = Math.floor(Math.random() * 100000000);
     }
@@ -161,7 +183,7 @@ export class OptionsComponent {
         }
       ).add(() => {
         if (defaultSeed){
-          this.generationRequest.seed = -1;
+          this.generationRequest.seed = undefined;
         }});
   }
 

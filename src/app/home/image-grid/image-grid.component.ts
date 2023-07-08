@@ -40,9 +40,19 @@ export class ImageGridComponent {
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['images']) {
-      // Reset the showImages array and reset reference image
-      this.showImages = this.images.map(() => true);
-      this.referenceImage = undefined;
+      // If images were set to null or undefined, reset the showImages array
+      if (this.images.length == 0) {
+        this.showImages = [];
+        this.showInstructions = true;
+        this.referenceImage = undefined;
+        this.referenceImageChange.emit(this.referenceImage);
+        return;
+      }
+      else{
+        // Reset the showImages array and reset reference image
+        this.showImages = this.images.map(() => true);
+        this.referenceImage = undefined;
+      }
     }
     if (changes['aspectRatio']){
       if (this.aspectRatio.aspectRatio == 'square'){
