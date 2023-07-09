@@ -130,6 +130,11 @@ export class OptionsComponent {
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
 
+    // Remove inpainting and strength elements
+    this.showInpainting = false;
+    this.showStrength = false;
+    this.inpaintingChange.emit(this.showInpainting);
+
     // Clear the images array
     this.images = [];
     this.imagesChange.emit(this.images);

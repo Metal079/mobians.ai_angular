@@ -6,9 +6,8 @@ import { Observable } from 'rxjs';
   providedIn: 'root',
 })
 export class StableDiffusionService {
-  //private apiBaseUrl = 'http://76.157.184.213:8000 ';  // replace with your base API url
-  //private apiBaseUrl = 'http://127.0.0.1:8080';
-  private apiBaseUrl =  'http://76.157.184.213:9000';
+  //private apiBaseUrl =  'http://76.157.184.213:9000';
+  private apiBaseUrl =  'https://mobians.azurewebsites.net'
 
   constructor(private http: HttpClient) {}
 

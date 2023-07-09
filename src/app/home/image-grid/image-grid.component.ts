@@ -58,9 +58,15 @@ export class ImageGridComponent {
   }
 
   toggleDrawingMode() {
-    this.imageCanvas.nativeElement.style.pointerEvents = this.inpaintingEnabled ? 'auto' : 'none';
-    this.imageCanvas.nativeElement.style.visibility = this.inpaintingEnabled ? 'visible' : 'hidden';
+    if (this.imageCanvas && this.imageCanvas.nativeElement) {
+      // this.inpaintingEnabled = !this.inpaintingEnabled; // Flip the value of this.inpaintingEnabled
+      console.log('Inpainting enabled: ' + this.inpaintingEnabled);
+      this.imageCanvas.nativeElement.style.pointerEvents = this.inpaintingEnabled ? 'auto' : 'none';
+      this.imageCanvas.nativeElement.style.visibility = this.inpaintingEnabled ? 'visible' : 'hidden';
+    }
   }
+  
+
   
   onMouseDown(e: MouseEvent) {
     if (!this.inpaintingEnabled) return;
@@ -101,19 +107,25 @@ export class ImageGridComponent {
     if (changes['images']) {
       // If images were set to null or undefined, reset the showImages array
       if (this.images.length == 0) {
-        this.showImages = [];
-        this.showInstructions = true;
-        this.referenceImage = undefined;
-        this.referenceImageChange.emit(this.referenceImage);
-        return;
+          this.showImages = [];
+          this.showInstructions = true;
+          this.referenceImage = undefined;
+          this.referenceImageChange.emit(this.referenceImage);
+
+          // Check if this.ctx and this.imageCanvas.nativeElement are defined before clearing the canvas
+          if (this.ctx && this.imageCanvas && this.imageCanvas.nativeElement) {
+              this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+              // this.inpaintingEnabled = false;
+              // this.toggleDrawingMode(); // call this method instead of setting style directly
+          }
       }
-      else{
-        // Reset the showImages array and reset reference image
-        this.showImages = this.images.map(() => true);
-        this.referenceImage = undefined;
-        this.showInstructions = false;
+      else {
+          // Reset the showImages array and reset reference image
+          this.showImages = this.images.map(() => true);
+          this.referenceImage = undefined;
+          this.showInstructions = false;
       }
-    }
+  }
     if (changes['aspectRatio']){
       if (this.aspectRatio.aspectRatio == 'square'){
         this.screenHeight = this.screenWidth;
@@ -132,7 +144,7 @@ export class ImageGridComponent {
         this.screenHeight = this.screenWidth;
       }
     }
-    // If inpainting status changes
+    // If inpainting status is sent from parent, toggle drawing mode
     if (changes['inpaintingEnabled']) {
       this.toggleDrawingMode();
     }
