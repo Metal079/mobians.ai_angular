@@ -52,5 +52,5 @@ jobs:
         with:
           app-name: 'mobiansAAngular'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_EAB828E497474555930DFF47B0EB309C }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_542A218372C8451987F2E0D0EF636583 }}
           package: .
