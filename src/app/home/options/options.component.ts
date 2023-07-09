@@ -73,13 +73,37 @@ export class OptionsComponent {
     if (changes['referenceImage'] && changes['referenceImage'].currentValue != null) {
       this.referenceImage = changes['referenceImage'].currentValue;
       this.generationRequest.image = this.referenceImage!.base64;
-      this.onReferenceImageChange(this.referenceImage!.aspectRatio);
+      // this.changeAspectRatio(this.referenceImage!.aspectRatio);
       this.generationRequest.job_type = "img2img";
-    }
-  }
 
-  onReferenceImageChange(referenceImageAspectRatio: string) {
-    this.changeAspectRatio(referenceImageAspectRatio);
+      if (this.referenceImage!.aspectRatio == 'square') {
+        this.aspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square" };
+        this.generationRequest.width = 512;
+        this.generationRequest.height = 512;
+      }
+      else if (this.referenceImage!.aspectRatio == 'portrait') {
+        this.aspectRatio = { width: 512, height: 768, model: "testSonicBeta4__dynamic", aspectRatio: "portrait" };
+        this.generationRequest.width = 512;
+        this.generationRequest.height = 768;
+      }
+      else if (this.referenceImage!.aspectRatio == 'landscape') {
+        this.aspectRatio = { width: 768, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "landscape" };
+        this.generationRequest.width = 768;
+        this.generationRequest.height = 512;
+      }
+  
+      // Emit the aspectRatio object itself.
+      this.aspectRatioChange.emit(this.aspectRatio);
+
+      if(this.referenceImage != null) {
+        this.showInpainting = true;
+        this.showStrength = true;
+      }
+      else{
+        this.showInpainting = false;
+        this.showStrength = false;
+      }
+    }
   }
 
   changeAspectRatioSelector(event: any) {
@@ -108,8 +132,8 @@ export class OptionsComponent {
     this.aspectRatioChange.emit(this.aspectRatio);
 
     // Clear the images array
-    // this.images = [];
-    // this.imagesChange.emit(this.images);
+    this.images = [];
+    this.imagesChange.emit(this.images);
   }
 
   // Update the prompt to the shared service

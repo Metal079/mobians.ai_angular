@@ -11,7 +11,7 @@
   </div>
 
   <!-- Denoise strength -->
-  <div *ngIf="referenceImage" id="denoise-strength">
+  <div *ngIf="showStrength" id="denoise-strength">
     <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
         }}</span>
       <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
@@ -30,7 +30,7 @@
   </div>
 
   <!-- inpaint switch -->
-  <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
+  <div *ngIf="showInpainting" class="form-check form-switch" id="enable-inpainting">
     <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
     <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
