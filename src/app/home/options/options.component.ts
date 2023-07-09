@@ -73,7 +73,6 @@ export class OptionsComponent {
     if (changes['referenceImage'] && changes['referenceImage'].currentValue != null) {
       this.referenceImage = changes['referenceImage'].currentValue;
       this.generationRequest.image = this.referenceImage!.base64;
-      // this.changeAspectRatio(this.referenceImage!.aspectRatio);
       this.generationRequest.job_type = "img2img";
 
       if (this.referenceImage!.aspectRatio == 'square') {

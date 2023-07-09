@@ -104,7 +104,7 @@ export class ImageGridComponent {
         this.showImages = [];
         this.showInstructions = true;
         this.referenceImage = undefined;
-        // this.referenceImageChange.emit(this.referenceImage);
+        this.referenceImageChange.emit(this.referenceImage);
         return;
       }
       else{
