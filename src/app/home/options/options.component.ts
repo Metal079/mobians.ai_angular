@@ -22,6 +22,8 @@ export class OptionsComponent {
   showLoading: boolean = false;
   showStrength: boolean = false;
   showInpainting: boolean = false;
+  showInpaintingCanvas: boolean = false;
+  queuePosition?: number;
   images: string[] = [];
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square"};
   defaultNegativePrompt: string = "nsfw, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
@@ -40,16 +42,16 @@ export class OptionsComponent {
     job_type: "txt2img",
     model: "testSonicBeta4__dynamic"
   };
-  mode: string = "txt2img";
   jobID: string = "";
   API_URL: string = "";
 
   @Input() referenceImage?: ReferenceImage;
-  @Input() showGenerateWithReferenceImage: boolean = false;
 
   @Output() imagesChange  = new EventEmitter<any>();
   @Output() loadingChange  = new EventEmitter<any>();
   @Output() aspectRatioChange  = new EventEmitter<AspectRatio>();
+  @Output() inpaintingChange  = new EventEmitter<boolean>();
+  @Output() queuePositionChange  = new EventEmitter<number>();
 
   constructor(
     private stableDiffusionService: StableDiffusionService
@@ -72,7 +74,6 @@ export class OptionsComponent {
       this.referenceImage = changes['referenceImage'].currentValue;
       this.generationRequest.image = this.referenceImage!.base64;
       this.onReferenceImageChange(this.referenceImage!.aspectRatio);
-      this.mode = "img2img";
       this.generationRequest.job_type = "img2img";
     }
   }
@@ -105,6 +106,10 @@ export class OptionsComponent {
 
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
+
+    // Clear the images array
+    // this.images = [];
+    // this.imagesChange.emit(this.images);
   }
 
   // Update the prompt to the shared service
@@ -205,40 +210,47 @@ export class OptionsComponent {
         }});
   }
 
-// check for status of job
-getJob(job_id: string, API_URL: string) {
-  let jobComplete = false;
-  let lastResponse: any;
+  // check for status of job
+  getJob(job_id: string, API_URL: string) {
+    let jobComplete = false;
+    let lastResponse: any;
 
-  const getJobInfo = {
-    "job_id": job_id,
-    "API_IP": API_URL
+    const getJobInfo = {
+      "job_id": job_id,
+      "API_IP": API_URL
+    }
+    
+    // Create an interval which fires every 3 seconds
+    interval(3000)
+      .pipe(
+        // For each tick of the interval, call the service
+        concatMap(() => this.stableDiffusionService.getJob(getJobInfo)),
+        // Store the response for use in finalize
+        tap(response => lastResponse = response),
+        // Only continue the stream while the job is incomplete
+        takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
+        // Once the stream completes, do any cleanup if necessary
+        finalize(() => {
+          if (jobComplete && lastResponse) {
+            console.log(lastResponse);
+            this.images = lastResponse.result;
+            this.imagesChange.emit(this.images);
+            this.loadingChange.emit(false);
+          }
+        })
+      )
+      .subscribe(
+        response => {
+          // This will be called every 3 seconds, so we do nothing here
+          console.log("queue position: " + response.queue_position);
+          this.queuePositionChange.emit(response.queue_position);
+        },
+        error => console.error(error)
+      );
   }
-  
-  // Create an interval which fires every 3 seconds
-  interval(3000)
-    .pipe(
-      // For each tick of the interval, call the service
-      concatMap(() => this.stableDiffusionService.getJob(getJobInfo)),
-      // Store the response for use in finalize
-      tap(response => lastResponse = response),
-      // Only continue the stream while the job is incomplete
-      takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
-      // Once the stream completes, do any cleanup if necessary
-      finalize(() => {
-        if (jobComplete && lastResponse) {
-          console.log(lastResponse);
-          this.images = lastResponse.result;
-          this.imagesChange.emit(this.images);
-          this.loadingChange.emit(false);
-        }
-      })
-    )
-    .subscribe(
-      response => {
-        // This will be called every 3 seconds, so we do nothing here
-      },
-      error => console.error(error)
-    );
-}
+
+  enableInpaintCanvas() {
+    this.showInpaintingCanvas = !this.showInpaintingCanvas;
+    this.inpaintingChange.emit(this.showInpaintingCanvas);
+  }
 }

@@ -14,22 +14,20 @@ export class AppComponent {
   title = 'The best Sonic OC generator';
 
   images: string[] = [];
-  showInstructions: boolean = true;
   showLoading: boolean = false;
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
   referenceImage?: ReferenceImage;
+  inpaintingEnabled: boolean = false;
+  queuePosition?: number;
 
   constructor() {}  
 
-
   onImagesChange(images: string[]) {
     this.images = images;
-    this.showInstructions = false;
   }
 
   onShowLoadingChange(showLoading: boolean) {
     this.showLoading = showLoading;
-    this.showInstructions = false;
   }
 
   onAspectRatioChange(aspectRatio: AspectRatio) {
@@ -38,8 +36,13 @@ export class AppComponent {
 
   onReferenceImageChange(referenceImage: ReferenceImage) {
     this.referenceImage = referenceImage;
+  }
 
-    // Manually trigger change detection
-    //this.cdRef.detectChanges();
+  onInpaintingChange(inpaintingEnabled: boolean) {
+    this.inpaintingEnabled = inpaintingEnabled;
+  }
+
+  onQueuePositionChange(queuePosition: number) {
+    this.queuePosition = queuePosition;
   }
 }

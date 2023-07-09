@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, Output, EventEmitter, HostListener  } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ReferenceImage } from 'src/_shared/reference-image.interface';
@@ -10,16 +10,19 @@ import { ReferenceImage } from 'src/_shared/reference-image.interface';
   styleUrls: ['./image-grid.component.css']
 })
 export class ImageGridComponent {
+  @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   referenceImage?: ReferenceImage;
   imageExpanded: boolean = false;
   screenWidth: number;
   screenHeight: number = window.innerHeight;
+  showInstructions: boolean = true;
 
+  @Input() inpaintingEnabled: boolean = false;
   @Input() images: string[] = [];
   @Input() showLoading: boolean = false;
-  @Input() showInstructions: boolean = true;
   @Input() aspectRatio!: AspectRatio;
+  @Input() queuePosition?: number;
 
   @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
@@ -27,6 +30,62 @@ export class ImageGridComponent {
   constructor() {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
+  }
+
+  private ctx!: CanvasRenderingContext2D;
+  private drawing = false;
+
+  ngAfterViewInit() {
+    const context = this.imageCanvas.nativeElement.getContext('2d');
+    if (context !== null) {
+      this.ctx = context;
+      this.ctx.lineWidth = 40;
+      this.ctx.lineJoin = "round";
+      this.ctx.lineCap = "round";
+      
+      // Check if parentElement is not null before accessing its properties
+      if (this.imageCanvas.nativeElement.parentElement !== null) {
+        this.imageCanvas.nativeElement.width = this.aspectRatio.width;
+        this.imageCanvas.nativeElement.height = this.aspectRatio.height;
+      }
+
+      // Make sure painting is disabled by default
+      this.imageCanvas.nativeElement.style.pointerEvents = 'none';
+  
+    } else {
+      throw new Error('Could not get 2D rendering context');
+    }
+  }
+
+  toggleDrawingMode() {
+    this.imageCanvas.nativeElement.style.pointerEvents = this.inpaintingEnabled ? 'auto' : 'none';
+    this.imageCanvas.nativeElement.style.visibility = this.inpaintingEnabled ? 'visible' : 'hidden';
+  }
+  
+  onMouseDown(e: MouseEvent) {
+    if (!this.inpaintingEnabled) return;
+    this.drawing = true;
+    const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
+    this.ctx.beginPath();
+    this.ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  }
+  
+  onMouseMove(e: MouseEvent) {
+    if (!this.inpaintingEnabled || !this.drawing) return;
+    const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
+    this.ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    this.ctx.stroke();
+  }
+
+  resizeCanvas() {
+    if (this.imageCanvas && this.imageCanvas.nativeElement) {
+      this.imageCanvas.nativeElement.width = this.aspectRatio.width;
+      this.imageCanvas.nativeElement.height = this.aspectRatio.height;
+    }
+  }
+
+  onMouseUp() {
+    this.drawing = false;
   }
 
   @HostListener('window:resize', ['$event'])
@@ -44,29 +103,43 @@ export class ImageGridComponent {
       if (this.images.length == 0) {
         this.showImages = [];
         this.showInstructions = true;
-        this.referenceImage = undefined;
-        this.referenceImageChange.emit(this.referenceImage);
+        // this.referenceImage = undefined;
+        // this.referenceImageChange.emit(this.referenceImage);
         return;
       }
       else{
         // Reset the showImages array and reset reference image
         this.showImages = this.images.map(() => true);
         this.referenceImage = undefined;
+        this.showInstructions = false;
       }
     }
     if (changes['aspectRatio']){
       if (this.aspectRatio.aspectRatio == 'square'){
         this.screenHeight = this.screenWidth;
+        this.resizeCanvas();
       }
       else if (this.aspectRatio.aspectRatio == 'portrait'){
         this.screenHeight = this.screenWidth * 1.5;
+        this.resizeCanvas();
       }
       else if (this.aspectRatio.aspectRatio == 'landscape'){
         this.screenHeight = this.screenWidth * 0.66;
+        this.resizeCanvas();
       }
       else{
         console.log("Error: aspect ratio not recognized");
         this.screenHeight = this.screenWidth;
+      }
+    }
+    // If inpainting status changes
+    if (changes['inpaintingEnabled']) {
+      this.toggleDrawingMode();
+    }
+    // Queue position changed so update the queue position to the emited value
+    if (changes['queuePosition']) {
+      if (this.queuePosition != undefined) {
+        this.queuePosition = changes['queuePosition'].currentValue;
       }
     }
   }
@@ -143,6 +216,9 @@ export class ImageGridComponent {
   }
 
   expandImage(base64: string, event: Event) {
+    // Dont do anything if theres no images
+    if (this.images.length == 0) return;
+
     // If a reference image is set, don't expand the image and delete it
     if (this.referenceImage) {
       this.referenceImage = undefined;
@@ -171,10 +247,6 @@ export class ImageGridComponent {
           base64: base64
         };
     
-        // Hide images and show reference image
-        this.images.forEach(element => {
-          
-        });
         this.referenceImageChange.emit(this.referenceImage);
         console.log(this.referenceImage);
 

@@ -1,16 +1,19 @@
 <div id="generation-space">
   <app-image-grid
     [images]="images"
-    [showInstructions]="showInstructions"
     [showLoading]="showLoading"
     [aspectRatio]="aspectRatio"
     (referenceImageChange)="onReferenceImageChange($event)"
+    [inpaintingEnabled]="inpaintingEnabled"
+    [queuePosition]="queuePosition"
   ></app-image-grid>
   <app-options
     (imagesChange)="onImagesChange($event)"
     (loadingChange)="onShowLoadingChange($event)"
     (aspectRatioChange)="onAspectRatioChange($event)"
     [referenceImage]="referenceImage"
+    (inpaintingChange)="onInpaintingChange($event)"
+    (queuePositionChange)="onQueuePositionChange($event)"
   ></app-options>
 </div>
 <app-faq></app-faq>

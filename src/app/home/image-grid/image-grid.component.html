@@ -2,7 +2,7 @@
 'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
   <!-- Prompt instructions -->
   <input type="file" id="fileInput" style="display: none" (change)="onFileSelected($event)">
-  <div *ngIf="showInstructions" id="instructions" (click)="openFileDialog()">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a reference!</div>
+  <div *ngIf="showInstructions && !showLoading && images.length < 1" id="instructions" (click)="openFileDialog()">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a reference!</div>
 
 
   <!-- Loading container -->
@@ -12,25 +12,27 @@
       <div class="spinner-border text-primary" role="status"></div>
       <!-- Loading text -->
       <div id="queue-position">
-        Generating images...
-      </div>
+        {{queuePosition ? 'Queue Position: ' + queuePosition : 'Generating images...'}}
+      </div>      
     </div>
   </div>
 
   <!-- Images -->
   <div class="image-wrapper" *ngIf="images.length > 0 && showImages[0] && !showLoading && !referenceImage" id="wrapper1">
-    <img [src]="'data:image/png;base64,' + images[0]" class="small-image" alt="Image1 goes here" (click)="expandImage(images[0], $event)" id="image0">
+    <img [src]="'data:image/png;base64,' + images[0]" class="small-image" alt="Image1 goes here" (click)="inpaintingEnabled || expandImage(images[0], $event)" id="image0">
   </div>
   <div class="image-wrapper" *ngIf="images.length > 1 && showImages[1] && !showLoading && !referenceImage" id="wrapper2">
-    <img [src]="'data:image/png;base64,' + images[1]" class="small-image" alt="Image2 goes here" (click)="expandImage(images[1], $event)" id="image1">
+    <img [src]="'data:image/png;base64,' + images[1]" class="small-image" alt="Image2 goes here" (click)="inpaintingEnabled || expandImage(images[1], $event)" id="image1">
   </div>
   <div class="image-wrapper" *ngIf="images.length > 2 && showImages[2] && !showLoading && !referenceImage" id="wrapper3">
-    <img [src]="'data:image/png;base64,' + images[2]" class="small-image" alt="Image3 goes here" (click)="expandImage(images[2], $event)" id="image2">
+    <img [src]="'data:image/png;base64,' + images[2]" class="small-image" alt="Image3 goes here" (click)="inpaintingEnabled || expandImage(images[2], $event)" id="image2">
   </div>
   <div class="image-wrapper" *ngIf="images.length > 3 && showImages[3] && !showLoading && !referenceImage" id="wrapper4">
-    <img [src]="'data:image/png;base64,' + images[3]" class="small-image" alt="Image4 goes here" (click)="expandImage(images[3], $event)" id="image3">
+    <img [src]="'data:image/png;base64,' + images[3]" class="small-image" alt="Image4 goes here" (click)="inpaintingEnabled || expandImage(images[3], $event)" id="image3">
   </div>
   <div class="reference-image" *ngIf="referenceImage && !showLoading" id="wrapper5">
-    <img [src]="referenceImage.url" alt="Reference Image goes here" (click)="expandImage(images[3], $event)" id="referenceImage">
+    <img [src]="referenceImage.url" alt="Reference Image goes here" (click)="inpaintingEnabled || expandImage(images[3], $event)" id="referenceImage">
   </div>
+  <canvas #imageCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()"></canvas>
+
 </div>
