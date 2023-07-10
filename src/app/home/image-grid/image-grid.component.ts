@@ -229,7 +229,7 @@ export class ImageGridComponent {
 
   expandImage(base64: string, event: Event) {
     // Dont do anything if theres no images
-    if (this.images.length == 0) return;
+    //if (this.images.length == 0) return;
 
     // If a reference image is set, don't expand the image and delete it
     if (this.referenceImage) {
