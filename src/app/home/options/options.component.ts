@@ -61,10 +61,10 @@ export class OptionsComponent {
     ) {}
 
   ngOnInit() {
-    this.loadSettings();
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.generationRequest.prompt = value;
     });
+    this.loadSettings();
   }
 
   ngOnDestroy() {
