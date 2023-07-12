@@ -5,12 +5,10 @@ import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ReferenceImage } from 'src/_shared/reference-image.interface';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { interval } from 'rxjs';
-import { switchMap, takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
-import { AfterViewInit } from '@angular/core';
+import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { timer } from 'rxjs';
-import { ToastModule } from 'primeng/toast';
 import {MessageService} from 'primeng/api';
 
 
@@ -205,7 +203,7 @@ export class OptionsComponent {
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.7;
-    this.generationRequest.seed = -1;
+    this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 7;
     this.changeAspectRatio("square");
 
@@ -243,10 +241,12 @@ export class OptionsComponent {
           console.error(error);  // handle error
           this.showError();  // show the error modal
         }
-      ).add(() => {
-        if (defaultSeed){
-          this.generationRequest.seed = undefined;
-        }});
+      );
+
+      // reset seed to default if it was changed
+      if (defaultSeed){
+        this.generationRequest.seed = undefined;
+      }
   }
 
 // check for status of job
