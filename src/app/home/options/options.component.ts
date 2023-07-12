@@ -5,10 +5,11 @@ import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ReferenceImage } from 'src/_shared/reference-image.interface';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { interval } from 'rxjs';
-import { switchMap, takeWhile, finalize, concatMap, tap } from 'rxjs/operators';
+import { switchMap, takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
 import { AfterViewInit } from '@angular/core';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
+import { timer } from 'rxjs';
 
 
 @Component({
@@ -244,44 +245,61 @@ export class OptionsComponent {
         }});
   }
 
-  // check for status of job
-  getJob(job_id: string, API_URL: string) {
-    let jobComplete = false;
-    let lastResponse: any;
+// check for status of job
+getJob(job_id: string, API_URL: string) {
+  let jobComplete = false;
+  let lastResponse: any;
 
-    const getJobInfo = {
-      "job_id": job_id,
-      "API_IP": API_URL
-    }
-    
-    // Create an interval which fires every 3 seconds
-    interval(3000)
-      .pipe(
-        // For each tick of the interval, call the service
-        concatMap(() => this.stableDiffusionService.getJob(getJobInfo)),
-        // Store the response for use in finalize
-        tap(response => lastResponse = response),
-        // Only continue the stream while the job is incomplete
-        takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
-        // Once the stream completes, do any cleanup if necessary
-        finalize(() => {
-          if (jobComplete && lastResponse) {
-            console.log(lastResponse);
-            this.images = lastResponse.result;
-            this.imagesChange.emit(this.images);
-            this.loadingChange.emit(false);
-          }
-        })
-      )
-      .subscribe(
-        response => {
-          // This will be called every 3 seconds, so we do nothing here
-          console.log("queue position: " + response.queue_position);
-          this.queuePositionChange.emit(response.queue_position);
-        },
-        error => console.error(error)
-      );
+  const getJobInfo = {
+    "job_id": job_id,
+    "API_IP": API_URL
   }
+  
+  // Create an interval which fires every 3 seconds
+  interval(2000)
+    .pipe(
+      // For each tick of the interval, call the service
+      concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
+        retryWhen(errors =>
+          errors.pipe(
+            // use the scan operator to track the number of attempts
+            scan((retryCount, err) => {
+              // if retryCount reaches 3 or error status is not 500, throw error
+              if (retryCount >= 3 || err.status !== 500) {
+                throw err;
+              }
+              console.log("retrying... Attempt #" + (retryCount + 1) + " of 3");
+              return retryCount + 1;
+            }, 0),
+            // delay retrying the request for 3 seconds
+            delayWhen(() => timer(3000))
+          )
+        )
+      )),
+      // Store the response for use in finalize
+      tap(response => lastResponse = response),
+      // Only continue the stream while the job is incomplete
+      takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
+      // Once the stream completes, do any cleanup if necessary
+      finalize(() => {
+        if (jobComplete && lastResponse) {
+          console.log(lastResponse);
+          this.images = lastResponse.result;
+          this.imagesChange.emit(this.images);
+          this.loadingChange.emit(false);
+        }
+      })
+    )
+    .subscribe(
+      response => {
+        // This will be called every 3 seconds, so we do nothing here
+        console.log("queue position: " + response.queue_position);
+        this.queuePositionChange.emit(response.queue_position);
+      },
+      error => console.error(error)
+    );
+}
+
 
   enableInpaintCanvas() {
     this.showInpaintingCanvas = !this.showInpaintingCanvas;
