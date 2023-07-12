@@ -10,12 +10,14 @@ import { AfterViewInit } from '@angular/core';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { timer } from 'rxjs';
+import { ToastModule } from 'primeng/toast';
+import {MessageService} from 'primeng/api';
 
 
 @Component({
   selector: 'app-options',
   templateUrl: './options.component.html',
-  styleUrls: ['./options.component.css']
+  styleUrls: ['./options.component.css'],
 })
 export class OptionsComponent {
   private subscription!: Subscription;
@@ -57,6 +59,7 @@ export class OptionsComponent {
   constructor(
     private stableDiffusionService: StableDiffusionService
     , private sharedService: SharedService
+    , private messageService: MessageService
     ) {}
 
   ngOnInit() {
@@ -238,6 +241,7 @@ export class OptionsComponent {
         },
         error => {
           console.error(error);  // handle error
+          this.showError();  // show the error modal
         }
       ).add(() => {
         if (defaultSeed){
@@ -296,7 +300,10 @@ getJob(job_id: string, API_URL: string) {
         console.log("queue position: " + response.queue_position);
         this.queuePositionChange.emit(response.queue_position);
       },
-      error => console.error(error)
+      error =>{
+        console.error(error)
+        this.showError();  // show the error modal
+      } 
     );
 }
 
@@ -304,5 +311,14 @@ getJob(job_id: string, API_URL: string) {
   enableInpaintCanvas() {
     this.showInpaintingCanvas = !this.showInpaintingCanvas;
     this.inpaintingChange.emit(this.showInpaintingCanvas);
+  }
+
+  showError() {
+    this.messageService.add({
+      severity:'error', 
+      summary:'Error Message', 
+      detail:'There was an error attempting to generate your image. Website is likely down. Please try again later or check the Discord server for updates. https://discord.com/invite/RXbJUaFh',
+      life: 500000  // Here is the addition.
+    });
   }
 }
