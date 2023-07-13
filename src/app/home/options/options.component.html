@@ -6,7 +6,8 @@
       aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="3"></textarea>
     <button
       [class]="referenceImage ? 'btn btn-success d-flex align-items-center' : 'btn btn-primary d-flex align-items-center'"
-      type="button" id="generate-button" (click)="this.submitJob()">
+      type="button" id="generate-button" (click)="this.submitJob()"
+      [disabled]="!enableGenerationButton">
       {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
     </button>
   </div>

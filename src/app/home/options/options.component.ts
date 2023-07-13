@@ -20,6 +20,7 @@ import {MessageService} from 'primeng/api';
 export class OptionsComponent {
   private subscription!: Subscription;
 
+  enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
   showInpainting: boolean = false;
@@ -215,6 +216,9 @@ export class OptionsComponent {
 
   // Send job to django api and retrieve job id.
   submitJob() {
+    // Disable generation button
+    this.enableGenerationButton = false;
+
     // Save settings to session storage
     this.saveSettings();
 
@@ -291,6 +295,7 @@ getJob(job_id: string, API_URL: string) {
           this.images = lastResponse.result;
           this.imagesChange.emit(this.images);
           this.loadingChange.emit(false);
+          this.enableGenerationButton = true;
         }
       })
     )
@@ -303,6 +308,7 @@ getJob(job_id: string, API_URL: string) {
       error =>{
         console.error(error)
         this.showError();  // show the error modal
+        this.enableGenerationButton = true;
       } 
     );
 }
