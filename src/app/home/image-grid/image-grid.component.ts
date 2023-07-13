@@ -176,7 +176,9 @@ export class ImageGridComponent {
   }
 
   openFileDialog() {
-    document.getElementById('fileInput')?.click();
+    if (this.showInstructions && !this.showLoading && this.images.length < 1){
+      document.getElementById('fileInput')?.click();
+    }
   }
   
   onFileSelected(event: Event) {

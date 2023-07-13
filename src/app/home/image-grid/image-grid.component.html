@@ -1,5 +1,6 @@
-<div class="image-grid" (dragover)="allowDrop($event)" (drop)="onDrop($event)" [ngStyle]="{'width.px': isMobileView() ? '100%' : aspectRatio.width, 
-'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
+<div class="image-grid" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
+     [ngStyle]="{'width.px': isMobileView() ? '100%' : aspectRatio.width, 
+     'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
   <!-- Prompt instructions -->
   <input type="file" id="fileInput" style="display: none" (change)="onFileSelected($event)">
   <div *ngIf="showInstructions && !showLoading && images.length < 1" id="instructions" (click)="openFileDialog()">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a reference!</div>
