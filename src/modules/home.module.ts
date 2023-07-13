@@ -10,6 +10,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import {ToastModule} from 'primeng/toast';
 import {MessageService} from 'primeng/api';
+import {InputTextareaModule} from 'primeng/inputtextarea';
 
 
 @NgModule({
@@ -23,7 +24,8 @@ import {MessageService} from 'primeng/api';
     BrowserAnimationsModule,
     ToastModule,
     CommonModule,
-    FormsModule  // FormsModule included here in imports
+    FormsModule,  // FormsModule included here in imports
+    InputTextareaModule
   ],
   exports: [
     ImageGridComponent,
