@@ -235,7 +235,11 @@ export class ImageGridComponent {
     if (file) {
       this.processFile(file);
     }
+    
+    // Reset the value of the file input
+    target.value = '';
   }
+  
 
   processFile(file: File) {
     // Create a URL that points to the file
