@@ -18,6 +18,9 @@ export class ImageGridComponent {
   screenHeight: number = window.innerHeight;
   showInstructions: boolean = true;
 
+  private erasing = false;
+
+
   @Input() inpaintingEnabled: boolean = false;
   @Input() images: string[] = [];
   @Input() showLoading: boolean = false;
@@ -40,7 +43,7 @@ export class ImageGridComponent {
     const context = this.imageCanvas.nativeElement.getContext('2d');
     if (context !== null) {
       this.ctx = context;
-      this.ctx.lineWidth = 80;
+      this.ctx.lineWidth = 50;
       this.ctx.lineJoin = "round";
       this.ctx.lineCap = "round";
       
@@ -74,14 +77,45 @@ export class ImageGridComponent {
     const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
     this.ctx.beginPath();
     this.ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    this.erasing = e.button === 2; // set erasing to true if right button is pressed
+    if (this.erasing) {
+      this.ctx.globalCompositeOperation = 'destination-out';
+      this.ctx.lineWidth = 50; // you might want to adjust this
+    } else {
+      this.ctx.globalCompositeOperation = 'source-over';
+      this.ctx.lineWidth = 50; // back to your original line width
+    }
   }
+  
+  onMouseUp() {
+    this.drawing = false;
+    this.erasing = false; // reset erasing mode
+    this.ctx.globalCompositeOperation = 'source-over'; // reset to normal drawing
+    // Save the canvas as base64 image
+    const base64Image = this.saveCanvasAsBase64();
+    this.inpaint_mask.emit(base64Image);
+  }
+  
+  
   
   onMouseMove(e: MouseEvent) {
     if (!this.inpaintingEnabled || !this.drawing) return;
     const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
     this.ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
     this.ctx.stroke();
+    if (this.erasing) {
+      this.ctx.globalCompositeOperation = 'destination-out';
+    } else {
+      this.ctx.globalCompositeOperation = 'source-over';
+    }
   }
+
+  // @HostListener('contextmenu', ['$event'])
+  // onRightClick(event: MouseEvent) {
+  //   event.preventDefault();
+  //   this.erasing = true;
+  //   // this.onMouseDown(event);
+  // }
 
   resizeCanvas() {
     if (this.imageCanvas && this.imageCanvas.nativeElement) {
@@ -94,16 +128,6 @@ export class ImageGridComponent {
       this.ctx.lineCap = "round";
     }
   }
-  
-
-  onMouseUp() {
-    this.drawing = false;
-
-    // Save the canvas as base64 image
-    const base64Image = this.saveCanvasAsBase64();
-    this.inpaint_mask.emit(base64Image);
-}
-
 
   saveCanvasAsBase64(): string {
     if (this.imageCanvas && this.imageCanvas.nativeElement) {
@@ -111,8 +135,6 @@ export class ImageGridComponent {
     }
     throw new Error('Canvas not available');
   }
-
-
 
   @HostListener('window:resize', ['$event'])
   getScreenSize(event?: Event) {
@@ -173,6 +195,9 @@ export class ImageGridComponent {
       if (this.queuePosition != undefined) {
         this.queuePosition = changes['queuePosition'].currentValue;
       }
+    }
+    if (changes['showLoading']){
+      // this.toggleDrawingMode()
     }
   }
 
@@ -282,12 +307,7 @@ export class ImageGridComponent {
         };
     
         this.referenceImageChange.emit(this.referenceImage);
-        console.log(this.referenceImage);
-
       }
   }
 }
-
-
-
 }

@@ -232,8 +232,12 @@ export class OptionsComponent {
     // Disable generation button
     this.enableGenerationButton = false;
 
+    // Hide canvas if it exists
+    this.showInpaintingCanvas = false;
+
     // Save settings to session storage
     this.saveSettings();
+    this.inpaintingChange.emit(this.showInpaintingCanvas);
 
     // Change seed to random number if default seed is selected
     let defaultSeed: boolean;
@@ -260,6 +264,7 @@ export class OptionsComponent {
           this.imagesChange.emit(this.images);
           this.loadingChange.emit(false);
           this.enableGenerationButton = true;
+          this.generationRequest.mask_image = undefined;
         }
       );
 

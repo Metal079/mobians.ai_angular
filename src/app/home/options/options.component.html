@@ -33,7 +33,7 @@
 
   <!-- inpaint switch -->
   <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
-    <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" (click)="enableInpaintCanvas()" />
+    <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas" (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
     <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
       title="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
