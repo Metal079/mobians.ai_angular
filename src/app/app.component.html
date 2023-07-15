@@ -6,6 +6,7 @@
     (referenceImageChange)="onReferenceImageChange($event)"
     [inpaintingEnabled]="inpaintingEnabled"
     [queuePosition]="queuePosition"
+    (inpaint_mask)="onInpaintMaskChange($event)"
   ></app-image-grid>
   <app-options
     (imagesChange)="onImagesChange($event)"
@@ -14,6 +15,7 @@
     [referenceImage]="referenceImage"
     (inpaintingChange)="onInpaintingChange($event)"
     (queuePositionChange)="onQueuePositionChange($event)"
+    [inpaintMask]="inpaintMask"
   ></app-options>
 </div>
 <app-faq></app-faq>

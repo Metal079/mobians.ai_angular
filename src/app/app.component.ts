@@ -19,6 +19,7 @@ export class AppComponent {
   referenceImage?: ReferenceImage;
   inpaintingEnabled: boolean = false;
   queuePosition?: number;
+  inpaintMask?: string;
 
   constructor() {}  
 
@@ -44,5 +45,10 @@ export class AppComponent {
 
   onQueuePositionChange(queuePosition: number) {
     this.queuePosition = queuePosition;
+  }
+
+  onInpaintMaskChange(inpaint_mask: string) {
+    this.inpaintMask = inpaint_mask;
+    console.log(inpaint_mask);
   }
 }

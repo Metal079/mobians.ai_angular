@@ -32,6 +32,7 @@ export class OptionsComponent {
   generationRequest: GenerationRequest = {
     prompt: "",
     image: this.referenceImage?.base64,
+    mask_image: undefined,
     negative_prompt: this.defaultNegativePrompt,
     scheduler: 7,
     steps: 20,
@@ -48,6 +49,7 @@ export class OptionsComponent {
   API_URL: string = "";
 
   @Input() referenceImage?: ReferenceImage;
+  @Input() inpaintMask?: string;
 
   @Output() imagesChange  = new EventEmitter<any>();
   @Output() loadingChange  = new EventEmitter<any>();
@@ -110,6 +112,17 @@ export class OptionsComponent {
           this.showInpainting = false;
           this.showStrength = false;
         }
+      }
+    }
+    if (changes['inpaintMask'] && changes['inpaintMask'].currentValue != undefined) {
+      this.inpaintMask = changes['inpaintMask'].currentValue;
+      if (changes['inpaintMask'].currentValue == undefined){
+        this.generationRequest.mask_image = undefined;
+        this.generationRequest.job_type = "img2img";
+      }
+      else{
+        this.generationRequest.mask_image = this.inpaintMask!;
+        this.generationRequest.job_type = "inpainting";
       }
     }
   }
@@ -244,6 +257,9 @@ export class OptionsComponent {
         error => {
           console.error(error);  // handle error
           this.showError();  // show the error modal
+          this.imagesChange.emit(this.images);
+          this.loadingChange.emit(false);
+          this.enableGenerationButton = true;
         }
       );
 

@@ -26,6 +26,7 @@ export class ImageGridComponent {
 
   @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
+  @Output() inpaint_mask = new EventEmitter<string>();
 
   constructor() {
     this.screenWidth = window.innerWidth;
@@ -39,7 +40,7 @@ export class ImageGridComponent {
     const context = this.imageCanvas.nativeElement.getContext('2d');
     if (context !== null) {
       this.ctx = context;
-      this.ctx.lineWidth = 40;
+      this.ctx.lineWidth = 80;
       this.ctx.lineJoin = "round";
       this.ctx.lineCap = "round";
       
@@ -65,7 +66,6 @@ export class ImageGridComponent {
       this.imageCanvas.nativeElement.style.visibility = this.inpaintingEnabled ? 'visible' : 'hidden';
     }
   }
-  
 
   
   onMouseDown(e: MouseEvent) {
@@ -87,12 +87,32 @@ export class ImageGridComponent {
     if (this.imageCanvas && this.imageCanvas.nativeElement) {
       this.imageCanvas.nativeElement.width = this.aspectRatio.width;
       this.imageCanvas.nativeElement.height = this.aspectRatio.height;
+  
+      // Set the styles again after resizing
+      this.ctx.lineWidth = 80;
+      this.ctx.lineJoin = "round";
+      this.ctx.lineCap = "round";
     }
   }
+  
 
   onMouseUp() {
     this.drawing = false;
+
+    // Save the canvas as base64 image
+    const base64Image = this.saveCanvasAsBase64();
+    this.inpaint_mask.emit(base64Image);
+}
+
+
+  saveCanvasAsBase64(): string {
+    if (this.imageCanvas && this.imageCanvas.nativeElement) {
+        return this.imageCanvas.nativeElement.toDataURL();
+    }
+    throw new Error('Canvas not available');
   }
+
+
 
   @HostListener('window:resize', ['$event'])
   getScreenSize(event?: Event) {
