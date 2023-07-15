@@ -285,7 +285,7 @@ getJob(job_id: string, API_URL: string) {
   }
   
   // Create an interval which fires every 3 seconds
-  interval(2000)
+  interval(6000)
     .pipe(
       // For each tick of the interval, call the service
       concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
