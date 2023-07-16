@@ -330,6 +330,7 @@ getJob(job_id: string, API_URL: string) {
         console.error(error)
         this.showError();  // show the error modal
         this.enableGenerationButton = true;
+        this.loadingChange.emit(false);
       } 
     );
 }
