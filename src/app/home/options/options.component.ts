@@ -10,6 +10,7 @@ import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { timer } from 'rxjs';
 import {MessageService} from 'primeng/api';
+import { NotificationService } from 'src/app/notification.service';
 
 
 @Component({
@@ -61,6 +62,7 @@ export class OptionsComponent {
     private stableDiffusionService: StableDiffusionService
     , private sharedService: SharedService
     , private messageService: MessageService
+    , private notificationService: NotificationService
     ) {}
 
   ngOnInit() {
@@ -311,6 +313,7 @@ getJob(job_id: string, API_URL: string) {
       takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
       // Once the stream completes, do any cleanup if necessary
       finalize(() => {
+        this.notificationService.playDing();
         if (jobComplete && lastResponse) {
           console.log(lastResponse);
           this.images = lastResponse.result;
