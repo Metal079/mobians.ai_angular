@@ -3,6 +3,7 @@
     [images]="images"
     [showLoading]="showLoading"
     [aspectRatio]="aspectRatio"
+    [referenceImage]="referenceImage"
     (referenceImageChange)="onReferenceImageChange($event)"
     [inpaintingEnabled]="inpaintingEnabled"
     [queuePosition]="queuePosition"
@@ -12,10 +13,11 @@
     (imagesChange)="onImagesChange($event)"
     (loadingChange)="onShowLoadingChange($event)"
     (aspectRatioChange)="onAspectRatioChange($event)"
-    [referenceImage]="referenceImage"
     (inpaintingChange)="onInpaintingChange($event)"
     (queuePositionChange)="onQueuePositionChange($event)"
     [inpaintMask]="inpaintMask"
+    [referenceImage]="referenceImage"
+    (referenceImageChange)="onReferenceImageChange($event)"
   ></app-options>
 </div>
 <app-faq></app-faq>

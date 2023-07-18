@@ -12,7 +12,6 @@ import { ReferenceImage } from 'src/_shared/reference-image.interface';
 export class ImageGridComponent {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
-  referenceImage?: ReferenceImage;
   imageExpanded: boolean = false;
   screenWidth: number;
   screenHeight: number = window.innerHeight;
@@ -26,6 +25,8 @@ export class ImageGridComponent {
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
+  @Input() referenceImage?: ReferenceImage;
+
 
   @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
@@ -198,6 +199,11 @@ export class ImageGridComponent {
     }
     if (changes['showLoading']){
       // this.toggleDrawingMode()
+    }
+    if (changes['referenceImage']){
+      if (this.images.length == 0 && this.referenceImage == undefined){
+        this.showInstructions = true;
+      }
     }
   }
 

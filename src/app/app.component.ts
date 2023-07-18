@@ -49,6 +49,6 @@ export class AppComponent {
 
   onInpaintMaskChange(inpaint_mask: string) {
     this.inpaintMask = inpaint_mask;
-    console.log(inpaint_mask);
   }
+
 }

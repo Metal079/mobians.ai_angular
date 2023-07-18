@@ -56,6 +56,7 @@ export class OptionsComponent {
   @Output() aspectRatioChange  = new EventEmitter<AspectRatio>();
   @Output() inpaintingChange  = new EventEmitter<boolean>();
   @Output() queuePositionChange  = new EventEmitter<number>();
+  @Output() referenceImageChange  = new EventEmitter<ReferenceImage>();
 
   constructor(
     private stableDiffusionService: StableDiffusionService
@@ -68,6 +69,7 @@ export class OptionsComponent {
       this.generationRequest.prompt = value;
     });
     this.loadSettings();
+    this.updateSharedPrompt();
   }
 
   ngOnDestroy() {
@@ -285,7 +287,7 @@ getJob(job_id: string, API_URL: string) {
   }
   
   // Create an interval which fires every 3 seconds
-  interval(6000)
+  interval(3000)
     .pipe(
       // For each tick of the interval, call the service
       concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
@@ -348,5 +350,11 @@ getJob(job_id: string, API_URL: string) {
       detail:'There was an error attempting to generate your image. Website is likely down. Please try again later or check the Discord server for updates. https://discord.com/invite/RXbJUaFh',
       life: 500000  // Here is the addition.
     });
+  }
+
+  removeReferenceImage(){
+    this.referenceImage = undefined;
+    this.generationRequest.image = undefined;
+    this.referenceImageChange.emit(undefined);
   }
 }

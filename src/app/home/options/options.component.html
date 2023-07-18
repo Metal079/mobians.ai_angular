@@ -54,6 +54,13 @@
       Options
     </button>
 
+      <!-- Remove reference image button -->
+    <span *ngIf="referenceImage" id="remove-reference-image-button">
+      <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
+        Remove Reference Image
+      </button>
+    </span>
+
     <!-- Re-generate with reference button -->
     <button class="btn btn-success" type="button" onclick="redoWithSameReference()" id="redo-with-reference-button"
       style="display: none">
@@ -127,6 +134,8 @@
       </button>
     </div>
   </div>
+
+
 
 
 </div>
