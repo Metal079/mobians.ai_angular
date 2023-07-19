@@ -26,6 +26,7 @@ export class OptionsComponent {
   showStrength: boolean = false;
   showInpainting: boolean = false;
   showInpaintingCanvas: boolean = false;
+  notification: boolean = false;
   queuePosition?: number;
   images: string[] = [];
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square"};
@@ -313,7 +314,9 @@ getJob(job_id: string, API_URL: string) {
       takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
       // Once the stream completes, do any cleanup if necessary
       finalize(() => {
-        this.notificationService.playDing();
+        if (this.notification){
+          this.notificationService.playDing();
+        }
         if (jobComplete && lastResponse) {
           console.log(lastResponse);
           this.images = lastResponse.result;
