@@ -16,16 +16,17 @@
   <div *ngIf="referenceImage" id="denoise-strength">
     <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
         }}</span>
-      <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
-        title="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
-        style="
+        <span class="ms-1 text-primary"
+          pTooltip="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
+          tooltipPosition="top"
+          style="
           background-color: rgba(255, 255, 255, 0.8);
           padding: 2px 4px;
           border-radius: 50%;
           cursor: pointer;
-        ">
-        ?
-      </span>
+          ">
+          ?
+        </span>
     </label>
     <input type="range" class="form-range" min="0.2" max="1" value="0.7" step="0.05" id="custom-denoise"
       [(ngModel)]="generationRequest.strength" />
@@ -35,8 +36,9 @@
   <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
     <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas" (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
-    <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
-      title="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
+    <span class="ms-1 text-primary"
+      pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
+      tooltipPosition="top"
       style="
         background-color: rgba(255, 255, 255, 0.8);
         padding: 2px 4px;
@@ -79,8 +81,9 @@
       <!-- Negative Prompt -->
       <div class="mb-3">
         <label for="negative-prompt-input" class="form-label">Negative Prompt
-          <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
-            title="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
+          <span class="ms-1 text-primary"
+            pTooltip="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
+            tooltipPosition="top"
             style="
               background-color: rgba(255, 255, 255, 0.8);
               padding: 2px 4px;
@@ -97,8 +100,9 @@
       <!-- Seed -->
       <div class="mb-3">
         <label for="seedInput" class="form-label">Seed
-          <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Each generated image has a specific seed, if that seed is entered with the same prompt,
-            you can regenerate the same or very similar images. By default a random seed is used with each generation."
+          <span class="ms-1 text-primary"
+            pTooltip="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."
+            tooltipPosition="top"
             style="
               background-color: rgba(255, 255, 255, 0.8);
               padding: 2px 4px;
@@ -113,10 +117,11 @@
 
       <!-- CFG -->
       <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
-          }}</span>
-        <span class="ms-1 text-primary" data-bs-toggle="tooltip" data-bs-placement="top"
-          title="CFG refers to how closely a image tries follow to a prompt, too high values may fry
-            images, while too low of a value will result in an unrelated photo being generated. By default 7 is used but this can be experimented with." style="
+        }}</span>
+        <span class="ms-1 text-primary"
+          pTooltip="CFG refers to how closely a image tries follow to a prompt, too high values may fry images, while too low of a value will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."
+          tooltipPosition="top"
+          style="
             background-color: rgba(255, 255, 255, 0.8);
             padding: 2px 4px;
             border-radius: 50%;
@@ -134,8 +139,4 @@
       </button>
     </div>
   </div>
-
-
-
-
 </div>
