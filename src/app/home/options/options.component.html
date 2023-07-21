@@ -133,6 +133,24 @@
       <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" />
 
+      <!-- FastPass Code -->
+      <div class="mb-3">
+        <label for="fastPassCode" class="form-label">FastPass Code
+          <span class="ms-1 text-primary"
+            pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
+            tooltipPosition="top"
+            style="
+              background-color: rgba(255, 255, 255, 0.8);
+              padding: 2px 4px;
+              border-radius: 50%;
+              cursor: pointer;
+            ">
+            ?
+          </span>
+        </label>
+        <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!" [(ngModel)]="generationRequest.fastPassCode" />
+      </div>
+
       <!-- Reset session storage and view -->
       <button class="btn btn-danger" type="button" (click)="resetSessionStorage()" id="reset-session-storage-button">
         Reset Saved Options

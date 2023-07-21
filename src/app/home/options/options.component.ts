@@ -176,13 +176,19 @@ export class OptionsComponent {
     if (this.generationRequest.strength != undefined){
       localStorage.setItem("custom-denoise", this.generationRequest.strength.toString());
     }
-    if (this.generationRequest.seed != undefined){
+    if (this.generationRequest.seed == undefined){
+      localStorage.removeItem("seed-input");
+    }
+    else if (this.generationRequest.seed != undefined){
       localStorage.setItem("seed-input", this.generationRequest.seed.toString());
     }
     if (this.generationRequest.steps != undefined){
       localStorage.setItem("cfg", this.generationRequest.guidance_scale.toString());
     }
     localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
+    if (this.generationRequest.fastPassCode != undefined && this.generationRequest.fastPassCode != ""){
+      localStorage.setItem("fast-pass-code", this.generationRequest.fastPassCode);
+    }
   }
 
   // Load session storage info of changed settings
@@ -204,7 +210,9 @@ export class OptionsComponent {
     }
     if (localStorage.getItem("aspect-ratio") != null){
       this.changeAspectRatio(localStorage.getItem("aspect-ratio")!);
-      
+    }
+    if (localStorage.getItem("fast-pass-code") != null){
+      this.generationRequest.fastPassCode = localStorage.getItem("fast-pass-code")!;
     }
   }
 
@@ -216,6 +224,7 @@ export class OptionsComponent {
     localStorage.removeItem("seed-input");
     localStorage.removeItem("cfg");
     localStorage.removeItem("aspect-ratio");
+    localStorage.removeItem("fast-pass-code");
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.7;

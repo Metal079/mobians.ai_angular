@@ -11,6 +11,7 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import {ToastModule} from 'primeng/toast';
 import {MessageService} from 'primeng/api';
 import {InputTextareaModule} from 'primeng/inputtextarea';
+import { TooltipModule } from 'primeng/tooltip';
 
 
 @NgModule({
@@ -25,7 +26,8 @@ import {InputTextareaModule} from 'primeng/inputtextarea';
     ToastModule,
     CommonModule,
     FormsModule,  // FormsModule included here in imports
-    InputTextareaModule
+    InputTextareaModule,
+    TooltipModule
   ],
   exports: [
     ImageGridComponent,
