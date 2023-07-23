@@ -13,6 +13,6 @@ export interface GenerationRequest {
     strength: number | undefined;
     job_type: string;
     model: string;
-    fastPassCode?: string;
+    fast_pass_code?: string;
   }
   

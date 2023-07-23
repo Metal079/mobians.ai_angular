@@ -43,7 +43,8 @@ export class OptionsComponent {
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
-    model: "testSonicBeta4__dynamic"
+    model: "testSonicBeta4__dynamic",
+    fast_pass_code: undefined
   };
   jobID: string = "";
   API_URL: string = "";
@@ -186,8 +187,12 @@ export class OptionsComponent {
       localStorage.setItem("cfg", this.generationRequest.guidance_scale.toString());
     }
     localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
-    if (this.generationRequest.fastPassCode != undefined && this.generationRequest.fastPassCode != ""){
-      localStorage.setItem("fast-pass-code", this.generationRequest.fastPassCode);
+    if (this.generationRequest.fast_pass_code == undefined || this.generationRequest.fast_pass_code == ""){
+      this.generationRequest.fast_pass_code = undefined;
+      localStorage.removeItem("fast-pass-code");
+    }
+    else if (this.generationRequest.fast_pass_code != undefined && this.generationRequest.fast_pass_code != ""){
+      localStorage.setItem("fast-pass-code", this.generationRequest.fast_pass_code);
     }
   }
 
@@ -212,7 +217,7 @@ export class OptionsComponent {
       this.changeAspectRatio(localStorage.getItem("aspect-ratio")!);
     }
     if (localStorage.getItem("fast-pass-code") != null){
-      this.generationRequest.fastPassCode = localStorage.getItem("fast-pass-code")!;
+      this.generationRequest.fast_pass_code = localStorage.getItem("fast-pass-code")!;
     }
   }
 
@@ -271,7 +276,7 @@ export class OptionsComponent {
         },
         error => {
           console.error(error);  // handle error
-          this.showError();  // show the error modal
+          this.showError(error);  // show the error modal
           this.imagesChange.emit(this.images);
           this.loadingChange.emit(false);
           this.enableGenerationButton = true;
@@ -339,7 +344,7 @@ getJob(job_id: string, API_URL: string) {
       },
       error =>{
         console.error(error)
-        this.showError();  // show the error modal
+        this.showError(error);  // show the error modal
         this.enableGenerationButton = true;
         this.loadingChange.emit(false);
       } 
@@ -352,14 +357,24 @@ getJob(job_id: string, API_URL: string) {
     this.inpaintingChange.emit(this.showInpaintingCanvas);
   }
 
-  showError() {
+  showError(error: any) {
+    // Default error message
+    let errorMessage = 'There was an error attempting to generate your image. Website is likely down. Please try again later or check the Discord server for updates. https://discord.com/invite/RXbJUaFh';
+  
+    // If the error comes from the backend and has a 'detail' field, use it as the error message
+    if (error && error.error && error.error.detail) {
+      errorMessage = error.error.detail;
+    }
+  
+    // Display the error toast
     this.messageService.add({
       severity:'error', 
       summary:'Error Message', 
-      detail:'There was an error attempting to generate your image. Website is likely down. Please try again later or check the Discord server for updates. https://discord.com/invite/RXbJUaFh',
+      detail: errorMessage,
       life: 500000  // Here is the addition.
     });
   }
+  
 
   removeReferenceImage(){
     this.referenceImage = undefined;
