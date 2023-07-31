@@ -1,6 +1,6 @@
 export interface GenerationRequest {
     prompt: string;
-    image: string | undefined;
+    image?: string;
     mask_image?: string;
     scheduler: number;
     steps: number;

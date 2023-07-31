@@ -2,7 +2,7 @@ import { Component  } from '@angular/core';
 import { ImageGridComponent } from './home/image-grid/image-grid.component';
 import { Input } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
-import { ReferenceImage } from 'src/_shared/reference-image.interface';
+import { MobiansImage } from 'src/_shared/mobians-image.interface';
 
 
 @Component({
@@ -16,10 +16,11 @@ export class AppComponent {
   images: string[] = [];
   showLoading: boolean = false;
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
-  referenceImage?: ReferenceImage;
   inpaintingEnabled: boolean = false;
   queuePosition?: number;
   inpaintMask?: string;
+  showRatingButtons: boolean = false;
+  ratingButtonsEligibility: boolean = false;
 
   constructor() {}  
 
@@ -35,10 +36,6 @@ export class AppComponent {
     this.aspectRatio = aspectRatio;
   }
 
-  onReferenceImageChange(referenceImage: ReferenceImage) {
-    this.referenceImage = referenceImage;
-  }
-
   onInpaintingChange(inpaintingEnabled: boolean) {
     this.inpaintingEnabled = inpaintingEnabled;
   }
@@ -49,6 +46,19 @@ export class AppComponent {
 
   onInpaintMaskChange(inpaint_mask: string) {
     this.inpaintMask = inpaint_mask;
+  }
+
+  ratingButtonsEligibilityChange() {
+    this.ratingButtonsEligibility = true;
+  }
+
+  onImageExpandedChange(imageExpanded: boolean) {
+    if (imageExpanded && this.ratingButtonsEligibility) {
+      this.showRatingButtons = true;
+    }
+    else {
+      this.showRatingButtons = false;
+    }
   }
 
 }
