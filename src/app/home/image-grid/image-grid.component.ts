@@ -1,7 +1,10 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
-import { ReferenceImage } from 'src/_shared/reference-image.interface';
+import { MobiansImage } from 'src/_shared/mobians-image.interface';
+import { v4 as uuidv4 } from 'uuid';
+import { SharedService } from 'src/app/shared.service';
+import { Subscription } from 'rxjs';
 
 
 @Component({
@@ -12,33 +15,88 @@ import { ReferenceImage } from 'src/_shared/reference-image.interface';
 export class ImageGridComponent {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
+  imagesIDs: string[] = [];
   imageExpanded: boolean = false;
   screenWidth: number;
   screenHeight: number = window.innerHeight;
   showInstructions: boolean = true;
+  images: MobiansImage[] = [];
+  referenceImage?: MobiansImage;
 
   private erasing = false;
-
+  private imageSubscription!: Subscription;
+  private referenceImageSubscription!: Subscription;
+  private previousImages: MobiansImage[] = [];
 
   @Input() inpaintingEnabled: boolean = false;
-  @Input() images: string[] = [];
+  // @Input() images: string[] = [];
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
-  @Input() referenceImage?: ReferenceImage;
+  // @Input() referenceImage?: ReferenceImage;
 
-
-  @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
+  // @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
   @Output() inpaint_mask = new EventEmitter<string>();
+  @Output() imageExpandedChange = new EventEmitter<boolean>();
 
-  constructor() {
+  constructor(
+    private sharedService: SharedService
+  ) {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
   }
 
   private ctx!: CanvasRenderingContext2D;
   private drawing = false;
+
+  ngOnInit() {
+    this.imageSubscription = this.sharedService.getImages().subscribe(images => {
+      // Check if all 4 images have changed or modified
+      if (images.length === 4 && this.allImagesChanged(images)) {
+        // Do something with the images
+        this.images = images;
+        this.referenceImage = undefined;
+        console.log('All 4 images changed or modified:', images);
+      }
+
+      // Update previous images for future comparison
+      this.previousImages = images;
+    });
+
+    this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
+      if (image) {
+        // console.log('Reference Image changed:', image);
+        this.referenceImage = image;
+      }
+      else{
+        // console.log('Reference Image removed');
+        this.referenceImage = undefined;
+      }
+    });
+  }
+
+  private allImagesChanged(newImages: MobiansImage[]): boolean {
+    // If the previousImages array is empty, return true
+    if (this.previousImages.length === 0) {
+      return true;
+    }
+
+    // Compare each image in the newImages array with the corresponding image in the previousImages array
+    for (let i = 0; i < newImages.length; i++) {
+      const newImage = newImages[i];
+      const prevImage = this.previousImages[i];
+
+      // Here, you'll need to define how you determine if an image is considered "changed."
+      // This could be based on one or more properties, depending on your needs.
+      // For example, you might compare the base64 strings:
+      if (newImage.base64 == prevImage.base64) {
+        return false; // If any image hasn't changed, return false
+      }
+    }
+
+    return true; // If all images have changed, return true
+  }
 
   ngAfterViewInit() {
     const context = this.imageCanvas.nativeElement.getContext('2d');
@@ -47,7 +105,7 @@ export class ImageGridComponent {
       this.ctx.lineWidth = 50;
       this.ctx.lineJoin = "round";
       this.ctx.lineCap = "round";
-      
+
       // Check if parentElement is not null before accessing its properties
       if (this.imageCanvas.nativeElement.parentElement !== null) {
         this.imageCanvas.nativeElement.width = this.aspectRatio.width;
@@ -56,7 +114,7 @@ export class ImageGridComponent {
 
       // Make sure painting is disabled by default
       this.imageCanvas.nativeElement.style.pointerEvents = 'none';
-  
+
     } else {
       throw new Error('Could not get 2D rendering context');
     }
@@ -71,7 +129,6 @@ export class ImageGridComponent {
     }
   }
 
-  
   onMouseDown(e: MouseEvent) {
     if (!this.inpaintingEnabled) return;
     this.drawing = true;
@@ -87,7 +144,7 @@ export class ImageGridComponent {
       this.ctx.lineWidth = 50; // back to your original line width
     }
   }
-  
+
   onMouseUp() {
     this.drawing = false;
     this.erasing = false; // reset erasing mode
@@ -96,9 +153,7 @@ export class ImageGridComponent {
     const base64Image = this.saveCanvasAsBase64();
     this.inpaint_mask.emit(base64Image);
   }
-  
-  
-  
+
   onMouseMove(e: MouseEvent) {
     if (!this.inpaintingEnabled || !this.drawing) return;
     const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
@@ -111,18 +166,11 @@ export class ImageGridComponent {
     }
   }
 
-  // @HostListener('contextmenu', ['$event'])
-  // onRightClick(event: MouseEvent) {
-  //   event.preventDefault();
-  //   this.erasing = true;
-  //   // this.onMouseDown(event);
-  // }
-
   resizeCanvas() {
     if (this.imageCanvas && this.imageCanvas.nativeElement) {
       this.imageCanvas.nativeElement.width = this.aspectRatio.width;
       this.imageCanvas.nativeElement.height = this.aspectRatio.height;
-  
+
       // Set the styles again after resizing
       this.ctx.lineWidth = 80;
       this.ctx.lineJoin = "round";
@@ -132,7 +180,7 @@ export class ImageGridComponent {
 
   saveCanvasAsBase64(): string {
     if (this.imageCanvas && this.imageCanvas.nativeElement) {
-        return this.imageCanvas.nativeElement.toDataURL();
+      return this.imageCanvas.nativeElement.toDataURL();
     }
     throw new Error('Canvas not available');
   }
@@ -147,42 +195,47 @@ export class ImageGridComponent {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes['images']) {
-      // If images were set to null or undefined, reset the showImages array
-      if (this.images.length == 0) {
-          this.showImages = [];
-          this.showInstructions = true;
-          this.referenceImage = undefined;
-          this.referenceImageChange.emit(this.referenceImage);
+    // if (changes['images']) {
+    //   // If images were set to null or undefined, reset the showImages array
+    //   if (this.images.length == 0) {
+    //     this.showImages = [];
+    //     this.imagesIDs = [];
+    //     this.showInstructions = true;
+    //     this.referenceImage = undefined;
+    //     this.sharedService.setReferenceImage(null);
+    //     // this.referenceImageChange.emit(this.referenceImage);
 
-          // Check if this.ctx and this.imageCanvas.nativeElement are defined before clearing the canvas
-          if (this.ctx && this.imageCanvas && this.imageCanvas.nativeElement) {
-              this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
-              // this.inpaintingEnabled = false;
-              // this.toggleDrawingMode(); // call this method instead of setting style directly
-          }
-      }
-      else {
-          // Reset the showImages array and reset reference image
-          this.showImages = this.images.map(() => true);
-          this.referenceImage = undefined;
-          this.showInstructions = false;
-      }
-  }
-    if (changes['aspectRatio']){
-      if (this.aspectRatio.aspectRatio == 'square'){
+    //     // Check if this.ctx and this.imageCanvas.nativeElement are defined before clearing the canvas
+    //     if (this.ctx && this.imageCanvas && this.imageCanvas.nativeElement) {
+    //       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+    //       // this.inpaintingEnabled = false;
+    //       // this.toggleDrawingMode(); // call this method instead of setting style directly
+    //     }
+    //   }
+    //   else {
+    //     // Reset the showImages array and reset reference image
+    //     this.showImages = this.images.map(() => true);
+    //     this.referenceImage = undefined;
+    //     this.showInstructions = false;
+
+    //     // Create UUID for each image
+    //     this.imagesIDs = this.images.map(() => uuidv4());
+    //   }
+    // }
+    if (changes['aspectRatio']) {
+      if (this.aspectRatio.aspectRatio == 'square') {
         this.screenHeight = this.screenWidth;
         this.resizeCanvas();
       }
-      else if (this.aspectRatio.aspectRatio == 'portrait'){
+      else if (this.aspectRatio.aspectRatio == 'portrait') {
         this.screenHeight = this.screenWidth * 1.5;
         this.resizeCanvas();
       }
-      else if (this.aspectRatio.aspectRatio == 'landscape'){
+      else if (this.aspectRatio.aspectRatio == 'landscape') {
         this.screenHeight = this.screenWidth * 0.66;
         this.resizeCanvas();
       }
-      else{
+      else {
         console.log("Error: aspect ratio not recognized");
         this.screenHeight = this.screenWidth;
       }
@@ -197,11 +250,11 @@ export class ImageGridComponent {
         this.queuePosition = changes['queuePosition'].currentValue;
       }
     }
-    if (changes['showLoading']){
+    if (changes['showLoading']) {
       // this.toggleDrawingMode()
     }
-    if (changes['referenceImage']){
-      if (this.images.length == 0 && this.referenceImage == undefined){
+    if (changes['referenceImage']) {
+      if (this.images.length == 0 && this.referenceImage == undefined) {
         this.showInstructions = true;
       }
     }
@@ -214,12 +267,12 @@ export class ImageGridComponent {
   // When reference image is dropped, set it as the reference image
   onDrop(event: DragEvent) {
     event.preventDefault();
-  
+
     // Ensure dataTransfer is not null
     if (event.dataTransfer) {
       // Retrieve the file being dragged
       let file = event.dataTransfer.files[0];
-  
+
       if (file) {
         this.processFile(file);
       }
@@ -227,50 +280,50 @@ export class ImageGridComponent {
   }
 
   openFileDialog() {
-    if (this.showInstructions && !this.showLoading && this.images.length < 1){
+    if (this.showInstructions && !this.showLoading && this.images.length < 1) {
       document.getElementById('fileInput')?.click();
     }
   }
-  
+
   onFileSelected(event: Event) {
     // The target of this event is an HTMLInputElement, so we need to assert the type
     const target = event.target as HTMLInputElement;
     // The files property is a FileList, which is like an array of files
     let file: File | null = target.files ? target.files[0] : null;
-  
+
     if (file) {
       this.processFile(file);
     }
-    
+
     // Reset the value of the file input
     target.value = '';
   }
-  
 
   processFile(file: File) {
     // Create a URL that points to the file
     let url = URL.createObjectURL(file);
-  
+
     // Create new image element to get dimensions
     let img = new Image();
     img.src = url;
-  
+
     img.onload = () => {
       // Calculate the aspect ratio (Square, Portrait, Landscape)
       let tempAspectRatio = img.naturalWidth / img.naturalHeight;
-  
+
       // Set the reference image
       this.referenceImage = {
         url: url,
         width: img.naturalWidth,
         height: img.naturalHeight,
         aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
-        base64: ''
+        base64: '',
+        UUID: uuidv4(),
       };
-  
+
       // Turn off the instructions
       this.showInstructions = false;
-  
+
       // Convert the image to base64
       let reader = new FileReader();
       reader.readAsDataURL(file);
@@ -278,20 +331,18 @@ export class ImageGridComponent {
         let base64Image = reader.result as string;
         // Set the base64 property of the reference image
         this.referenceImage!.base64 = base64Image;
-        // Emit the new reference image
-        this.referenceImageChange.emit(this.referenceImage);
+        this.sharedService.setReferenceImage(this.referenceImage!);
       }
     }
   }
 
-  expandImage(base64: string, event: Event) {
-    // Dont do anything if theres no images
-    //if (this.images.length == 0) return;
-
+  expandImage(imageIndex: number, event: Event) {
     // If a reference image is set, don't expand the image and delete it
     if (this.referenceImage) {
       this.referenceImage = undefined;
-      this.referenceImageChange.emit(this.referenceImage);
+      this.sharedService.setReferenceImage(this.referenceImage || null);
+
+      this.imageExpandedChange.emit(false);
 
       // if there are no regular images, show the instructions
       if (this.images.length == 0) {
@@ -301,23 +352,26 @@ export class ImageGridComponent {
     else {
       // Create new image element to get dimensions
       let img = new Image();
-      img.src = 'data:image/png;base64,' + base64;
-    
+      const imageInfo = this.sharedService.getImage(imageIndex);
+      img.src = 'data:image/png;base64,' + imageInfo!.base64;
+
       img.onload = () => {
         // Calculate the aspect ratio (Square, Portrait, Landscape)
         let tempAspectRatio = img.naturalWidth / img.naturalHeight;
-    
+
         // Set the reference image
         this.referenceImage = {
           url: img.src,
           width: img.naturalWidth,
           height: img.naturalHeight,
           aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
-          base64: base64
+          base64: imageInfo!.base64,
+          UUID: imageInfo!.UUID,
+          rating: imageInfo?.rating
         };
-    
-        this.referenceImageChange.emit(this.referenceImage);
+        this.sharedService.setReferenceImage(this.referenceImage);
+        this.imageExpandedChange.emit(true);
       }
+    }
   }
-}
 }

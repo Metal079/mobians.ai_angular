@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ImageGridComponent } from 'src/app/home/image-grid/image-grid.component';
 import { OptionsComponent } from 'src/app/home/options/options.component';
 import { FaqComponent } from 'src/app/home/faq/faq.component';
+import { UserRatingComponent } from 'src/app/home/user-rating/user-rating.component';
 
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -12,13 +13,15 @@ import {ToastModule} from 'primeng/toast';
 import {MessageService} from 'primeng/api';
 import {InputTextareaModule} from 'primeng/inputtextarea';
 import { TooltipModule } from 'primeng/tooltip';
+import { ButtonModule } from 'primeng/button';
 
 
 @NgModule({
   declarations: [
     ImageGridComponent,
     OptionsComponent,
-    FaqComponent
+    FaqComponent,
+    UserRatingComponent,
   ],
   imports: [
     BrowserModule,
@@ -27,12 +30,14 @@ import { TooltipModule } from 'primeng/tooltip';
     CommonModule,
     FormsModule,  // FormsModule included here in imports
     InputTextareaModule,
-    TooltipModule
+    TooltipModule,
+    ButtonModule,
   ],
   exports: [
     ImageGridComponent,
     OptionsComponent,
-    FaqComponent
+    FaqComponent,
+    UserRatingComponent,
   ],
   providers: [MessageService]
 })
