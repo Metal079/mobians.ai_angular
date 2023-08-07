@@ -81,6 +81,9 @@ export class OptionsComponent {
         this.generationRequest.job_type = "img2img";
         this.generationRequest.image = image.base64;
         this.referenceImage = image;
+
+        // Set the aspect ratio
+        this.changeAspectRatio(image.aspectRatio);
       }
       else {
         this.generationRequest.job_type = "txt2img";
@@ -289,7 +292,7 @@ export class OptionsComponent {
     }
 
     // Create an interval which fires every 3 seconds
-    interval(3000)
+    interval(1000)
       .pipe(
         // For each tick of the interval, call the service
         concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(

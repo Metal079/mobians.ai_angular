@@ -324,6 +324,24 @@ export class ImageGridComponent {
       // Turn off the instructions
       this.showInstructions = false;
 
+      // Set the aspect ratio
+      if (this.aspectRatio.aspectRatio == 'square') {
+        this.screenHeight = this.screenWidth;
+        this.resizeCanvas();
+      }
+      else if (this.aspectRatio.aspectRatio == 'portrait') {
+        this.screenHeight = this.screenWidth * 1.5;
+        this.resizeCanvas();
+      }
+      else if (this.aspectRatio.aspectRatio == 'landscape') {
+        this.screenHeight = this.screenWidth * 0.66;
+        this.resizeCanvas();
+      }
+      else {
+        console.log("Error: aspect ratio not recognized");
+        this.screenHeight = this.screenWidth;
+      }
+
       // Convert the image to base64
       let reader = new FileReader();
       reader.readAsDataURL(file);
