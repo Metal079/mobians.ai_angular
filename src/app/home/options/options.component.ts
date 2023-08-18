@@ -52,6 +52,7 @@ export class OptionsComponent {
   jobID: string = "";
   API_URL: string = "";
   referenceImage?: MobiansImage;
+  currentSeed?: number;
 
   @Input() inpaintMask?: string;
 
@@ -254,6 +255,7 @@ export class OptionsComponent {
     else {
       defaultSeed = false;
     }
+    this.currentSeed = this.generationRequest.seed;
     this.sharedService.setGenerationRequest(this.generationRequest);
 
     // set loading to true and submit job

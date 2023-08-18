@@ -1,13 +1,13 @@
-<p-toast ></p-toast>
+<p-toast></p-toast>
 <!-- Prompt input box and advanced options button -->
 <div class="input-button-container">
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch">
-    <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt" (ngModelChange)="updateSharedPrompt()" class="form-control resizable-textarea" placeholder="Enter Prompt"
+    <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
+      (ngModelChange)="updateSharedPrompt()" class="form-control resizable-textarea" placeholder="Enter Prompt"
       aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
     <button
       [class]="referenceImage ? 'btn btn-success d-flex align-items-center' : 'btn btn-primary d-flex align-items-center'"
-      type="button" id="generate-button" (click)="this.submitJob()"
-      [disabled]="!enableGenerationButton">
+      type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!enableGenerationButton">
       {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
     </button>
   </div>
@@ -16,17 +16,16 @@
   <div *ngIf="referenceImage" id="denoise-strength">
     <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
         }}</span>
-        <span class="ms-1 text-primary"
-          pTooltip="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
-          tooltipPosition="top"
-          style="
+      <span class="ms-1 text-primary"
+        pTooltip="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
+        tooltipPosition="top" style="
           background-color: rgba(255, 255, 255, 0.8);
           padding: 2px 4px;
           border-radius: 50%;
           cursor: pointer;
           ">
-          ?
-        </span>
+        ?
+      </span>
     </label>
     <input type="range" class="form-range" min="0.2" max="1" value="0.7" step="0.05" id="custom-denoise"
       [(ngModel)]="generationRequest.strength" />
@@ -34,12 +33,12 @@
 
   <!-- inpaint switch -->
   <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
-    <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas" (click)="enableInpaintCanvas()" />
+    <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas"
+      (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
     <span class="ms-1 text-primary"
       pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
-      tooltipPosition="top"
-      style="
+      tooltipPosition="top" style="
         background-color: rgba(255, 255, 255, 0.8);
         padding: 2px 4px;
         border-radius: 50%;
@@ -56,7 +55,7 @@
       Options
     </button>
 
-      <!-- Remove reference image button -->
+    <!-- Remove reference image button -->
     <span *ngIf="referenceImage" id="remove-reference-image-button">
       <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
         Remove Reference Image
@@ -83,8 +82,7 @@
         <label for="negative-prompt-input" class="form-label">Negative Prompt
           <span class="ms-1 text-primary"
             pTooltip="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
-            tooltipPosition="top"
-            style="
+            tooltipPosition="top" style="
               background-color: rgba(255, 255, 255, 0.8);
               padding: 2px 4px;
               border-radius: 50%;
@@ -97,31 +95,44 @@
           [(ngModel)]="generationRequest.negative_prompt"></textarea>
       </div>
 
-      <!-- Seed -->
-      <div class="mb-3">
-        <label for="seedInput" class="form-label">Seed
-          <span class="ms-1 text-primary"
-            pTooltip="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."
-            tooltipPosition="top"
-            style="
-              background-color: rgba(255, 255, 255, 0.8);
-              padding: 2px 4px;
-              border-radius: 50%;
-              cursor: pointer;
-            ">
-            ?
-          </span>
-        </label>
-        <input type="number" class="form-control" id="seedInput" placeholder="-1" [(ngModel)]="generationRequest.seed" />
+      <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+        <!-- Seed -->
+        <div style="width: 49%; flex-basis: calc(49%);">
+          <label for="seedInput" class="form-label">
+            Seed
+            <span class="ms-1 text-primary"
+              pTooltip="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."
+              tooltipPosition="top"
+              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
+              ?
+            </span>
+          </label>
+          <input type="number" class="form-control" id="seedInput1" placeholder="-1"
+            [(ngModel)]="generationRequest.seed" />
+        </div>
+
+        <!-- Selected Image Seed -->
+        <div style="width: 49%; flex-basis: calc(49%);">
+          <label for="seedInput2" class="form-label">
+            Current Seed
+            <span class="ms-1 text-primary"
+              pTooltip="The current seed of the currently generated images. This can be used to regenerate the same/or very similar image."
+              tooltipPosition="top"
+              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
+              ?
+            </span>
+          </label>
+          <input type="number" class="form-control" id="seedInput2" placeholder="Generate to see seed."
+            [(ngModel)]="currentSeed" disabled="true" [value]="currentSeed" />
+        </div>
       </div>
 
       <!-- CFG -->
       <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
-        }}</span>
+          }}</span>
         <span class="ms-1 text-primary"
           pTooltip="CFG refers to how closely a image tries follow to a prompt, too high values may fry images, while too low of a value will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."
-          tooltipPosition="top"
-          style="
+          tooltipPosition="top" style="
             background-color: rgba(255, 255, 255, 0.8);
             padding: 2px 4px;
             border-radius: 50%;
@@ -138,8 +149,7 @@
         <label for="fastPassCode" class="form-label">FastPass Code
           <span class="ms-1 text-primary"
             pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
-            tooltipPosition="top"
-            style="
+            tooltipPosition="top" style="
               background-color: rgba(255, 255, 255, 0.8);
               padding: 2px 4px;
               border-radius: 50%;
@@ -148,7 +158,8 @@
             ?
           </span>
         </label>
-        <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!" [(ngModel)]="generationRequest.fast_pass_code" />
+        <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
+          [(ngModel)]="generationRequest.fast_pass_code" />
       </div>
 
       <!-- Reset session storage and view -->
