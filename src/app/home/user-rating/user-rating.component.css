@@ -1,0 +1,12 @@
+.button-container {
+    height: 1000px;  /* for example */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+  }
+  
+  .rating-button {
+    width: 50%;
+    border-radius: 0;
+  }
+  

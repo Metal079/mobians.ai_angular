@@ -1,21 +1,23 @@
 <div id="generation-space">
-  <app-image-grid
-    [images]="images"
-    [showLoading]="showLoading"
-    [aspectRatio]="aspectRatio"
-    (referenceImageChange)="onReferenceImageChange($event)"
-    [inpaintingEnabled]="inpaintingEnabled"
-    [queuePosition]="queuePosition"
-    (inpaint_mask)="onInpaintMaskChange($event)"
-  ></app-image-grid>
+  <div id="image-rating-section">
+    <app-image-grid
+      [showLoading]="showLoading"
+      [aspectRatio]="aspectRatio"
+      [inpaintingEnabled]="inpaintingEnabled"
+      [queuePosition]="queuePosition"
+      (inpaint_mask)="onInpaintMaskChange($event)"
+      (imageExpandedChange)="onImageExpandedChange($event)"
+    ></app-image-grid>
+    <app-user-rating *ngIf="!showLoading"></app-user-rating>
+  </div>
   <app-options
     (imagesChange)="onImagesChange($event)"
     (loadingChange)="onShowLoadingChange($event)"
     (aspectRatioChange)="onAspectRatioChange($event)"
-    [referenceImage]="referenceImage"
     (inpaintingChange)="onInpaintingChange($event)"
     (queuePositionChange)="onQueuePositionChange($event)"
     [inpaintMask]="inpaintMask"
+    (ratingButtonsEligibilityChange)="ratingButtonsEligibilityChange()"
   ></app-options>
 </div>
 <app-faq></app-faq>

@@ -1,6 +1,6 @@
 export interface GenerationRequest {
     prompt: string;
-    image: string | undefined;
+    image?: string;
     mask_image?: string;
     scheduler: number;
     steps: number;
@@ -13,5 +13,6 @@ export interface GenerationRequest {
     strength: number | undefined;
     job_type: string;
     model: string;
+    fast_pass_code?: string;
   }
   
