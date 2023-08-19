@@ -165,11 +165,12 @@
       <!-- Notifications -->
       <div class="d-flex justify-content-start mb-3">
         <div class="form-check me-3">
-          <input class="form-check-input" type="checkbox" [(ngModel)]="notification" id="notification">
+          <input class="form-check-input" type="checkbox" [(ngModel)]="enableNotifications"
+            (change)="enableNotification()" id="notification">
           <label class="form-check-label" for="notification">Send Notification When Image Completes</label>
         </div>
       </div>
-        
+
       <!-- Reset session storage and view -->
       <button class="btn btn-danger" type="button" (click)="resetSessionStorage()" id="reset-session-storage-button">
         Reset Saved Options

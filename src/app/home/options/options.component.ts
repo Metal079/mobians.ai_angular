@@ -12,6 +12,7 @@ import { timer } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationService } from 'src/app/notification.service';
+import { SwPush } from '@angular/service-worker';
 
 
 @Component({
@@ -28,7 +29,7 @@ export class OptionsComponent {
   showStrength: boolean = false;
   showInpainting: boolean = false;
   showInpaintingCanvas: boolean = false;
-  notification: boolean = false;
+  enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
   aspectRatio: AspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square" };
@@ -65,11 +66,14 @@ export class OptionsComponent {
   @Output() queuePositionChange = new EventEmitter<number>();
   @Output() ratingButtonsEligibilityChange = new EventEmitter<boolean>();
 
+  readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
+
   constructor(
     private stableDiffusionService: StableDiffusionService
     , private sharedService: SharedService
     , private messageService: MessageService
     , private notificationService: NotificationService
+    , private swPush: SwPush
   ) { }
 
   ngOnInit() {
@@ -97,7 +101,6 @@ export class OptionsComponent {
     });
   }
 
-
   ngOnDestroy() {
     if (this.subscription) {
       this.subscription.unsubscribe();
@@ -106,7 +109,6 @@ export class OptionsComponent {
       this.referenceImageSubscription.unsubscribe();
     }
   }
-
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['inpaintMask'] && changes['inpaintMask'].currentValue != undefined) {
@@ -323,8 +325,9 @@ export class OptionsComponent {
         takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
         // Once the stream completes, do any cleanup if necessary
         finalize(() => {
-          if (this.notification){
+          if (this.enableNotifications) {
             this.notificationService.playDing();
+            this.notificationService.sendPushNotification();
           }
           if (jobComplete && lastResponse) {
             console.log(lastResponse);
@@ -389,5 +392,11 @@ export class OptionsComponent {
     this.generationRequest.image = undefined;
     this.sharedService.setReferenceImage(null);
     this.sharedService.setGenerationRequest(this.generationRequest);
+  }
+
+  enableNotification() {
+    if (this.enableNotifications) {
+      this.notificationService.subscribeToNotifications();
+    }
   }
 }
