@@ -395,6 +395,9 @@ export class OptionsComponent {
   }
 
   enableNotification() {
+    const userId = uuidv4()
+    this.notificationService.userId = userId;
+
     if (this.enableNotifications) {
       this.notificationService.subscribeToNotifications();
     }
