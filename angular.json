@@ -24,7 +24,7 @@
               "src/favicon.ico",
               "src/assets",
               "src/manifest.webmanifest",
-              "src/manifest.webmanifest"
+              "src/notification-sw.js"
             ],
             "styles": [
               "src/styles.css",
@@ -92,7 +92,8 @@
               "src/favicon.ico",
               "src/assets",
               "src/manifest.webmanifest",
-              "src/manifest.webmanifest"
+              "src/manifest.webmanifest",
+              "src/notification-sw.js"
             ],
             "styles": [
               "src/styles.css"
