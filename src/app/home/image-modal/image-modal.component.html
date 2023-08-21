@@ -1,0 +1,6 @@
+<p>image-modal works!</p>
+<div *ngIf="showModal" class="modal">
+    <canvas #imageCanvas (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()"></canvas>
+    <button (click)="closeModal()">Close</button>
+  </div>
+  
