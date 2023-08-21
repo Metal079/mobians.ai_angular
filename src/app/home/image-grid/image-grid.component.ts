@@ -21,7 +21,6 @@ export class ImageGridComponent {
   screenHeight: number = window.innerHeight;
   showInstructions: boolean = true;
   images: MobiansImage[] = [];
-  referenceImage?: MobiansImage;
 
   private erasing = false;
   private imageSubscription!: Subscription;
@@ -29,19 +28,16 @@ export class ImageGridComponent {
   private previousImages: MobiansImage[] = [];
 
   @Input() inpaintingEnabled: boolean = false;
-  // @Input() images: string[] = [];
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
-  // @Input() referenceImage?: ReferenceImage;
 
-  // @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
 
   constructor(
-    private sharedService: SharedService
+    public sharedService: SharedService
   ) {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
@@ -56,7 +52,7 @@ export class ImageGridComponent {
       if (images.length === 4 && this.allImagesChanged(images)) {
         // Do something with the images
         this.images = images;
-        this.referenceImage = undefined;
+        this.sharedService.setReferenceImage(null);
         console.log('All 4 images changed or modified:', images);
       }
 
@@ -64,16 +60,14 @@ export class ImageGridComponent {
       this.previousImages = images;
     });
 
-    this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
-      if (image) {
-        // console.log('Reference Image changed:', image);
-        this.referenceImage = image;
-      }
-      else{
-        // console.log('Reference Image removed');
-        this.referenceImage = undefined;
-      }
-    });
+    // this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
+    //   if (image) {
+    //     // console.log('Reference Image changed:', image);
+    //   }
+    //   else{
+    //     // console.log('Reference Image removed');
+    //   }
+    // });
   }
 
   private allImagesChanged(newImages: MobiansImage[]): boolean {
@@ -195,33 +189,6 @@ export class ImageGridComponent {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    // if (changes['images']) {
-    //   // If images were set to null or undefined, reset the showImages array
-    //   if (this.images.length == 0) {
-    //     this.showImages = [];
-    //     this.imagesIDs = [];
-    //     this.showInstructions = true;
-    //     this.referenceImage = undefined;
-    //     this.sharedService.setReferenceImage(null);
-    //     // this.referenceImageChange.emit(this.referenceImage);
-
-    //     // Check if this.ctx and this.imageCanvas.nativeElement are defined before clearing the canvas
-    //     if (this.ctx && this.imageCanvas && this.imageCanvas.nativeElement) {
-    //       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
-    //       // this.inpaintingEnabled = false;
-    //       // this.toggleDrawingMode(); // call this method instead of setting style directly
-    //     }
-    //   }
-    //   else {
-    //     // Reset the showImages array and reset reference image
-    //     this.showImages = this.images.map(() => true);
-    //     this.referenceImage = undefined;
-    //     this.showInstructions = false;
-
-    //     // Create UUID for each image
-    //     this.imagesIDs = this.images.map(() => uuidv4());
-    //   }
-    // }
     if (changes['aspectRatio']) {
       if (this.aspectRatio.aspectRatio == 'square') {
         this.screenHeight = this.screenWidth;
@@ -254,7 +221,7 @@ export class ImageGridComponent {
       // this.toggleDrawingMode()
     }
     if (changes['referenceImage']) {
-      if (this.images.length == 0 && this.referenceImage == undefined) {
+      if (this.images.length == 0 && this.sharedService.getReferenceImageValue() == null) {
         this.showInstructions = true;
       }
     }
@@ -312,7 +279,7 @@ export class ImageGridComponent {
       let tempAspectRatio = img.naturalWidth / img.naturalHeight;
 
       // Set the reference image
-      this.referenceImage = {
+      const referenceImage = {
         url: url,
         width: img.naturalWidth,
         height: img.naturalHeight,
@@ -347,18 +314,17 @@ export class ImageGridComponent {
       reader.readAsDataURL(file);
       reader.onload = () => {
         let base64Image = reader.result as string;
+        referenceImage.base64 = base64Image;
         // Set the base64 property of the reference image
-        this.referenceImage!.base64 = base64Image;
-        this.sharedService.setReferenceImage(this.referenceImage!);
+        this.sharedService.setReferenceImage(referenceImage);
       }
     }
   }
 
   expandImage(imageIndex: number, event: Event) {
     // If a reference image is set, don't expand the image and delete it
-    if (this.referenceImage) {
-      this.referenceImage = undefined;
-      this.sharedService.setReferenceImage(this.referenceImage || null);
+    if (this.sharedService.getReferenceImageValue()) {
+      this.sharedService.setReferenceImage(null);
 
       this.imageExpandedChange.emit(false);
 
@@ -378,7 +344,7 @@ export class ImageGridComponent {
         let tempAspectRatio = img.naturalWidth / img.naturalHeight;
 
         // Set the reference image
-        this.referenceImage = {
+        const referenceImage = {
           url: img.src,
           width: img.naturalWidth,
           height: img.naturalHeight,
@@ -387,7 +353,7 @@ export class ImageGridComponent {
           UUID: imageInfo!.UUID,
           rating: imageInfo?.rating
         };
-        this.sharedService.setReferenceImage(this.referenceImage);
+        this.sharedService.setReferenceImage(referenceImage);
         this.imageExpandedChange.emit(true);
       }
     }
