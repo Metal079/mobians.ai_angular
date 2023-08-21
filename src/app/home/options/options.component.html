@@ -32,7 +32,7 @@
   </div>
 
   <!-- inpaint switch -->
-  <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
+  <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting" [ngStyle]="{'padding-left': '3em'}">
     <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas"
       (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>
