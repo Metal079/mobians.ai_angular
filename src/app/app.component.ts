@@ -1,4 +1,4 @@
-import { Component  } from '@angular/core';
+import { Component } from '@angular/core';
 import { ImageGridComponent } from './home/image-grid/image-grid.component';
 import { Input } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -15,14 +15,16 @@ export class AppComponent {
 
   images: string[] = [];
   showLoading: boolean = false;
-  aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
+  aspectRatio: AspectRatio = { width: 512, height: 512, model: "test", aspectRatio: "square" };
   inpaintingEnabled: boolean = false;
   queuePosition?: number;
   inpaintMask?: string;
   showRatingButtons: boolean = false;
   ratingButtonsEligibility: boolean = false;
 
-  constructor() {}  
+  darkMode: boolean = false;
+
+  constructor() { }
 
   onImagesChange(images: string[]) {
     this.images = images;
@@ -61,4 +63,9 @@ export class AppComponent {
     }
   }
 
+  onWebsiteDarkMode(darkMode: boolean) {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const switchToTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', switchToTheme);
+  }
 }

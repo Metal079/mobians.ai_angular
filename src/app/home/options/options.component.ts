@@ -65,12 +65,13 @@ export class OptionsComponent {
   @Output() inpaintingChange = new EventEmitter<boolean>();
   @Output() queuePositionChange = new EventEmitter<number>();
   @Output() ratingButtonsEligibilityChange = new EventEmitter<boolean>();
+  @Output() websiteDarkMode = new EventEmitter<boolean>();
 
   readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
 
   constructor(
     private stableDiffusionService: StableDiffusionService
-    , private sharedService: SharedService
+    , public sharedService: SharedService
     , private messageService: MessageService
     , private notificationService: NotificationService
     , private swPush: SwPush
@@ -127,6 +128,15 @@ export class OptionsComponent {
   changeAspectRatioSelector(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.changeAspectRatio(selectElement.value);
+  }
+
+  websiteThemeChange(event: any) {
+  if (event.currentTarget.value == "dark") {
+      this.websiteDarkMode.emit(true);
+    }
+    else if (event.currentTarget.value == "light") {
+      this.websiteDarkMode.emit(false);
+    }
   }
 
   changeAspectRatio(aspectRatio: string) {
@@ -196,6 +206,7 @@ export class OptionsComponent {
   loadSettings() {
     if (localStorage.getItem("prompt-input") != null) {
       this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
+      this.updateSharedPrompt();
     }
     if (localStorage.getItem("negative-prompt-input") != null) {
       this.generationRequest.negative_prompt = localStorage.getItem("negative-prompt-input")!;

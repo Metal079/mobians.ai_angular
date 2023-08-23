@@ -1,14 +1,31 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  /* Light theme colors */
+  --background-color: #2fa5e9;
+  --text-color: #000;
+  --selection-background-color: #fcbe14;
+  --selection-text-color: #000;
+}
+
+[data-theme="dark"] {
+  /* Dark theme colors */
+  --background-color: #121212; /* Dark gray */
+  --text-color: #ffffff; /* White */
+  --selection-background-color: #fcbe14; /* Keeping the same selection color */
+  --selection-text-color: #000; /* Keeping the same selection text color */
+}
+
+
 body {
-    background-color: #2fa5e9;
-  }
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
 
-  ::selection {
-    background-color: #fcbe14; /* Change this color to your desired selection background color */
-    color: #000; /* Change this color to your desired selected text color */
-  }
+::selection {
+  background-color: var(--selection-background-color);
+  color: var(--selection-text-color);
+}
 
-  ::-moz-selection {
-    background-color: #fcbe14; /* Change this color to your desired selection background color */
-    color: #000; /* Change this color to your desired selected text color */
-  }
+::-moz-selection {
+  background-color: var(--selection-background-color);
+  color: var(--selection-text-color);
+}

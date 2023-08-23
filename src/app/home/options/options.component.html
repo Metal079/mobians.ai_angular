@@ -162,6 +162,16 @@
           [(ngModel)]="generationRequest.fast_pass_code" />
       </div>
 
+      <!-- Dark/Light mode changing -->
+      <div>
+        <label for="floatingSelect">Website Light/Dark Mode</label>
+        <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
+          [(ngModel)]="aspectRatio['aspectRatio']" (change)="websiteThemeChange($event)">
+          <option value="Light">Light</option>
+          <option value="Dark">Dark Mode</option>
+        </select>
+      </div>
+
       <!-- Notifications -->
       <div class="d-flex justify-content-start mb-3">
         <div class="form-check me-3">
