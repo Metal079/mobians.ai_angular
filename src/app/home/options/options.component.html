@@ -27,12 +27,12 @@
         ?
       </span>
     </label>
-    <input type="range" class="form-range" min="0.2" max="1" value="0.7" step="0.05" id="custom-denoise"
+    <input type="range" class="form-range" min="0.2" max="1" value="0.8" step="0.05" id="custom-denoise"
       [(ngModel)]="generationRequest.strength" />
   </div>
 
   <!-- inpaint switch -->
-  <div *ngIf="referenceImage" class="form-check form-switch" id="enable-inpainting">
+  <div *ngIf="referenceImage && screenWidth > 600" class="form-check form-switch" id="enable-inpainting" [ngStyle]="{'padding-left': '3em'}">
     <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" [(ngModel)]="showInpaintingCanvas"
       (click)="enableInpaintCanvas()" />
     <label class="form-check-label" for="flexSwitchCheckDefault">Inpaint</label>

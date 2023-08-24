@@ -56,6 +56,7 @@ export class OptionsComponent {
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
+  screenWidth: number = window.innerWidth;
 
   @Input() inpaintMask?: string;
 
@@ -228,7 +229,7 @@ export class OptionsComponent {
     localStorage.removeItem("fast-pass-code");
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
-    this.generationRequest.strength = 0.7;
+    this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 7;
     this.changeAspectRatio("square");
