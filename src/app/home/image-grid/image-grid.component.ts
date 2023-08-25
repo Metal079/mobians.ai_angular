@@ -29,13 +29,10 @@ export class ImageGridComponent {
   private previousImages: MobiansImage[] = [];
 
   @Input() inpaintingEnabled: boolean = false;
-  // @Input() images: string[] = [];
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
-  // @Input() referenceImage?: ReferenceImage;
 
-  // @Output() referenceImageChange = new EventEmitter<ReferenceImage>();
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
@@ -195,33 +192,6 @@ export class ImageGridComponent {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    // if (changes['images']) {
-    //   // If images were set to null or undefined, reset the showImages array
-    //   if (this.images.length == 0) {
-    //     this.showImages = [];
-    //     this.imagesIDs = [];
-    //     this.showInstructions = true;
-    //     this.referenceImage = undefined;
-    //     this.sharedService.setReferenceImage(null);
-    //     // this.referenceImageChange.emit(this.referenceImage);
-
-    //     // Check if this.ctx and this.imageCanvas.nativeElement are defined before clearing the canvas
-    //     if (this.ctx && this.imageCanvas && this.imageCanvas.nativeElement) {
-    //       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
-    //       // this.inpaintingEnabled = false;
-    //       // this.toggleDrawingMode(); // call this method instead of setting style directly
-    //     }
-    //   }
-    //   else {
-    //     // Reset the showImages array and reset reference image
-    //     this.showImages = this.images.map(() => true);
-    //     this.referenceImage = undefined;
-    //     this.showInstructions = false;
-
-    //     // Create UUID for each image
-    //     this.imagesIDs = this.images.map(() => uuidv4());
-    //   }
-    // }
     if (changes['aspectRatio']) {
       if (this.aspectRatio.aspectRatio == 'square') {
         this.screenHeight = this.screenWidth;
