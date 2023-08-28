@@ -1,9 +1,11 @@
-import { Component  } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { ImageGridComponent } from './home/image-grid/image-grid.component';
 import { Input } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
+import { ImageModalComponent } from './home/image-modal/image-modal.component';
 
+import { SharedService } from 'src/app/shared.service';
 
 @Component({
   selector: 'app-root',
@@ -11,6 +13,8 @@ import { MobiansImage } from 'src/_shared/mobians-image.interface';
   styleUrls: ['./app.component.css'],
 })
 export class AppComponent {
+  @ViewChild(ImageModalComponent) imageModal!: ImageModalComponent;
+
   title = 'The best Sonic OC generator';
 
   images: string[] = [];
@@ -22,7 +26,7 @@ export class AppComponent {
   showRatingButtons: boolean = false;
   ratingButtonsEligibility: boolean = false;
 
-  constructor() {}  
+  constructor(private sharedService: SharedService) {}  
 
   onImagesChange(images: string[]) {
     this.images = images;
@@ -61,4 +65,10 @@ export class AppComponent {
     }
   }
 
+  onImageModalOpenChange(open: boolean) {
+    if (open) {
+      const referenceImageUrl = this.sharedService.getReferenceImageValue()!.url;
+      this.imageModal.openModal(referenceImageUrl!);
+    }
+  }
 }

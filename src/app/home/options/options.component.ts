@@ -66,6 +66,7 @@ export class OptionsComponent {
   @Output() inpaintingChange = new EventEmitter<boolean>();
   @Output() queuePositionChange = new EventEmitter<number>();
   @Output() ratingButtonsEligibilityChange = new EventEmitter<boolean>();
+  @Output() imageModalOpen = new EventEmitter<boolean>();
 
   readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
 
@@ -402,5 +403,9 @@ export class OptionsComponent {
     if (this.enableNotifications) {
       this.notificationService.subscribeToNotifications();
     }
+  }
+
+  openImageModal() {
+    this.imageModalOpen.emit(true);
   }
 }

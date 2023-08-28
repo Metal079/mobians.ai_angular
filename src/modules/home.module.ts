@@ -6,6 +6,9 @@ import { ImageGridComponent } from 'src/app/home/image-grid/image-grid.component
 import { OptionsComponent } from 'src/app/home/options/options.component';
 import { FaqComponent } from 'src/app/home/faq/faq.component';
 import { UserRatingComponent } from 'src/app/home/user-rating/user-rating.component';
+import { ImageModalComponent } from 'src/app/home/image-modal/image-modal.component';
+import { GligenDisplayComponent } from 'src/app/home/gligen-display/gligen-display.component';
+import { InpaintingDisplayComponent } from 'src/app/home/inpainting-display/inpainting-display.component';
 
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -14,7 +17,8 @@ import {MessageService} from 'primeng/api';
 import {InputTextareaModule} from 'primeng/inputtextarea';
 import { TooltipModule } from 'primeng/tooltip';
 import { ButtonModule } from 'primeng/button';
-
+import { ColorPickerModule } from 'primeng/colorpicker';
+import { ToggleButtonModule } from 'primeng/togglebutton';
 
 @NgModule({
   declarations: [
@@ -22,6 +26,9 @@ import { ButtonModule } from 'primeng/button';
     OptionsComponent,
     FaqComponent,
     UserRatingComponent,
+    ImageModalComponent,
+    GligenDisplayComponent, 
+    InpaintingDisplayComponent,
   ],
   imports: [
     BrowserModule,
@@ -32,12 +39,17 @@ import { ButtonModule } from 'primeng/button';
     InputTextareaModule,
     TooltipModule,
     ButtonModule,
+    ColorPickerModule,
+    ToggleButtonModule
   ],
   exports: [
     ImageGridComponent,
     OptionsComponent,
     FaqComponent,
     UserRatingComponent,
+    ImageModalComponent,
+    GligenDisplayComponent, 
+    InpaintingDisplayComponent,
   ],
   providers: [MessageService]
 })

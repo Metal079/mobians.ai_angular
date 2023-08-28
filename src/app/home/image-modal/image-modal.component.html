@@ -1,6 +1,38 @@
-<p>image-modal works!</p>
 <div *ngIf="showModal" class="modal">
-    <canvas #imageCanvas (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()"></canvas>
-    <button (click)="closeModal()">Close</button>
-  </div>
-  
+    <p-button class="close-button" (click)="closeModal()">Close</p-button>
+
+    <div class="content-container">
+        <div class="image-container">
+            <img [src]="expandedImageSrc" alt="Expanded Image" />
+            <canvas #imageCanvas></canvas>
+            <canvas #overlayCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)"
+                (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (touchstart)="onTouchStart($event)"
+                (touchmove)="onTouchMove($event)" (touchend)="onTouchEnd()"
+                (contextmenu)="preventContextMenu($event)"></canvas>
+        </div>
+
+        <div class="options-container">
+            <div class="col">
+                <p-button label="Undo" icon="fa fa-rotate-left"></p-button>
+            </div>
+            <div class="col">
+                <p-button (click)="toggleDrawingMode()" label="Draw" icon="fa fa-pencil"></p-button>
+            </div>
+            <div class="col">
+                <p-button label="Erase" icon="fa fa-eraser"></p-button>
+            </div>
+            <div class="col">
+                <!-- <p-button  label="Color" icon="fa fa-palette"></p-button> -->
+                <p-toggleButton [(ngModel)]="colorInpaintMode" onLabel="Color Inpaint" offLabel="Normal Inpaint"
+                    onIcon="fa fa-palette" offIcon="fa fa-spray-can"></p-toggleButton>
+                <p-colorPicker *ngIf="colorInpaintMode" [(ngModel)]="color"></p-colorPicker>
+            </div>
+            <div class="col brush-size-col" >
+                <label for="brushSize" style="color: white;">Brush Size: {{brushSize}}</label>
+                <input id="brushSize" type="range" [(ngModel)]="brushSize" min="1" max="100">
+            </div>
+            
+        </div>
+
+    </div>
+</div>

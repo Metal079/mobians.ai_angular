@@ -5,6 +5,7 @@ import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { v4 as uuidv4 } from 'uuid';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
+import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 
 
 @Component({
@@ -21,13 +22,14 @@ export class ImageGridComponent {
   screenHeight: number = window.innerHeight;
   showInstructions: boolean = true;
   images: MobiansImage[] = [];
+  prevRefImageBase64?: string;
 
   private erasing = false;
   private imageSubscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   private previousImages: MobiansImage[] = [];
 
-  @Input() inpaintingEnabled: boolean = false;
+  @Input() inpaintingEnabled: boolean = true;
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
@@ -36,8 +38,8 @@ export class ImageGridComponent {
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
 
-  constructor(
-    public sharedService: SharedService
+  constructor(public sharedService: SharedService
+    , private inpaintingMaskService: InpaintingMaskService
   ) {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
@@ -53,11 +55,27 @@ export class ImageGridComponent {
         // Do something with the images
         this.images = images;
         this.sharedService.setReferenceImage(null);
+        this.inpaintingMaskService.clearCanvasData();
+
         console.log('All 4 images changed or modified:', images);
       }
 
       // Update previous images for future comparison
       this.previousImages = images;
+    });
+
+    this.inpaintingMaskService.canvasData$.subscribe(dataUrl => {
+      if (dataUrl) {
+        // Load the image from the Data URL
+        const img = new Image();
+        img.src = dataUrl;
+        img.onload = () => {
+          // Draw the image onto the canvas
+          this.ctx.drawImage(img, 0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+          const base64Image = this.saveCanvasAsBase64();
+          this.inpaint_mask.emit(base64Image);
+        };
+      }
     });
 
     // this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
@@ -218,7 +236,9 @@ export class ImageGridComponent {
       }
     }
     if (changes['showLoading']) {
-      // this.toggleDrawingMode()
+      // Clear the canvas
+      this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+      this.inpaintingMaskService.clearCanvasData();
     }
     if (changes['referenceImage']) {
       if (this.images.length == 0 && this.sharedService.getReferenceImageValue() == null) {
@@ -288,35 +308,42 @@ export class ImageGridComponent {
         UUID: uuidv4(),
       };
 
-      // Turn off the instructions
-      this.showInstructions = false;
-
-      // Set the aspect ratio
-      if (this.aspectRatio.aspectRatio == 'square') {
-        this.screenHeight = this.screenWidth;
-        this.resizeCanvas();
-      }
-      else if (this.aspectRatio.aspectRatio == 'portrait') {
-        this.screenHeight = this.screenWidth * 1.5;
-        this.resizeCanvas();
-      }
-      else if (this.aspectRatio.aspectRatio == 'landscape') {
-        this.screenHeight = this.screenWidth * 0.66;
-        this.resizeCanvas();
-      }
-      else {
-        console.log("Error: aspect ratio not recognized");
-        this.screenHeight = this.screenWidth;
-      }
-
-      // Convert the image to base64
+      // Convert the image to base64 and check if it is the same as the previous reference image if so don't set it
       let reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
         let base64Image = reader.result as string;
-        referenceImage.base64 = base64Image;
-        // Set the base64 property of the reference image
-        this.sharedService.setReferenceImage(referenceImage);
+        if (this.prevRefImageBase64 != base64Image) {
+          this.prevRefImageBase64 = base64Image;
+          referenceImage.base64 = base64Image;
+          // Set the base64 property of the reference image
+          this.sharedService.setReferenceImage(referenceImage);
+        }
+        else {
+          console.log("Reference image already exists");
+          return;
+        }
+
+        // Turn off the instructions
+        this.showInstructions = false;
+
+        // Set the aspect ratio
+        if (this.aspectRatio.aspectRatio == 'square') {
+          this.screenHeight = this.screenWidth;
+          this.resizeCanvas();
+        }
+        else if (this.aspectRatio.aspectRatio == 'portrait') {
+          this.screenHeight = this.screenWidth * 1.5;
+          this.resizeCanvas();
+        }
+        else if (this.aspectRatio.aspectRatio == 'landscape') {
+          this.screenHeight = this.screenWidth * 0.66;
+          this.resizeCanvas();
+        }
+        else {
+          console.log("Error: aspect ratio not recognized");
+          this.screenHeight = this.screenWidth;
+        }
       }
     }
   }
