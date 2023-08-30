@@ -23,6 +23,7 @@ export class ImageGridComponent {
   showInstructions: boolean = true;
   images: MobiansImage[] = [];
   prevRefImageBase64?: string;
+  showReferenceImage: boolean = false;
 
   private erasing = false;
   private imageSubscription!: Subscription;
@@ -52,9 +53,13 @@ export class ImageGridComponent {
     this.imageSubscription = this.sharedService.getImages().subscribe(images => {
       // Check if all 4 images have changed or modified
       if (images.length === 4 && this.allImagesChanged(images)) {
-        // Do something with the images
+        // Hide old ref image
+        this.showReferenceImage = false;
+
+        // Set the images
         this.images = images;
-        this.sharedService.setReferenceImage(null);
+
+        // Clear the canvas
         this.inpaintingMaskService.clearCanvasData();
 
         console.log('All 4 images changed or modified:', images);
@@ -64,6 +69,7 @@ export class ImageGridComponent {
       this.previousImages = images;
     });
 
+    //  Check when the inpainting mask changes
     this.inpaintingMaskService.canvasData$.subscribe(dataUrl => {
       if (dataUrl) {
         // Load the image from the Data URL
@@ -78,14 +84,16 @@ export class ImageGridComponent {
       }
     });
 
-    // this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
-    //   if (image) {
-    //     // console.log('Reference Image changed:', image);
-    //   }
-    //   else{
-    //     // console.log('Reference Image removed');
-    //   }
-    // });
+    // Check when the reference image changes
+    this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
+      if (image) {
+        console.log('Reference Image changed:', image);
+        this.showReferenceImage = true;
+      }
+      else{
+        console.log('Reference Image removed');
+      }
+    });
   }
 
   private allImagesChanged(newImages: MobiansImage[]): boolean {
