@@ -13,25 +13,26 @@
 
         <div class="options-container">
             <div class="col">
-                <p-button label="Undo" icon="fa fa-rotate-left"></p-button>
+                <p-button label="Undo" icon="fa fa-rotate-left" (click)="undo()"></p-button>
             </div>
             <div class="col">
-                <p-button (click)="toggleDrawingMode()" label="Draw" icon="fa fa-pencil"></p-button>
+                <p-button (click)="enableDrawingMode()" label="Draw" icon="fa fa-pencil"></p-button>
             </div>
             <div class="col">
-                <p-button label="Erase" icon="fa fa-eraser"></p-button>
+                <p-button (click)="enableErasingMode()" label="Erase" icon="fa fa-eraser"></p-button>
             </div>
-            <div class="col">
+            <div class="col inpaint-row">
                 <!-- <p-button  label="Color" icon="fa fa-palette"></p-button> -->
                 <p-toggleButton [(ngModel)]="colorInpaintMode" onLabel="Color Inpaint" offLabel="Normal Inpaint"
-                    onIcon="fa fa-palette" offIcon="fa fa-spray-can"></p-toggleButton>
+                    onIcon="fa fa-palette" offIcon="fa fa-spray-can"
+                    (click)="toggleColorInpaintMode()"></p-toggleButton>
                 <p-colorPicker *ngIf="colorInpaintMode" [(ngModel)]="color"></p-colorPicker>
             </div>
-            <div class="col brush-size-col" >
+            <div class="col brush-size-col">
                 <label for="brushSize" style="color: white;">Brush Size: {{brushSize}}</label>
                 <input id="brushSize" type="range" [(ngModel)]="brushSize" min="1" max="100">
             </div>
-            
+
         </div>
 
     </div>

@@ -27,6 +27,9 @@
   border: 0;
 }
 
+.inpaint-button {
+  margin-left: 10px;
+}
 
 @media (max-width: 480px) {
   .input-button-container {

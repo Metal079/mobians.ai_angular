@@ -321,6 +321,7 @@ export class ImageGridComponent {
         }
         else {
           console.log("Reference image already exists");
+          this.showInstructions = false;
           return;
         }
 
@@ -351,9 +352,9 @@ export class ImageGridComponent {
   expandImage(imageIndex: number, event: Event) {
     // If a reference image is set, don't expand the image and delete it
     if (this.sharedService.getReferenceImageValue()) {
-      this.sharedService.setReferenceImage(null);
+      // this.sharedService.setReferenceImage(null);
 
-      this.imageExpandedChange.emit(false);
+      // this.imageExpandedChange.emit(false);
 
       // if there are no regular images, show the instructions
       if (this.images.length == 0) {

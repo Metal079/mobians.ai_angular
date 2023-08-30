@@ -13,7 +13,7 @@
   </div>
 
   <!-- inpaint switch -->
-  <div *ngIf="referenceImage">
+  <div *ngIf="referenceImage" class="inpaint-button">
     <p-button label="Inpainting" (click)="openImageModal()"></p-button>
     <span class="ms-1 text-primary"
       pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
@@ -54,7 +54,7 @@
     </button>
 
     <!-- Remove reference image button -->
-    <span *ngIf="referenceImage" id="remove-reference-image-button">
+    <span *ngIf="referenceImage" id="remove-reference-image-button" style="margin-left: 20px;">
       <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
         Remove Reference Image
       </button>

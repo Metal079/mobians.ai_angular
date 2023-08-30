@@ -2,6 +2,7 @@ export interface GenerationRequest {
     prompt: string;
     image?: string;
     mask_image?: string;
+    color_inpaint?: boolean;
     scheduler: number;
     steps: number;
     negative_prompt: string;

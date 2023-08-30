@@ -3,6 +3,8 @@ import { GligenService } from 'src/app/gligen.service';
 import { SharedService } from 'src/app/shared.service';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
+import { GenerationRequest } from 'src/_shared/generation-request.interface';
+import { HostListener } from '@angular/core';
 
 @Component({
   selector: 'app-image-modal',
@@ -17,29 +19,30 @@ export class ImageModalComponent {
   private overlayCtx!: CanvasRenderingContext2D; // add this line near `private ctx!: CanvasRenderingContext2D;`
   private drawing = false;
   private erasing = false;
+  private undoStack: ImageData[] = [];
+  private redoStack: ImageData[] = [];
+  private subscription: any;
+  private inpaintingSubscription: any;
   color = "black";
 
   showModal = false;
   expandedImageSrc = '';
-  mobileDevice?: boolean;
-  drawingEnabled: boolean = false;
   superColor: any;
   imageInfo!: MobiansImage;
   colorInpaintMode: boolean = false;
   brushSize: number = 50;
+  currentGenerationRequest: GenerationRequest | null = null;
+  drawingEnabled: boolean = false;
+  tempErase: boolean = false;
 
   constructor(private gligenService: GligenService
     , private sharedService: SharedService
     , private inpaintingMaskService: InpaintingMaskService) { }
 
   ngOnInit() {
-    if (window.innerWidth < 768) {
-      this.mobileDevice = true;
-    }
-  }
-
-  ngAfterViewChecked() {
-
+    this.subscription = this.sharedService.getGenerationRequest().subscribe(value => {
+      this.currentGenerationRequest = value;
+    });
   }
 
   ngAfterViewInit() {
@@ -68,28 +71,49 @@ export class ImageModalComponent {
     } else {
       throw new Error('Could not get 2D rendering context for overlay canvas');
     }
+
+    // Set the canvas to an existing one if it exists
+    const canvasData = this.inpaintingMaskService.getCurrentCanvasData();
+    if (canvasData) {
+      const image = new Image();
+      image.onload = () => {
+        this.ctx.drawImage(image, 0, 0);
+      };
+      image.src = canvasData;
+    } else {
+      const initialImageData = this.ctx.getImageData(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+      this.undoStack.push(initialImageData);
+    }
   }
 
-  toggleDrawingMode() {
-    this.drawingEnabled = !this.drawingEnabled;
+  enableDrawingMode() {
+    this.drawingEnabled = true;
     this.imageCanvas.nativeElement.style.pointerEvents = this.drawingEnabled ? 'auto' : 'none';
+    this.erasing = false;
   }
 
-  handleStartDrawing(x: number, y: number, isErasing: boolean): void {
+  handleStartDrawing(x: number, y: number): void {
     this.drawing = true;
     const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
-    this.ctx.beginPath();
-    this.ctx.moveTo(x - rect.left, y - rect.top);
-    this.erasing = isErasing;
-    this.ctx.globalCompositeOperation = isErasing ? 'destination-out' : 'source-over';
-    this.ctx.lineWidth = isErasing ? this.brushSize : this.brushSize;
-    if (isErasing) {
-      this.ctx.strokeStyle = "rgba(0, 0, 0, 0)";  // Transparent for erasing
-      this.ctx.fillStyle = "rgba(0, 0, 0, 0)";  // Transparent for erasing
+
+    if (this.erasing) {
+      this.ctx.globalCompositeOperation = 'destination-out';
     } else {
+      this.ctx.globalCompositeOperation = 'source-over';
       this.ctx.strokeStyle = this.color;  // Color for drawing
       this.ctx.fillStyle = this.color;  // Color for drawing
     }
+
+    // Draw a circle at the starting point
+    const radius = this.ctx.lineWidth / 2;  // you can adjust this
+    this.ctx.beginPath();
+    this.ctx.arc(x - rect.left, y - rect.top, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.closePath();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(x - rect.left, y - rect.top);
+    this.ctx.lineWidth = this.brushSize;
   }
 
   handleDrawing(x: number, y: number): void {
@@ -98,23 +122,32 @@ export class ImageModalComponent {
     const rect = this.imageCanvas.nativeElement.getBoundingClientRect();
     this.ctx.lineTo(x - rect.left, y - rect.top);
     this.ctx.stroke();
-    if (this.erasing) {
-      this.ctx.globalCompositeOperation = 'destination-out';
-    } else {
-      this.ctx.globalCompositeOperation = 'source-over';
-    }
   }
 
   handleStopDrawing(): void {
     this.drawing = false;
-    this.erasing = false;
-    this.ctx.globalCompositeOperation = 'source-over';  // Resetting the operation
     this.ctx.lineWidth = this.brushSize;  // Resetting the lineWidth, if needed
+
+    if (this.tempErase) {
+      this.tempErase = false;
+      this.enableDrawingMode();
+    }
+
+    // Save the current canvas state before starting the new stroke
+    const imageData = this.ctx.getImageData(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
+    this.undoStack.push(imageData);
+    console.log("pushed to undo stack. Size: " + this.undoStack.length.toString())
   }
 
-
   onMouseDown(event: MouseEvent): void {
-    this.handleStartDrawing(event.clientX, event.clientY, event.button === 2);
+    // Check which button was clicked
+    if (event.button === 2 && !this.erasing) {
+      // Right click
+      this.enableErasingMode();
+      this.tempErase = true;
+    }
+
+    this.handleStartDrawing(event.clientX, event.clientY);
   }
 
   onMouseUp(): void {
@@ -143,7 +176,7 @@ export class ImageModalComponent {
 
   onTouchStart(event: TouchEvent): void {
     const touch = event.touches[0];
-    this.handleStartDrawing(touch.clientX, touch.clientY, false);
+    this.handleStartDrawing(touch.clientX, touch.clientY);
   }
 
   onTouchMove(event: TouchEvent): void {
@@ -156,6 +189,15 @@ export class ImageModalComponent {
   }
 
   openModal(imageSrc: string) {
+    // // Remove Ko-fi widget
+    // const kofiWidget = document.querySelector('#kofiwidget-overlay');
+    // if (kofiWidget) {
+    //   const style = document.createElement('style');
+    //   style.id = 'hide-kofi';  // so that you can find it later to remove
+    //   style.innerHTML = `#kofiwidget-overlay { display: none !important; }`;
+    //   document.head.appendChild(style);
+    // }
+
     // Disable scrolling while the modal is open
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
@@ -191,6 +233,12 @@ export class ImageModalComponent {
   }
 
   closeModal() {
+    // Add back Ko-fi widget
+    // const kofiWidget = document.querySelector('.kofiwidget-overlay');
+    // if (kofiWidget instanceof HTMLElement) {
+    //   kofiWidget.style.display = 'block';
+    // }
+
     this.saveCanvas();
     this.showModal = false;
   }
@@ -211,6 +259,55 @@ export class ImageModalComponent {
 
     // Save the canvas data to the shared service
     this.sharedService.setReferenceImage(this.imageInfo);
+  }
 
+  toggleColorInpaintMode() {
+    // Toggle the color_inpaint property of the current generation request
+    // If null or undefined, set it to true
+    if (this.currentGenerationRequest?.color_inpaint === undefined || this.currentGenerationRequest?.color_inpaint === null) {
+      this.currentGenerationRequest!.color_inpaint = true;
+    }
+    else {
+      this.currentGenerationRequest!.color_inpaint = !this.currentGenerationRequest?.color_inpaint;
+    }
+
+    // Save the updated generation request to the shared service
+    this.sharedService.setGenerationRequest(this.currentGenerationRequest!);
+  }
+
+  enableErasingMode() {
+    this.erasing = true;
+    this.drawingEnabled = false;
+  }
+
+  undo(): void {
+    if (this.undoStack.length > 1) { // Keep the initial state
+      const lastImageData = this.undoStack.pop();
+      const previousImageData = this.undoStack[this.undoStack.length - 1]; // Corrected index
+      this.ctx.putImageData(previousImageData, 0, 0);
+
+      if (lastImageData) {
+        this.redoStack.push(lastImageData);
+      }
+    }
+  }
+
+  @HostListener('wheel', ['$event'])
+  onWheel(event: WheelEvent): void {
+    // Determine the direction of the scroll
+    const delta = event.deltaY;
+
+    // Update the brush size based on the scroll direction
+    if (delta > 0) {
+      this.brushSize += 1;  // Increase brush size
+    } else {
+      this.brushSize -= 1;  // Decrease brush size
+    }
+
+    // You can also add constraints to the brush size if needed
+    this.brushSize = Math.max(1, Math.min(100, this.brushSize));
+
+    // Finally, update the canvas context's line width
+    this.ctx.lineWidth = this.brushSize;
   }
 }

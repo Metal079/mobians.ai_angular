@@ -10,7 +10,7 @@
     justify-content: center;
     align-items: center;
 }
-  
+
 .close-button {
     position: absolute;
     top: 10px;
@@ -73,18 +73,29 @@ canvas {
 }
 
 .brush-size-col {
-    flex: 0 1 auto; /* This ensures the column does not grow or shrink but stays auto */
-    min-width: 150px; /* Set a minimum width for this column */
+    flex: 0 1 auto;
+    /* This ensures the column does not grow or shrink but stays auto */
+    min-width: 150px;
+    /* Set a minimum width for this column */
     display: flex;
-    flex-direction: column; /* Stack the label and the slider vertically */
+    flex-direction: column;
+    /* Stack the label and the slider vertically */
 }
 
-.p-togglebutton.p-button{
+.p-togglebutton.p-button {
     background: blue;
 }
 
+.inpaint-row {
+    display: flex;
+    gap: 10px;
+}
 
 @media (max-width: 768px) {
+    .modal {
+        justify-content: flex-start;
+    }
+
     .content-container {
         flex-direction: column;
     }
@@ -108,9 +119,12 @@ canvas {
     }
 
     .brush-size-col {
-        flex: 1 0 100%; /* Take up the full row width */
-        min-width: 100%; /* Ensure it takes the entire width */
+        flex: 1 0 100%;
+        /* Take up the full row width */
+        min-width: 100%;
+        /* Ensure it takes the entire width */
         display: flex;
-        flex-direction: column; /* Stack the label and the slider vertically */
+        flex-direction: column;
+        /* Stack the label and the slider vertically */
     }
 }

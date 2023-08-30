@@ -56,7 +56,6 @@ export class OptionsComponent {
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
-  screenWidth: number = window.innerWidth;
 
   @Input() inpaintMask?: string;
 
