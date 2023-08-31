@@ -11,11 +11,11 @@ export class FaqComponent implements OnInit, OnDestroy {
   prompt!: string;
   characterNames: string[] = [
     'Amy Rose', 'Barry the quokka', 'Big the cat', 'Blaze the cat', 'Bunnie Rabbot', 'Charmy the bee',
-    'Cosmo the seedrian', 'Cream the rabbit', 'Espio the chameleon', 'Fiona Fox', 'Honey the cat', 
-    'Hershey the cat', 'Infinite the jackal', 'Jet the hawk', 'Jewel the beetle', 'Knuckles the echidna',
-    'Lanolin the sheep', 'Lupe the wolf', 'Marine the Raccoon', 'Metal Sonic', 'Metamorphia', 
+    'Cosmo the seedrian', 'Cream the rabbit', 'Eggman', 'Espio the chameleon', 'Fiona Fox', 'Honey the cat', 
+    'Hershey the cat', 'Infinite the jackal', 'Jet the hawk', 'Jewel the beetle', "Julie-Su the echidna", 'Knuckles the echidna',
+    'Lanolin the sheep', 'Lien-Da the echidna', 'Lupe the wolf', 'Marine the Raccoon', 'Metal Sonic', 'Metamorphia', 
     'Mighty the armadillo', 'Mina Mongoose', 'Mobian', 'Neo Metal Sonic', 'Nicole the Lynx', 
-    'Rouge the bat', 'Ray the flying squirrel', 'Rosy the rascal', 'Sage', 'Sally Acorn', 
+    'Rouge the bat', 'Ray the flying squirrel', 'Rosy the rascal', 'Sage', 'Sally Acorn', 'Sonia the hedgehog',
     'Scourge the hedgehog', 'Shadow the hedgehog', 'Silver the hedgehog', 'Shade the echidna', 
     'Sonic the hedgehog', 'Starline the platypus', 'Sticks the badger', 'Storm the albatross', 
     'Surge the tenrec', 'Tails the fox', 'Tekno the canary', 'Tangle the lemur', 'Tikal the echidna', 
