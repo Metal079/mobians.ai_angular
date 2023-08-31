@@ -50,6 +50,12 @@ export class ImageModalComponent {
   }
 
   initializeCanvas() {
+    // Prevents an initial error on load
+    if (!this.imageCanvas || !this.imageCanvas.nativeElement) {
+      console.warn('Canvas or its native element is not yet available.');
+      return;
+    }
+
     console.log('Initializing canvas');
     const context = this.imageCanvas.nativeElement.getContext('2d');
     if (context !== null) {

@@ -243,11 +243,11 @@ export class ImageGridComponent {
         this.queuePosition = changes['queuePosition'].currentValue;
       }
     }
-    if (changes['showLoading']) {
+    if (changes['showLoading'] && this.ctx) {
       // Clear the canvas
       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
       this.inpaintingMaskService.clearCanvasData();
-    }
+    }    
     if (changes['referenceImage']) {
       if (this.images.length == 0 && this.sharedService.getReferenceImageValue() == null) {
         this.showInstructions = true;
