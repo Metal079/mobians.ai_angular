@@ -19,16 +19,16 @@
   </div>
 
   <!-- Images -->
-  <div class="image-wrapper" *ngIf="images.length > 0 && !showLoading" id="wrapper1">
+  <div class="image-wrapper" *ngIf="images.length > 0 && !showLoading && !showReferenceImage" id="wrapper1">
     <img [src]="'data:image/png;base64,' + images[0].base64" class="small-image" alt="Image1 goes here" (click)="inpaintingEnabled || expandImage(0, $event)" id="image0">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 1 && !showLoading" id="wrapper2">
+  <div class="image-wrapper" *ngIf="images.length > 1 && !showLoading && !showReferenceImage" id="wrapper2">
     <img [src]="'data:image/png;base64,' + images[1].base64" class="small-image" alt="Image2 goes here" (click)="inpaintingEnabled || expandImage(1, $event)" id="image1">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 2 && !showLoading" id="wrapper3">
+  <div class="image-wrapper" *ngIf="images.length > 2 && !showLoading && !showReferenceImage" id="wrapper3">
     <img [src]="'data:image/png;base64,' + images[2].base64" class="small-image" alt="Image3 goes here" (click)="inpaintingEnabled || expandImage(2, $event)" id="image2">
   </div>
-  <div class="image-wrapper" *ngIf="images.length > 3 && !showLoading" id="wrapper4">
+  <div class="image-wrapper" *ngIf="images.length > 3 && !showLoading && !showReferenceImage" id="wrapper4">
     <img [src]="'data:image/png;base64,' + images[3].base64" class="small-image" alt="Image4 goes here" (click)="inpaintingEnabled || expandImage(3, $event)" id="image3">
   </div>
   <div class="reference-image" *ngIf="this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage" id="wrapper5">

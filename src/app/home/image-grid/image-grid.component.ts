@@ -366,6 +366,7 @@ export class ImageGridComponent {
       }
       else{
         this.sharedService.setReferenceImage(null);
+        this.showReferenceImage = false;
         this.imageExpandedChange.emit(false);
       }
     }
@@ -390,6 +391,7 @@ export class ImageGridComponent {
           rating: imageInfo?.rating
         };
         this.sharedService.setReferenceImage(referenceImage);
+        this.showReferenceImage = true;
         this.imageExpandedChange.emit(true);
       }
     }
