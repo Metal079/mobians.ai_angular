@@ -189,15 +189,11 @@ export class ImageModalComponent {
   }
 
   openModal(imageSrc: string) {
-    // // Remove Ko-fi widget
-    // const kofiWidget = document.querySelector('#kofiwidget-overlay');
-    // if (kofiWidget) {
-    //   const style = document.createElement('style');
-    //   style.id = 'hide-kofi';  // so that you can find it later to remove
-    //   style.innerHTML = `#kofiwidget-overlay { display: none !important; }`;
-    //   document.head.appendChild(style);
-    // }
-
+    const kofiWidget = document.querySelector('[id^="kofi-widget-overlay-"]');
+    if (kofiWidget instanceof HTMLElement) { // Check if it's an HTMLElement
+      kofiWidget.style.display = 'none';
+    }
+    
     // Disable scrolling while the modal is open
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
@@ -234,10 +230,10 @@ export class ImageModalComponent {
 
   closeModal() {
     // Add back Ko-fi widget
-    // const kofiWidget = document.querySelector('.kofiwidget-overlay');
-    // if (kofiWidget instanceof HTMLElement) {
-    //   kofiWidget.style.display = 'block';
-    // }
+    const kofiWidget = document.querySelector('[id^="kofi-widget-overlay-"]');
+    if (kofiWidget instanceof HTMLElement) { // Check if it's an HTMLElement
+      kofiWidget.style.display = 'block';
+    }
 
     this.saveCanvas();
     this.showModal = false;
