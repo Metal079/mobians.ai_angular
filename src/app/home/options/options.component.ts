@@ -300,7 +300,8 @@ export class OptionsComponent {
     }
 
     // Create an interval which fires every 3 seconds
-    interval(1000)
+    let subscription: Subscription; // Declare a variable to hold the subscription
+    subscription = interval(1000)
       .pipe(
         // For each tick of the interval, call the service
         concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
@@ -352,9 +353,22 @@ export class OptionsComponent {
       )
       .subscribe(
         response => {
-          // This will be called every 3 seconds, so we do nothing here
-          console.log("queue position: " + response.queue_position);
-          this.queuePositionChange.emit(response.queue_position);
+          // If job is not found, throw error
+          if (response.status === undefined) {
+            const error = { error: { detail: "Job not found. Please try again later." } };
+            console.error(error)
+            this.showError(error);  // show the error modal
+            this.enableGenerationButton = true;
+            this.loadingChange.emit(false);
+
+            // Break out of the interval
+            subscription.unsubscribe();  // Unsubscribe here
+          }
+          else {
+            // This will be called every 3 seconds, so we do nothing here
+            console.log("queue position: " + response.queue_position);
+            this.queuePositionChange.emit(response.queue_position);
+          }
         },
         error => {
           console.error(error)

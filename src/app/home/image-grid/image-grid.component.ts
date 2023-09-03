@@ -63,6 +63,10 @@ export class ImageGridComponent {
         this.inpaintingMaskService.clearCanvasData();
 
         console.log('All 4 images changed or modified:', images);
+
+        this.sharedService.setReferenceImage(null);
+        this.showReferenceImage = false;
+        this.imageExpandedChange.emit(false);
       }
 
       // Update previous images for future comparison
