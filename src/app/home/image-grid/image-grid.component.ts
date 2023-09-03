@@ -24,6 +24,7 @@ export class ImageGridComponent {
   images: MobiansImage[] = [];
   prevRefImageBase64?: string;
   showReferenceImage: boolean = false;
+  imagesJustChanged: boolean = false;
 
   private erasing = false;
   private imageSubscription!: Subscription;
@@ -64,8 +65,8 @@ export class ImageGridComponent {
 
         console.log('All 4 images changed or modified:', images);
 
-        this.sharedService.setReferenceImage(null);
-        this.showReferenceImage = false;
+        // Flag that the images just changed
+        this.imagesJustChanged = true;
         this.imageExpandedChange.emit(false);
       }
 
@@ -363,7 +364,7 @@ export class ImageGridComponent {
 
   expandImage(imageIndex: number, event: Event) {
     // If a reference image is set, don't expand the image and delete it
-    if (this.sharedService.getReferenceImageValue()) {
+    if (this.sharedService.getReferenceImageValue() && !this.imagesJustChanged) {
       // if there are no regular images, show the instructions
       if (this.images.length == 0) {
         this.showInstructions = true;
@@ -375,6 +376,8 @@ export class ImageGridComponent {
       }
     }
     else {
+      this.imagesJustChanged = false;
+
       // Create new image element to get dimensions
       let img = new Image();
       const imageInfo = this.sharedService.getImage(imageIndex);
