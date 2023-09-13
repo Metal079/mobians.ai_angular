@@ -301,7 +301,7 @@ export class OptionsComponent {
 
     // Create an interval which fires every 3 seconds
     let subscription: Subscription; // Declare a variable to hold the subscription
-    subscription = interval(1000)
+    subscription = interval(2000)
       .pipe(
         // For each tick of the interval, call the service
         concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
