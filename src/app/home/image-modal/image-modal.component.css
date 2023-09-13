@@ -75,7 +75,7 @@ canvas {
 .brush-size-col {
     flex: 0 1 auto;
     /* This ensures the column does not grow or shrink but stays auto */
-    min-width: 150px;
+    min-width: 120px;
     /* Set a minimum width for this column */
     display: flex;
     flex-direction: column;
@@ -126,5 +126,9 @@ canvas {
         display: flex;
         flex-direction: column;
         /* Stack the label and the slider vertically */
+    }
+
+    .col {
+        padding: 1vw;
     }
 }
