@@ -387,7 +387,7 @@ export class OptionsComponent {
   showError(error: any) {
     // Default error message
     // let errorMessage = 'There was an error attempting to generate your image. Website is likely down. Please try again later or check the Discord server for updates. https://discord.com/invite/mobians';
-    let errorMessage = 'Website will be down for ~2 weeks while a new model is trained. For more information on why join the discord and read #announcements https://discord.com/invite/mobians';
+    let errorMessage = 'Website will be down for ~2 weeks while a new model is trained. For more information on why join the discord and read #announcements https://discord.gg/j62gcjWtvq';
 
     // If the error comes from the backend and has a 'detail' field, use it as the error message
     if (error && error.error && error.error.detail) {
