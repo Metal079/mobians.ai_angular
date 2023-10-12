@@ -3,7 +3,6 @@ import { SimpleChanges } from '@angular/core';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { interval } from 'rxjs';
 import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
