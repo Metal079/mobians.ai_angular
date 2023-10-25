@@ -17,7 +17,7 @@ export class FaqComponent implements OnInit, OnDestroy {
     'Mighty the armadillo', 'Mina Mongoose', 'Mobian', 'Neo Metal Sonic', 'Nicole the Lynx', 
     'Rouge the bat', 'Ray the flying squirrel', 'Rosy the rascal', 'Sage', 'Sally Acorn', 'Sonia the hedgehog',
     'Scourge the hedgehog', 'Shadow the hedgehog', 'Silver the hedgehog', 'Shade the echidna', 
-    'Sonic the hedgehog', 'Starline the platypus', 'Sticks the badger', 'Storm the albatross', 
+    'Sonic the hedgehog', 'Starline the platypus', 'Sticks the badger', 'Storm the albatross', 'Synth the robot',
     'Surge the tenrec', 'Tails the fox', 'Tekno the canary', 'Tangle the lemur', 'Tikal the echidna', 
     'Vanilla the rabbit', 'Vector the crocodile', 'Wave the swallow', 'Whisper the wolf', 'Zoey the fox', 
     'Zeta the echidna'
