@@ -9,7 +9,6 @@
       (inpaint_mask)="onInpaintMaskChange($event)"
       (imageExpandedChange)="onImageExpandedChange($event)"
     ></app-image-grid>
-    <app-user-rating *ngIf="!showLoading"></app-user-rating>
   </div>
   <app-options
     (imagesChange)="onImagesChange($event)"
@@ -18,7 +17,6 @@
     (inpaintingChange)="onInpaintingChange($event)"
     (queuePositionChange)="onQueuePositionChange($event)"
     [inpaintMask]="inpaintMask"
-    (ratingButtonsEligibilityChange)="ratingButtonsEligibilityChange()"
     (imageModalOpen)="onImageModalOpenChange($event)"
   ></app-options>
 </div>
