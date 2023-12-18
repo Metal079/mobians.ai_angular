@@ -29,7 +29,7 @@
 
     <!-- Upscale button -->
     <span *ngIf="supporter">
-      <p-button label="Upscale" (click)="this.submitJob(true)"></p-button>
+      <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob(true)"></p-button>
       <span class="ms-1 text-primary"
         pTooltip="Upscale the image by 1.5x. This will make the image look better and generate finer details. Due to longer generation times, this feature is currently only available to supporters."
         tooltipPosition="top" style="
