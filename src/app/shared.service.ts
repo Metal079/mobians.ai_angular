@@ -10,6 +10,8 @@ export class SharedService {
   private _generationRequest: BehaviorSubject<GenerationRequest | null> = new BehaviorSubject<GenerationRequest | null>(null);
   private _images: BehaviorSubject<MobiansImage[]> = new BehaviorSubject<MobiansImage[]>([]);
   private _referenceImage: BehaviorSubject<MobiansImage | null> = new BehaviorSubject<MobiansImage | null>(null);
+  private _userData: BehaviorSubject<any> = new BehaviorSubject<any>(null);
+
 
   constructor() { }
 
@@ -75,4 +77,17 @@ export class SharedService {
   getReferenceImageValue(): MobiansImage | null {
     return this._referenceImage.getValue();
   }
+
+  setUserData(value: any) {
+    this._userData.next(value);
+  }
+
+  getUserData(): Observable<any> {
+      return this._userData.asObservable();
+  }
+
+  getUserDataValue(): any {
+      return this._userData.getValue();
+  }
+
 }

@@ -1,13 +1,13 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 @Injectable({
   providedIn: 'root',
 })
 export class StableDiffusionService {
-  // private apiBaseUrl =  'http://76.157.184.213:9000';
-  private apiBaseUrl =  'https://mobians.azurewebsites.net'
+  private apiBaseUrl =  environment.apiBaseUrl;
 
   constructor(private http: HttpClient) {}
 
@@ -27,6 +27,13 @@ export class StableDiffusionService {
 
   rateImage(data: any): Observable<any> {
     const url = `${this.apiBaseUrl}/rate_image/`;  // note the trailing slash
+    const headers = { 'content-type': 'application/json' };
+    const body = JSON.stringify(data);
+    return this.http.post(url, body, {'headers':headers});
+  }
+
+  discordLogin(data: any): Observable<any> {
+    const url = `${this.apiBaseUrl}/discord_auth/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
     return this.http.post(url, body, {'headers':headers});

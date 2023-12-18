@@ -5,6 +5,16 @@
       <div class="col-md-12 ">
         <h2 class="mb-4">FAQ</h2>
         <div class="card">
+          <div class="card-header" *ngIf="!serverMember">
+            <h5 class="mb-0">
+              Login with Discord! Supporters get access to more features! (Upscaling images with more detail!)
+            </h5>
+          </div>
+          <div class="card-body" *ngIf="!serverMember">
+            <button (click)="authenticateWithDiscord()">
+              <img src="assets/DiscordLogin.png" alt="Login with Discord">
+          </button>
+          </div>
           <div class="card-header">
             <h5 class="mb-0">
               What are some tips for good images?

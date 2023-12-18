@@ -55,6 +55,8 @@ export class OptionsComponent {
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
+  supporter: boolean = false;
+  serverMember: boolean = false;
 
   @Input() inpaintMask?: string;
 
@@ -96,6 +98,15 @@ export class OptionsComponent {
         this.generationRequest.job_type = "txt2img";
         this.generationRequest.image = undefined;
         this.referenceImage = undefined;
+      }
+    });
+
+    // Discord userdata check
+    this.sharedService.getUserData().subscribe(userData => {
+      if (userData) {
+        this.supporter = userData.has_required_role;
+        this.serverMember = userData.is_member_of_your_guild;
+        console.log('premium member!');
       }
     });
   }
@@ -239,7 +250,11 @@ export class OptionsComponent {
   }
 
   // Send job to django api and retrieve job id.
-  submitJob() {
+  submitJob(upscale: boolean = false) {
+    if (upscale) {
+      this.generationRequest.job_type = "upscale";
+    }
+
     // Disable generation button
     this.enableGenerationButton = false;
 

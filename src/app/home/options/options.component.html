@@ -12,8 +12,9 @@
     </button>
   </div>
 
-  <!-- inpaint switch -->
+  <!-- buttons that show with reference images expanded -->
   <div *ngIf="referenceImage" class="inpaint-button">
+    <!-- inpaint switch -->
     <p-button label="Inpainting" (click)="openImageModal()"></p-button>
     <span class="ms-1 text-primary"
       pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
@@ -24,6 +25,21 @@
     cursor: pointer;
     ">
       ?
+    </span>
+
+    <!-- Upscale button -->
+    <span *ngIf="supporter">
+      <p-button label="Upscale" (click)="this.submitJob(true)"></p-button>
+      <span class="ms-1 text-primary"
+        pTooltip="Upscale the image by 1.5x. This will make the image look better and generate finer details. Due to longer generation times, this feature is currently only available to supporters."
+        tooltipPosition="top" style="
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 2px 4px;
+        border-radius: 50%;
+        cursor: pointer;
+        ">
+        ?
+      </span>
     </span>
   </div>
 
@@ -175,4 +191,11 @@
       </button>
     </div>
   </div>
+
+  <!-- <p-overlayPanel #op>
+    <ng-template pTemplate="content">
+        <h4>Custom Content</h4>
+    </ng-template>
+</p-overlayPanel> -->
+  <!-- <p-button (click)="op.toggle($event)" icon="pi pi-image" label="Show"></p-button> -->
 </div>

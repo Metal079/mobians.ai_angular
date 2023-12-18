@@ -18,6 +18,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ButtonModule } from 'primeng/button';
 import { ColorPickerModule } from 'primeng/colorpicker';
 import { ToggleButtonModule } from 'primeng/togglebutton';
+import { OverlayPanelModule } from 'primeng/overlaypanel';
 
 @NgModule({
   declarations: [
@@ -38,7 +39,8 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
     TooltipModule,
     ButtonModule,
     ColorPickerModule,
-    ToggleButtonModule
+    ToggleButtonModule,
+    OverlayPanelModule,
   ],
   exports: [
     ImageGridComponent,
@@ -47,6 +49,7 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
     ImageModalComponent,
     GligenDisplayComponent, 
     InpaintingDisplayComponent,
+    OverlayPanelModule,
   ],
   providers: [MessageService]
 })

@@ -29,3 +29,17 @@
   }
 
 }
+
+button img {
+  height: 50px;
+  width: auto;
+  margin-right: 10px;
+  border: 0;
+  padding: 0;
+}
+
+button {
+  background-color: #2fa5e9;
+  border: 0;
+  padding: 0;
+}
