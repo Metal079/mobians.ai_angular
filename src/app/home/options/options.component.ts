@@ -107,8 +107,17 @@ export class OptionsComponent {
         this.supporter = userData.has_required_role;
         this.serverMember = userData.is_member_of_your_guild;
         console.log('premium member!');
+        this.onDiscordLoginSuccess(userData);
       }
     });
+
+    const storedUserData = localStorage.getItem('discordUserData');
+    if (storedUserData) {
+      const userData = JSON.parse(storedUserData);
+      this.supporter = userData.has_required_role;
+      this.serverMember = userData.is_member_of_your_guild;
+      this.sharedService.setUserData(userData);
+    }
   }
 
   ngOnDestroy() {
@@ -434,5 +443,10 @@ export class OptionsComponent {
 
   openImageModal() {
     this.imageModalOpen.emit(true);
+  }
+
+  // Example function called after successful Discord login
+  onDiscordLoginSuccess(userData: any) {
+    localStorage.setItem('discordUserData', JSON.stringify(userData));
   }
 }
