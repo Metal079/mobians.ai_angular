@@ -43,3 +43,10 @@ button {
   border: 0;
   padding: 0;
 }
+
+li:hover {
+  background: #fff5;
+  border-radius: .375rem;
+  padding-inline: .375rem;
+  cursor: pointer;
+}
