@@ -323,7 +323,7 @@ export class OptionsComponent {
 
     // Create an interval which fires every 3 seconds
     let subscription: Subscription; // Declare a variable to hold the subscription
-    subscription = interval(2000)
+    subscription = interval(3000)
       .pipe(
         // For each tick of the interval, call the service
         concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
@@ -338,8 +338,8 @@ export class OptionsComponent {
                 console.log("retrying... Attempt #" + (retryCount + 1) + " of 3");
                 return retryCount + 1;
               }, 0),
-              // delay retrying the request for 3 seconds
-              delayWhen(() => timer(3000))
+              // delay retrying the request for 1 second1
+              delayWhen(() => timer(1000))
             )
           )
         )),
