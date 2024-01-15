@@ -83,6 +83,13 @@
     </button>
 
     <div class="collapse w-100" id="collapseExample">
+      <label for="floatingSelect">Model Select</label>
+      <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
+        [(ngModel)]="this.generationRequest.model" (change)="changeModel($event)">
+        <option value="sonicDiffusionV4">SonicDiffusionV4</option>
+        <option value="fluffySonic">fluffySonic</option>
+      </select>
+
       <label for="floatingSelect">Image aspect-ratio</label>
       <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
         [(ngModel)]="aspectRatio['aspectRatio']" (change)="changeAspectRatioSelector($event)">

@@ -23,6 +23,7 @@ export class OptionsComponent {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
 
+  models = ["sonicDiffusionV4", "fluffySonic"]
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
@@ -31,7 +32,7 @@ export class OptionsComponent {
   enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
-  aspectRatio: AspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square" };
+  aspectRatio: AspectRatio = { width: 512, height: 512, model: "sonicDiffusionV4", aspectRatio: "square" };
   defaultNegativePrompt: string = "nsfw, 3d, EasyNegativeV2, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
   generationRequest: any = {
     prompt: "",
@@ -48,7 +49,7 @@ export class OptionsComponent {
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
-    model: "testSonicBeta4__dynamic",
+    model: "sonicDiffusionV4",
     fast_pass_code: undefined
   };
   jobID: string = "";
@@ -143,6 +144,11 @@ export class OptionsComponent {
     }
   }
 
+  changeModel(event: any) {
+    let selectElement = event.target as HTMLSelectElement;
+    this.generationRequest.model = selectElement.value;
+  }
+
   changeAspectRatioSelector(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.changeAspectRatio(selectElement.value);
@@ -150,17 +156,17 @@ export class OptionsComponent {
 
   changeAspectRatio(aspectRatio: string) {
     if (aspectRatio == 'square') {
-      this.aspectRatio = { width: 512, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "square" };
+      this.aspectRatio = { width: 512, height: 512, model: "sonicDiffusionV4", aspectRatio: "square" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 512;
     }
     else if (aspectRatio == 'portrait') {
-      this.aspectRatio = { width: 512, height: 768, model: "testSonicBeta4__dynamic", aspectRatio: "portrait" };
+      this.aspectRatio = { width: 512, height: 768, model: "sonicDiffusionV4", aspectRatio: "portrait" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 768;
     }
     else if (aspectRatio == 'landscape') {
-      this.aspectRatio = { width: 768, height: 512, model: "testSonicBeta4__dynamic", aspectRatio: "landscape" };
+      this.aspectRatio = { width: 768, height: 512, model: "sonicDiffusionV4", aspectRatio: "landscape" };
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
@@ -187,20 +193,31 @@ export class OptionsComponent {
 
   // Save session storage info of changed settings
   saveSettings() {
+    // Save prompt
     localStorage.setItem("prompt-input", this.generationRequest.prompt);
+
+    // Save negative prompt
     localStorage.setItem("negative-prompt-input", this.generationRequest.negative_prompt);
+
+    // Save denoise strength
     if (this.generationRequest.strength != undefined) {
       localStorage.setItem("custom-denoise", this.generationRequest.strength.toString());
     }
+
+    // Save seed
     if (this.generationRequest.seed == undefined) {
       localStorage.removeItem("seed-input");
     }
     else if (this.generationRequest.seed != undefined) {
       localStorage.setItem("seed-input", this.generationRequest.seed.toString());
     }
+
+    // Save cfg
     if (this.generationRequest.steps != undefined) {
       localStorage.setItem("cfg", this.generationRequest.guidance_scale.toString());
     }
+
+    // Save aspect ratio
     localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
     if (this.generationRequest.fast_pass_code == undefined || this.generationRequest.fast_pass_code == "") {
       this.generationRequest.fast_pass_code = undefined;
@@ -209,6 +226,9 @@ export class OptionsComponent {
     else if (this.generationRequest.fast_pass_code != undefined && this.generationRequest.fast_pass_code != "") {
       localStorage.setItem("fast-pass-code", this.generationRequest.fast_pass_code);
     }
+
+    // Save model
+    localStorage.setItem("model", this.generationRequest.model);
   }
 
   // Load session storage info of changed settings
@@ -234,6 +254,9 @@ export class OptionsComponent {
     if (localStorage.getItem("fast-pass-code") != null) {
       this.generationRequest.fast_pass_code = localStorage.getItem("fast-pass-code")!;
     }
+    if (localStorage.getItem("model") != null) {
+      this.generationRequest.model = localStorage.getItem("model")!;
+    }
   }
 
   // Reset session storage info of changed settings and reset view
@@ -250,6 +273,7 @@ export class OptionsComponent {
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 7;
+    this.generationRequest.model = "sonicDiffusionV4";
     this.changeAspectRatio("square");
 
     this.loadSettings();
@@ -409,7 +433,6 @@ export class OptionsComponent {
   showError(error: any) {
     // Default error message
     let errorMessage = 'There was an error attempting to generate your image. Website is possibly down. Try out generating on CivitAi as an alternative. https://civitai.com/models/1493';
-    //let errorMessage = 'Website will be down for ~2 weeks while a new model is trained. For more information on why join the discord and read #announcements https://discord.gg/mobians';
 
     // If the error comes from the backend and has a 'detail' field, use it as the error message
     if (error && error.error && error.error.detail) {
