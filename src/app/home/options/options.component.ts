@@ -219,11 +219,15 @@ export class OptionsComponent {
 
     // Save aspect ratio
     localStorage.setItem("aspect-ratio", this.aspectRatio.aspectRatio);
-    if (this.generationRequest.fast_pass_code == undefined || this.generationRequest.fast_pass_code == "") {
+
+    // Save fast pass code
+    if (this.generationRequest.fast_pass_code == undefined || this.generationRequest.fast_pass_code.trim() == "") {
       this.generationRequest.fast_pass_code = undefined;
       localStorage.removeItem("fast-pass-code");
     }
-    else if (this.generationRequest.fast_pass_code != undefined && this.generationRequest.fast_pass_code != "") {
+    else if (this.generationRequest.fast_pass_code != undefined && this.generationRequest.fast_pass_code.trim() != "") {
+      // Convert fast_pass_code to lowercase and remove whitespace
+      this.generationRequest.fast_pass_code = this.generationRequest.fast_pass_code.toLowerCase().replace(/\s/g, '');
       localStorage.setItem("fast-pass-code", this.generationRequest.fast_pass_code);
     }
 
@@ -471,5 +475,9 @@ export class OptionsComponent {
   // Example function called after successful Discord login
   onDiscordLoginSuccess(userData: any) {
     localStorage.setItem('discordUserData', JSON.stringify(userData));
+  }
+
+  onFastPassCodeChange(event: any) {
+    this.generationRequest.fast_pass_code = event.target.value.toLowerCase().replace(/\s/g, '');
   }
 }

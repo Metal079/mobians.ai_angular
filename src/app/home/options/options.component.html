@@ -180,7 +180,8 @@
           </span>
         </label>
         <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
-          [(ngModel)]="generationRequest.fast_pass_code" />
+          [(ngModel)]="generationRequest.fast_pass_code" 
+          (input)="onFastPassCodeChange($event)" />
       </div>
 
       <!-- Notifications -->
