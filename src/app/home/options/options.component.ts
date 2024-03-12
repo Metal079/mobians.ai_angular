@@ -62,10 +62,21 @@ export class OptionsComponent {
   serverMember: boolean = false;
   userGeneratedImages: MobiansImage[] = [];
 
+  // Pagination
   paginatedImages: MobiansImage[] = [];
   currentPage = 1;
   imagesPerPage = 6; // Display 8 images per page (2 rows of 4 images each)
   totalPages = 1;
+
+  // Sorting
+  selectedSortOption: string = 'timestamp';
+  sortOrder: 'asc' | 'desc' = 'desc';
+  searchQuery: string = '';
+  filteredImages: MobiansImage[] = [];
+  dropdownOptions: { label: string, value: string }[] = [ 
+    { label: 'Date', value: 'timestamp' },
+    { label: 'Alphabetical', value: 'promptSummary' }
+  ];
 
   @Input() inpaintMask?: string;
 
@@ -312,6 +323,7 @@ export class OptionsComponent {
         this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
       
         // Display the first page of images
+        this.searchImages();
         this.paginateImages();
       };
 
@@ -603,10 +615,24 @@ export class OptionsComponent {
     }
   }
 
+  searchImages() {
+    if (this.searchQuery.trim() === '') {
+      this.filteredImages = [...this.userGeneratedImages];
+    } else {
+      const lowercaseQuery = this.searchQuery.toLowerCase();
+      this.filteredImages = this.userGeneratedImages.filter(image =>
+        image.promptSummary && image.promptSummary.toLowerCase().includes(lowercaseQuery)
+      );
+    }
+    this.currentPage = 1;
+    this.totalPages = Math.ceil(this.filteredImages.length / this.imagesPerPage);
+    this.paginateImages();
+  }
+
   paginateImages() {
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
-    this.paginatedImages = this.userGeneratedImages.slice(startIndex, endIndex);
+    this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
   }
 
   previousPage() {
@@ -621,6 +647,31 @@ export class OptionsComponent {
       this.currentPage++;
       this.paginateImages();
     }
+  }
+
+  sortImages() {
+    if (this.selectedSortOption === 'timestamp') {
+      this.userGeneratedImages.sort((a, b) => {
+        const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+        const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+        return this.sortOrder === 'asc' ? timestampA - timestampB : timestampB - timestampA;
+      });
+    } else if (this.selectedSortOption === 'promptSummary') {
+      this.userGeneratedImages.sort((a, b) => {
+        const summaryA = a.promptSummary ? a.promptSummary.toLowerCase() : '';
+        const summaryB = b.promptSummary ? b.promptSummary.toLowerCase() : '';
+        return this.sortOrder === 'asc' ? summaryA.localeCompare(summaryB) : summaryB.localeCompare(summaryA);
+      });
+    }
+    // Add more sorting options as needed
+
+    this.paginateImages();
+    this.searchImages();
+  }
+
+  reverseSortOrder() {
+    this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    this.sortImages();
   }
 
   // Example function called after successful Discord login
