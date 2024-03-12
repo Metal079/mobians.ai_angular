@@ -31,6 +31,51 @@
   margin-left: 10px;
 }
 
+.history-panel {
+  margin-top: 20px;
+  margin-left: 10px;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-gap: 10px;
+  margin-top: 10px;
+}
+
+.history-item {
+  cursor: pointer;
+}
+
+.history-item img {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.history-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.summary-text {
+  max-height: 40px; /* Adjust the height as needed */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1; /* Adjust the number of lines to show */
+  -webkit-box-orient: vertical;
+  text-align: center;
+}
+
+.no-images-message {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
 @media (max-width: 480px) {
   .input-button-container {
     display: flex;
