@@ -87,16 +87,15 @@
         <div class="card card-body">
           <div class="sorting-options">
             <div class="sort-dropdown">
-              <p-dropdown id="sortBy" [options]="dropdownOptions" [(ngModel)]="selectedSortOption" (onChange)="sortImages()"></p-dropdown>
+              <p-dropdown id="sortBy" [options]="dropdownOptions" [(ngModel)]="selectedSortOption"
+                (onChange)="sortImages()"></p-dropdown>
               <button class="btn btn-sm btn-secondary" (click)="reverseSortOrder()">
                 {{ sortOrder === 'asc' ? '&#9650;' : '&#9660;' }}
               </button>
             </div>
             <div class="search-bar">
-              <span class="p-input-icon-left">
-                <i class="pi pi-search"></i>
-                <input type="text" pInputText placeholder="Search prompts" [(ngModel)]="searchQuery" (input)="searchImages()">
-              </span>
+              <input type="text" pInputText placeholder="Search prompts" [(ngModel)]="searchQuery"
+                (input)="searchImages()">
             </div>
           </div>
           <!-- Image History Panel -->

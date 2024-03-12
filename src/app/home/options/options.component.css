@@ -136,11 +136,7 @@
     width: 97vw;
   }
 
-  .sorting-options {
-    padding-right: 0;
-  }
-
-  .search-bar {
-    max-width: 100%;
+  .p-inputtext{
+    padding-right: 0px;
   }
 }
