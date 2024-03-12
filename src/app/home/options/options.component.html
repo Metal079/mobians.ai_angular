@@ -62,12 +62,46 @@
       [(ngModel)]="generationRequest.strength" />
   </div>
 
+
+
   <!-- Advanced options -->
   <div id="advanced-options">
     <button class="btn btn-primary dropdown-toggle" data-bs-toggle="collapse" href="#collapseExample" role="button"
-      aria-expanded="false" aria-controls="collapseExample">
+      aria-expanded="false" aria-controls="collapseExample" (click)="toggleOptions()">
       Options
     </button>
+
+  <!-- Image History Panel -->
+  <span class="history-panel">
+    <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
+      aria-expanded="false" aria-controls="historyCollapse" (click)="toggleHistory()">
+      Image History
+    </button>
+    <div class="collapse" id="historyCollapse">
+      <div class="card card-body">
+        <!-- Image History Panel -->
+        <div class="history-grid">
+          <div *ngFor="let image of paginatedImages" class="history-item">
+            <img [src]="image.thumbnailUrl" alt="Generated Image" (click)="openImageDetails(image)">
+            <div class="history-details">
+              <span>{{ image.timestamp | date:'short' }}</span>
+              <span>{{ image.promptSummary }}</span>
+            </div>
+          </div>
+        </div>
+        <!-- Show message if no images are available -->
+        <div *ngIf="paginatedImages.length === 0" class="no-images-message">
+          No generated images available.
+        </div>
+        <div class="pagination">
+          <button class="btn btn-sm btn-primary" (click)="previousPage()" [disabled]="currentPage === 1">Previous</button>
+          <span>Page {{ currentPage }} of {{ totalPages }}</span>
+          <button class="btn btn-sm btn-primary" (click)="nextPage()" [disabled]="currentPage === totalPages">Next</button>
+        </div>
+      </div>
+    </div>
+  </span>
+
 
     <!-- Remove reference image button -->
     <span *ngIf="referenceImage" id="remove-reference-image-button" style="margin-left: 20px;">
@@ -180,8 +214,7 @@
           </span>
         </label>
         <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
-          [(ngModel)]="generationRequest.fast_pass_code" 
-          (input)="onFastPassCodeChange($event)" />
+          [(ngModel)]="generationRequest.fast_pass_code" (input)="onFastPassCodeChange($event)" />
       </div>
 
       <!-- Notifications -->
@@ -200,10 +233,5 @@
     </div>
   </div>
 
-  <!-- <p-overlayPanel #op>
-    <ng-template pTemplate="content">
-        <h4>Custom Content</h4>
-    </ng-template>
-</p-overlayPanel> -->
-  <!-- <p-button (click)="op.toggle($event)" icon="pi pi-image" label="Show"></p-button> -->
+
 </div>

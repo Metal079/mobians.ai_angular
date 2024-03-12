@@ -22,6 +22,8 @@ import { SwPush } from '@angular/service-worker';
 export class OptionsComponent {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
+  private dbName = 'ImageDatabase';
+  private storeName = 'ImageStore';
 
   models = ["sonicDiffusionV4", "fluffySonic"]
   enableGenerationButton: boolean = true;
@@ -58,6 +60,12 @@ export class OptionsComponent {
   currentSeed?: number;
   supporter: boolean = false;
   serverMember: boolean = false;
+  userGeneratedImages: MobiansImage[] = [];
+
+  paginatedImages: MobiansImage[] = [];
+  currentPage = 1;
+  imagesPerPage = 6; // Display 8 images per page (2 rows of 4 images each)
+  totalPages = 1;
 
   @Input() inpaintMask?: string;
 
@@ -77,6 +85,27 @@ export class OptionsComponent {
     , private notificationService: NotificationService
     , private swPush: SwPush
   ) { }
+
+  private openDatabase(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 2);
+
+      request.onerror = (event) => {
+        reject(new Error('Failed to open database'));
+      };
+
+      request.onsuccess = (event) => {
+        const db = request.result;
+        resolve(db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = request.result;
+        db.deleteObjectStore(this.storeName); // Delete the existing object store
+        db.createObjectStore(this.storeName, { keyPath: 'UUID' }); // Recreate the object store with the correct key path
+      };
+    });
+  }
 
   ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
@@ -236,7 +265,7 @@ export class OptionsComponent {
   }
 
   // Load session storage info of changed settings
-  loadSettings() {
+  async loadSettings() {
     if (localStorage.getItem("prompt-input") != null) {
       this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
     }
@@ -260,6 +289,44 @@ export class OptionsComponent {
     }
     if (localStorage.getItem("model") != null) {
       this.generationRequest.model = localStorage.getItem("model")!;
+    }
+
+    try {
+      const db = await this.openDatabase();
+      const transaction = db.transaction(this.storeName, 'readonly');
+      const store = transaction.objectStore(this.storeName);
+
+      const request = store.getAll();
+
+      request.onsuccess = (event) => {
+        this.userGeneratedImages = request.result;
+      
+        // Sort the userGeneratedImages array based on the timestamp in descending order
+        this.userGeneratedImages.sort((a, b) => {
+          const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+          const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+          return timestampB - timestampA;
+        });
+      
+        // Calculate the total number of pages
+        this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
+      
+        // Display the first page of images
+        this.paginateImages();
+      };
+
+      request.onerror = (event) => {
+        console.error('Failed to retrieve images from IndexedDB', event);
+      };
+
+      // Wait for the transaction to complete before proceeding
+      await new Promise((resolve) => {
+        transaction.oncomplete = () => {
+          resolve(undefined);
+        };
+      });
+    } catch (error) {
+      console.error('Failed to open database', error);
     }
   }
 
@@ -376,30 +443,70 @@ export class OptionsComponent {
         // Only continue the stream while the job is incomplete
         takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
         // Once the stream completes, do any cleanup if necessary
-        finalize(() => {
+        finalize(async () => {
           if (this.enableNotifications) {
             this.notificationService.playDing();
             this.notificationService.sendPushNotification();
           }
           if (jobComplete && lastResponse) {
             console.log(lastResponse);
-            this.images = lastResponse.result.map((base64String: string) => {
+            const generatedImages = lastResponse.result.map((base64String: string) => {
               return {
                 base64: base64String,
-                // Fill in other properties as needed
-                width: this.generationRequest.width, // Example value, update as needed
-                height: this.generationRequest.height, // Example value, update as needed
-                aspectRatio: this.aspectRatio.aspectRatio, // Example value, update as needed
-                UUID: uuidv4(), // Example value, update as needed
-                rated: false, // Example value, update as needed
+                width: this.generationRequest.width,
+                height: this.generationRequest.height,
+                aspectRatio: this.aspectRatio.aspectRatio,
+                UUID: uuidv4(),
+                rated: false,
+                timestamp: new Date(),
+                promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
+                thumbnailUrl: 'data:image/png;base64,' + base64String // Generate thumbnail URL
               };
             });
+            this.images = generatedImages;
             this.sharedService.setImages(this.images);
+
+            // Add the generated images to userGeneratedImages array
+            this.userGeneratedImages.push(...generatedImages);
+
+            // Sort the userGeneratedImages array based on the timestamp in descending order
+            this.userGeneratedImages.sort((a, b) => {
+              const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+              const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+              return timestampB - timestampA;
+            });
+
+            // Calculate the total number of pages
+            this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
+
+            // Display the current page of images
+            this.paginateImages();
+
+            try {
+              const db = await this.openDatabase();
+              const transaction = db.transaction(this.storeName, 'readwrite');
+              const store = transaction.objectStore(this.storeName);
+
+              for (const image of generatedImages) {
+                console.log(image);
+                store.put(image);
+              }
+
+              transaction.oncomplete = () => {
+                console.log('Images stored in IndexedDB');
+              };
+
+              transaction.onerror = (event) => {
+                console.error('Failed to store images in IndexedDB', event);
+              };
+            } catch (error) {
+              console.error('Failed to open database', error);
+            }
+
             this.loadingChange.emit(false);
             this.enableGenerationButton = true;
           }
         })
-
       )
       .subscribe(
         response => {
@@ -416,8 +523,8 @@ export class OptionsComponent {
           }
           else {
             // This will be called every 3 seconds, so we do nothing here
-            console.log("queue position: " + response.queue_position);
-            this.queuePositionChange.emit(response.queue_position);
+            console.log("queue position: " + response.queue_position ?? 0);
+            this.queuePositionChange.emit(response.queue_position ?? 0);
           }
         },
         error => {
@@ -470,6 +577,47 @@ export class OptionsComponent {
 
   openImageModal() {
     this.imageModalOpen.emit(true);
+  }
+
+  openImageDetails(image: MobiansImage) {
+    // Implement the logic to open the image details modal or view
+    console.log('Opening image details for:', image);
+
+    // 
+  }
+
+  toggleOptions() {
+    const historyCollapse = document.getElementById('historyCollapse');
+    if (historyCollapse) {
+      historyCollapse.classList.remove('show');
+    }
+  }
+
+  toggleHistory() {
+    const optionsCollapse = document.getElementById('collapseExample');
+    if (optionsCollapse) {
+      optionsCollapse.classList.remove('show');
+    }
+  }
+
+  paginateImages() {
+    const startIndex = (this.currentPage - 1) * this.imagesPerPage;
+    const endIndex = startIndex + this.imagesPerPage;
+    this.paginatedImages = this.userGeneratedImages.slice(startIndex, endIndex);
+  }
+
+  previousPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.paginateImages();
+    }
+  }
+
+  nextPage() {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.paginateImages();
+    }
   }
 
   // Example function called after successful Discord login
