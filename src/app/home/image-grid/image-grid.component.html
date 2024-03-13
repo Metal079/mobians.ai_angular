@@ -32,7 +32,7 @@
     <img [src]="'data:image/png;base64,' + images[3].base64" class="small-image" alt="Image4 goes here" (click)="inpaintingEnabled || expandImage(3, $event)" id="image3">
   </div>
   <div class="reference-image" *ngIf="this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage" id="wrapper5">
-    <img [src]="this.sharedService.getReferenceImageValue()!.url" alt="Reference Image goes here" (click)="inpaintingEnabled || expandImage(4, $event)" id="referenceImage">
+    <img [src]="this.sharedService.getReferenceImageValue()!.url ?? this.sharedService.getReferenceImageValue()!.thumbnailUrl" alt="Reference Image goes here" (click)="inpaintingEnabled || expandImage(4, $event)" id="referenceImage">
   </div>
   <canvas #imageCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()"></canvas>
 

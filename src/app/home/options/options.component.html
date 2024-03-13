@@ -62,25 +62,66 @@
       [(ngModel)]="generationRequest.strength" />
   </div>
 
+  <!-- Remove reference image button -->
+  <span *ngIf="referenceImage" id="remove-reference-image-button" style="margin-left: 20px;">
+    <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
+      Remove Reference Image
+    </button>
+  </span>
+
   <!-- Advanced options -->
   <div id="advanced-options">
     <button class="btn btn-primary dropdown-toggle" data-bs-toggle="collapse" href="#collapseExample" role="button"
-      aria-expanded="false" aria-controls="collapseExample">
+      aria-expanded="false" aria-controls="collapseExample" (click)="toggleOptions()">
       Options
     </button>
 
-    <!-- Remove reference image button -->
-    <span *ngIf="referenceImage" id="remove-reference-image-button" style="margin-left: 20px;">
-      <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
-        Remove Reference Image
+    <!-- Image History Panel -->
+    <span class="history-panel">
+      <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="collapse"
+        data-bs-target="#historyCollapse" aria-expanded="false" aria-controls="historyCollapse"
+        (click)="toggleHistory()">
+        Image History
       </button>
+      <div class="collapse" id="historyCollapse">
+        <div class="card card-body">
+          <div class="sorting-options">
+            <div class="sort-dropdown">
+              <p-dropdown id="sortBy" [options]="dropdownOptions" [(ngModel)]="selectedSortOption"
+                (onChange)="sortImages()"></p-dropdown>
+              <button class="btn btn-sm btn-secondary" (click)="reverseSortOrder()">
+                {{ sortOrder === 'asc' ? '&#9650;' : '&#9660;' }}
+              </button>
+            </div>
+            <div class="search-bar">
+              <input type="text" pInputText placeholder="Search prompts" [(ngModel)]="searchQuery"
+                (input)="searchImages()">
+            </div>
+          </div>
+          <!-- Image History Panel -->
+          <div class="history-grid">
+            <div *ngFor="let image of paginatedImages" class="history-item">
+              <img [src]="image.url ?? image.thumbnailUrl" alt="Generated Image" (click)="openImageDetails(image)">
+              <div class="history-details">
+                <span>{{ image.timestamp | date:'short' }}</span>
+                <span class="summary-text">{{ image.promptSummary }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Show message if no images are available -->
+          <div *ngIf="paginatedImages.length === 0" class="no-images-message">
+            No generated images available.
+          </div>
+          <div class="pagination">
+            <button class="btn btn-sm btn-primary" (click)="previousPage()"
+              [disabled]="currentPage === 1">Previous</button>
+            <span>Page {{ currentPage }} of {{ totalPages }}</span>
+            <button class="btn btn-sm btn-primary" (click)="nextPage()"
+              [disabled]="currentPage === totalPages">Next</button>
+          </div>
+        </div>
+      </div>
     </span>
-
-    <!-- Re-generate with reference button -->
-    <button class="btn btn-success" type="button" onclick="redoWithSameReference()" id="redo-with-reference-button"
-      style="display: none">
-      Regenerate W/Prev Reference
-    </button>
 
     <div class="collapse w-100" id="collapseExample">
       <label for="floatingSelect">Model Select</label>
@@ -180,7 +221,7 @@
           </span>
         </label>
         <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
-          [(ngModel)]="generationRequest.fast_pass_code" />
+          [(ngModel)]="generationRequest.fast_pass_code" (input)="onFastPassCodeChange($event)" />
       </div>
 
       <!-- Notifications -->
@@ -199,10 +240,5 @@
     </div>
   </div>
 
-  <!-- <p-overlayPanel #op>
-    <ng-template pTemplate="content">
-        <h4>Custom Content</h4>
-    </ng-template>
-</p-overlayPanel> -->
-  <!-- <p-button (click)="op.toggle($event)" icon="pi pi-image" label="Show"></p-button> -->
+
 </div>

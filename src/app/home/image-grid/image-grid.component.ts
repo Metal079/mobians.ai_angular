@@ -94,6 +94,7 @@ export class ImageGridComponent {
       if (image) {
         console.log('Reference Image changed:', image);
         this.showReferenceImage = true;
+        this.showInstructions = false;
       }
       else{
         console.log('Reference Image removed');

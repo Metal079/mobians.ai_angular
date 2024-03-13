@@ -19,6 +19,8 @@ import { ButtonModule } from 'primeng/button';
 import { ColorPickerModule } from 'primeng/colorpicker';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { OverlayPanelModule } from 'primeng/overlaypanel';
+import { InputTextModule } from 'primeng/inputtext';
+import { DropdownModule } from 'primeng/dropdown';
 
 @NgModule({
   declarations: [
@@ -41,6 +43,8 @@ import { OverlayPanelModule } from 'primeng/overlaypanel';
     ColorPickerModule,
     ToggleButtonModule,
     OverlayPanelModule,
+    InputTextModule,
+    DropdownModule,
   ],
   exports: [
     ImageGridComponent,
@@ -50,6 +54,8 @@ import { OverlayPanelModule } from 'primeng/overlaypanel';
     GligenDisplayComponent, 
     InpaintingDisplayComponent,
     OverlayPanelModule,
+    InputTextModule,
+    DropdownModule,
   ],
   providers: [MessageService]
 })
