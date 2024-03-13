@@ -73,7 +73,7 @@ export class OptionsComponent {
   sortOrder: 'asc' | 'desc' = 'desc';
   searchQuery: string = '';
   filteredImages: MobiansImage[] = [];
-  dropdownOptions: { label: string, value: string }[] = [ 
+  dropdownOptions: { label: string, value: string }[] = [
     { label: 'Date', value: 'timestamp' },
     { label: 'Alphabetical', value: 'promptSummary' }
   ];
@@ -99,7 +99,7 @@ export class OptionsComponent {
 
   private openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 2);
+      const request = indexedDB.open(this.dbName, 5);
 
       request.onerror = (event) => {
         reject(new Error('Failed to open database'));
@@ -112,8 +112,17 @@ export class OptionsComponent {
 
       request.onupgradeneeded = (event) => {
         const db = request.result;
-        db.deleteObjectStore(this.storeName); // Delete the existing object store
+        // Check if the object store exists before trying to delete it
+        if (db.objectStoreNames.contains('yourObjectStoreName')) {
+          db.deleteObjectStore('yourObjectStoreName');
+          console.log('Object store deleted')
+          console.log(this.storeName)
+        }
+
+        // Now, create the object store as needed
         db.createObjectStore(this.storeName, { keyPath: 'UUID' }); // Recreate the object store with the correct key path
+        console.log('Object store created')
+        console.log(this.storeName)
       };
     });
   }
@@ -122,8 +131,18 @@ export class OptionsComponent {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.generationRequest.prompt = value;
     });
+
+    this.openDatabase().then(() => {
+      // Database and object store created successfully
+      // Perform any necessary operations
+      console.log('Database and object store created successfully')
+      this.loadSettings();
+    }).catch((error) => {
+      console.error('Failed to open database:', error);
+      // Handle the error appropriately
+    });
+
     this.sharedService.setGenerationRequest(this.generationRequest);
-    this.loadSettings();
     this.updateSharedPrompt();
 
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
@@ -311,17 +330,17 @@ export class OptionsComponent {
 
       request.onsuccess = (event) => {
         this.userGeneratedImages = request.result;
-      
+
         // Sort the userGeneratedImages array based on the timestamp in descending order
         this.userGeneratedImages.sort((a, b) => {
           const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
           const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
           return timestampB - timestampA;
         });
-      
+
         // Calculate the total number of pages
         this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
-      
+
         // Display the first page of images
         this.searchImages();
         this.paginateImages();
@@ -493,6 +512,9 @@ export class OptionsComponent {
 
             // Display the current page of images
             this.paginateImages();
+
+            // update the view
+            this.sortImages();
 
             try {
               const db = await this.openDatabase();
