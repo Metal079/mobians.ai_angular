@@ -333,31 +333,37 @@ export class OptionsComponent {
       const db = await this.openDatabase();
       const transaction = db.transaction(this.storeName, 'readonly');
       const store = transaction.objectStore(this.storeName);
-
       const request = store.getAll();
-
+    
       request.onsuccess = (event) => {
         this.userGeneratedImages = request.result;
-
-        // Sort the userGeneratedImages array based on the timestamp in descending order
-        this.userGeneratedImages.sort((a, b) => {
-          const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-          const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
-          return timestampB - timestampA;
-        });
-
-        // Calculate the total number of pages
-        this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
-
-        // Display the first page of images
-        this.searchImages();
-        this.paginateImages();
+    
+        if (this.userGeneratedImages.length > 0) {
+          // Sort the userGeneratedImages array based on the timestamp in descending order
+          this.userGeneratedImages.sort((a, b) => {
+            const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+            const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+            return timestampB - timestampA;
+          });
+    
+          // Calculate the total number of pages
+          this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
+    
+          // Display the first page of images
+          this.searchImages();
+          this.paginateImages();
+        } else {
+          // No images found, reset the pagination variables
+          this.currentPage = 1;
+          this.totalPages = 1;
+          this.paginatedImages = [];
+        }
       };
-
+    
       request.onerror = (event) => {
         console.error('Failed to retrieve images from IndexedDB', event);
       };
-
+    
       // Wait for the transaction to complete before proceeding
       await new Promise((resolve) => {
         transaction.oncomplete = () => {
@@ -749,6 +755,38 @@ export class OptionsComponent {
   reverseSortOrder() {
     this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
     this.sortImages();
+  }
+
+  async deleteAllImages() {
+    try {
+      const db = await this.openDatabase();
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+
+      const request = store.clear();
+
+      request.onsuccess = (event) => {
+        console.log('All images deleted from IndexedDB');
+        this.userGeneratedImages = [];
+        this.filteredImages = [];
+        this.paginatedImages = [];
+        this.currentPage = 1;
+        this.totalPages = 1;
+      };
+
+      request.onerror = (event) => {
+        console.error('Failed to delete images from IndexedDB', event);
+      };
+
+      // Wait for the transaction to complete before proceeding
+      await new Promise((resolve) => {
+        transaction.oncomplete = () => {
+          resolve(undefined);
+        };
+      });
+    } catch (error) {
+      console.error('Failed to open database', error);
+    }
   }
 
   // Example function called after successful Discord login
