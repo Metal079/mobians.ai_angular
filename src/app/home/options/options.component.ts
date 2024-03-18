@@ -99,30 +99,38 @@ export class OptionsComponent {
 
   private openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 5);
-
+      const request = indexedDB.open(this.dbName, 7);
+  
       request.onerror = (event) => {
         reject(new Error('Failed to open database'));
       };
-
+  
       request.onsuccess = (event) => {
         const db = request.result;
         resolve(db);
       };
-
+  
       request.onupgradeneeded = (event) => {
         const db = request.result;
         // Check if the object store exists before trying to delete it
         if (db.objectStoreNames.contains('yourObjectStoreName')) {
           db.deleteObjectStore('yourObjectStoreName');
-          console.log('Object store deleted')
-          console.log(this.storeName)
+          console.log('Object store deleted');
+          console.log(this.storeName);
         }
-
-        // Now, create the object store as needed
-        db.createObjectStore(this.storeName, { keyPath: 'UUID' }); // Recreate the object store with the correct key path
-        console.log('Object store created')
-        console.log(this.storeName)
+      
+        // Create the main object store if it doesn't exist
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: 'UUID' });
+          console.log('Object store created');
+          console.log(this.storeName);
+        }
+      
+        // Create the base64Store object store if it doesn't exist
+        if (!db.objectStoreNames.contains('base64Store')) {
+          db.createObjectStore('base64Store', { keyPath: 'UUID' });
+          console.log('base64Store created');
+        }
       };
     });
   }
@@ -384,6 +392,36 @@ export class OptionsComponent {
     this.imagesChange.emit([]);
   }
 
+  async loadImageData(image: MobiansImage) {
+    if (image.base64) {
+      // Image data is already loaded
+      return;
+    }
+
+    try {
+      const db = await this.openDatabase();
+      const transaction = db.transaction('base64Store', 'readonly');
+      const store = transaction.objectStore('base64Store');
+
+      const request = store.get(image.UUID);
+
+      request.onsuccess = (event) => {
+        const result = request.result;
+        if (result) {
+          image.base64 = result.base64;
+        }
+      };
+
+      await new Promise((resolve) => {
+        transaction.oncomplete = () => {
+          resolve(undefined);
+        };
+      });
+    } catch (error) {
+      console.error('Failed to load image data', error);
+    }
+  }
+
   // Send job to django api and retrieve job id.
   submitJob(upscale: boolean = false) {
     if (upscale) {
@@ -518,23 +556,21 @@ export class OptionsComponent {
 
             try {
               const db = await this.openDatabase();
-              const transaction = db.transaction(this.storeName, 'readwrite');
+              const transaction = db.transaction([this.storeName, 'base64Store'], 'readwrite');
               const store = transaction.objectStore(this.storeName);
-
+              const base64Store = transaction.objectStore('base64Store');
+      
               for (const image of generatedImages) {
-                console.log(image);
-                store.put(image);
+                // Save the image metadata
+                const imageMetadata = { ...image };
+                delete imageMetadata.base64; // Remove the base64 data from metadata
+                store.put(imageMetadata);
+      
+                // Save the base64 data separately
+                base64Store.put({ UUID: image.UUID, base64: image.base64 });
               }
-
-              transaction.oncomplete = () => {
-                console.log('Images stored in IndexedDB');
-              };
-
-              transaction.onerror = (event) => {
-                console.error('Failed to store images in IndexedDB', event);
-              };
             } catch (error) {
-              console.error('Failed to open database', error);
+              console.error('Failed to store image data', error);
             }
 
             this.loadingChange.emit(false);
@@ -651,23 +687,42 @@ export class OptionsComponent {
     this.paginateImages();
   }
 
-  paginateImages() {
+  async paginateImages() {
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
     this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
-  }
-
-  previousPage() {
-    if (this.currentPage > 1) {
-      this.currentPage--;
-      this.paginateImages();
+  
+    // Load image data for the current page
+    for (const image of this.paginatedImages) {
+      await this.loadImageData(image);
     }
   }
 
-  nextPage() {
+  async previousPage() {
+    if (this.currentPage > 1) {
+      // Unload image data for the current page (unless theyre currently being viewed in the modal) (this.userGeneratedImages)
+      for (const image of this.paginatedImages) {
+        if (!this.images.includes(image)) {
+          image.base64 = "";
+        }
+      }
+  
+      this.currentPage--;
+      await this.paginateImages();
+    }
+  }
+  
+  async nextPage() {
     if (this.currentPage < this.totalPages) {
+      // Unload image data for the current page
+      for (const image of this.paginatedImages) {
+        if (!this.images.includes(image)) {
+          image.base64 = "";
+        }
+      }
+  
       this.currentPage++;
-      this.paginateImages();
+      await this.paginateImages();
     }
   }
 
