@@ -456,6 +456,12 @@ export class OptionsComponent {
     this.currentSeed = this.generationRequest.seed;
     this.sharedService.setGenerationRequest(this.generationRequest);
 
+    // if using SDXL model change the resolution to double normal
+    if (this.generationRequest.model == "sonicDiffusionXL") {
+      this.generationRequest.width *= 1.5;
+      this.generationRequest.height *= 1.5;
+    }
+
     // set loading to true and submit job
     this.loadingChange.emit(true);
     this.stableDiffusionService.submitJob(this.generationRequest)
