@@ -7,6 +7,7 @@ export interface MobiansImage {
     UUID: string;
     rating?: boolean;
     timestamp?: Date;
+    prompt?: string;
     promptSummary?: string;
     thumbnailUrl?: string; // Add this line
   }

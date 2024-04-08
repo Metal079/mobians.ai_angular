@@ -95,14 +95,23 @@ export class OptionsComponent {
     , private messageService: MessageService
     , private notificationService: NotificationService
     , private swPush: SwPush
-  ) { }
+  ) { 
+    this.paginateImages = this.paginateImages.bind(this);
+  }
 
   private openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 7);
+      if (!window.indexedDB) {
+        console.error("IndexedDB is not supported in this browser.");
+        reject(new Error("IndexedDB is not supported"));
+        return;
+      }
+  
+      const request = indexedDB.open(this.dbName, 12); // Increment the version number
   
       request.onerror = (event) => {
-        reject(new Error('Failed to open database'));
+        console.error("Failed to open database:", event);
+        reject(new Error("Failed to open database"));
       };
   
       request.onsuccess = (event) => {
@@ -110,27 +119,81 @@ export class OptionsComponent {
         resolve(db);
       };
   
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = async (event) => {
         const db = request.result;
-        // Check if the object store exists before trying to delete it
-        if (db.objectStoreNames.contains('yourObjectStoreName')) {
-          db.deleteObjectStore('yourObjectStoreName');
-          console.log('Object store deleted');
-          console.log(this.storeName);
-        }
-      
+  
         // Create the main object store if it doesn't exist
         if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName, { keyPath: 'UUID' });
-          console.log('Object store created');
+          db.createObjectStore(this.storeName, { keyPath: "UUID" });
+          console.log("Object store created");
           console.log(this.storeName);
         }
-      
-        // Create the base64Store object store if it doesn't exist
-        if (!db.objectStoreNames.contains('base64Store')) {
-          db.createObjectStore('base64Store', { keyPath: 'UUID' });
-          console.log('base64Store created');
+  
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
+        if (transaction) {
+          const store = transaction.objectStore(this.storeName);
+  
+          let lastCursor: IDBValidKey | null = null;
+  
+          const deleteEntriesWithBase64 = async () => {
+            const request = lastCursor ? store.openCursor(lastCursor) : store.openCursor();
+  
+            request.onsuccess = async (event) => {
+              if (event.target) {
+                const cursor = (event.target as IDBRequest).result;
+  
+                if (cursor) {
+                  const image = cursor.value;
+                  console.log("Processing image:", image);
+  
+                  if (image.base64) {
+                    console.log("Deleting image with base64:", image);
+                    const deleteRequest = cursor.delete();
+  
+                    deleteRequest.onsuccess = () => {
+                      console.log("Image deleted successfully");
+                    };
+  
+                    deleteRequest.onerror = (event: Event) => {
+                      console.error("Failed to delete image:", event);
+                    };
+                  }
+  
+                  lastCursor = cursor.key;
+                  cursor.continue();
+                } else {
+                  lastCursor = null;
+                  console.log("No more entries to process");
+                }
+              }
+            };
+  
+            request.onerror = (event: Event) => {
+              console.error("Error processing entries:", event);
+            };
+  
+            await new Promise((resolve) => {
+              if (transaction.oncomplete !== null) {
+                transaction.oncomplete = () => {
+                  resolve(undefined);
+                };
+              } else {
+                resolve(undefined);
+              }
+            });
+  
+            if (lastCursor !== null) {
+              await deleteEntriesWithBase64();
+            }
+          };
+  
+          await deleteEntriesWithBase64();
         }
+      };
+  
+      request.onblocked = (event) => {
+        console.error("Database access blocked:", event);
+        reject(new Error("Database access blocked"));
       };
     });
   }
@@ -219,6 +282,23 @@ export class OptionsComponent {
   changeAspectRatioSelector(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.changeAspectRatio(selectElement.value);
+
+    // If the model selected is SDXL, change the aspect ratio to the corresponding XL aspect ratio
+    // if (this.generationRequest.model == "sonicDiffusionXL") {
+    //   if (selectElement.value == 'portrait') {
+    //     this.changeAspectRatio('portrait-xl');
+    //   }
+    //   else if (selectElement.value == 'landscape') {
+    //     this.changeAspectRatio('landscape-xl');
+    //   }
+    //   else {
+    //     this.changeAspectRatio(selectElement.value);
+    //   }
+
+    // }
+    // else {
+    //   this.changeAspectRatio(selectElement.value);
+    // }
   }
 
   changeAspectRatio(aspectRatio: string) {
@@ -237,6 +317,21 @@ export class OptionsComponent {
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
+    // else if (aspectRatio == 'square-xl') {
+    //   this.aspectRatio = { width: 512, height: 512, model: "sonicDiffusionXL", aspectRatio: "portrait-xl" };
+    //   this.generationRequest.width = 1024;
+    //   this.generationRequest.height = 1024;
+    // }
+    // else if (aspectRatio == 'portrait-xl') {
+    //   this.aspectRatio = { width: 512, height: 658, model: "sonicDiffusionXL", aspectRatio: "portrait-xl" };
+    //   this.generationRequest.width = 896;
+    //   this.generationRequest.height = 1152;
+    // }
+    // else if (aspectRatio == 'landscape-xl') {
+    //   this.aspectRatio = { width: 658, height: 512, model: "sonicDiffusionXL", aspectRatio: "landscape-xl" };
+    //   this.generationRequest.width = 1152;
+    //   this.generationRequest.height = 896;
+    // }
 
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
@@ -456,12 +551,6 @@ export class OptionsComponent {
     this.currentSeed = this.generationRequest.seed;
     this.sharedService.setGenerationRequest(this.generationRequest);
 
-    // if using SDXL model change the resolution to double normal
-    if (this.generationRequest.model == "sonicDiffusionXL") {
-      this.generationRequest.width *= 1.5;
-      this.generationRequest.height *= 1.5;
-    }
-
     // set loading to true and submit job
     this.loadingChange.emit(true);
     this.stableDiffusionService.submitJob(this.generationRequest)
@@ -540,6 +629,7 @@ export class OptionsComponent {
                 UUID: uuidv4(),
                 rated: false,
                 timestamp: new Date(),
+                prompt: this.generationRequest.prompt,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
                 url: 'data:image/png;base64,' + base64String // Generate URL
               };
@@ -669,6 +759,12 @@ export class OptionsComponent {
     this.referenceImage = image;
     this.generationRequest.image = image.base64;
     this.sharedService.setReferenceImage(image);
+
+    // update prompt
+    if (image.prompt){
+      this.generationRequest.prompt = image.prompt;
+      this.sharedService.setPrompt(image.prompt!);
+    }
   }
 
   toggleOptions() {
@@ -691,6 +787,8 @@ export class OptionsComponent {
     } else {
       const lowercaseQuery = this.searchQuery.toLowerCase();
       this.filteredImages = this.userGeneratedImages.filter(image =>
+        // try first with prompt then with promptSummary if prompt is not available
+        image.prompt && image.prompt.toLowerCase().includes(lowercaseQuery) ||
         image.promptSummary && image.promptSummary.toLowerCase().includes(lowercaseQuery)
       );
     }
