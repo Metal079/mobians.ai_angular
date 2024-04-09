@@ -28,7 +28,7 @@
     </span>
 
     <!-- Upscale button -->
-    <span *ngIf="serverMember">
+    <span *ngIf="serverMember && this.generationRequest.model != 'sonicDiffusionXL'">
       <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob(true)"></p-button>
       <span class="ms-1 text-primary"
         pTooltip="Upscale the image by 1.5x. This will make the image look better and generate finer details. Due to longer generation times, this feature is currently only available to discord server members."
