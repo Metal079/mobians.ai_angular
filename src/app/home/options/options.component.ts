@@ -277,6 +277,14 @@ export class OptionsComponent {
   changeModel(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.generationRequest.model = selectElement.value;
+
+    // If the model selected is SDXL, change the CFG to 4 by default, else 7
+    if (selectElement.value == "ponyDiffusionXL") {
+      this.generationRequest.guidance_scale = 4;
+    }
+    else {
+      this.generationRequest.guidance_scale = 7;
+    }
   }
 
   changeAspectRatioSelector(event: any) {

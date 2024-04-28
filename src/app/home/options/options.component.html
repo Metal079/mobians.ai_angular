@@ -130,6 +130,7 @@
         <option value="sonicDiffusionV4">SonicDiffusionV4</option>
         <option value="fluffySonic">fluffySonic</option>
         <option value="sonicDiffusionXL">sonicDiffusionXL</option>
+        <option value="ponyDiffusionXL">ponyDiffusionXL</option>
       </select>
 
       <label for="floatingSelect">Image aspect-ratio</label>
@@ -209,19 +210,16 @@
 
       <!-- FastPass Code -->
       <div class="mb-3">
-        <label for="fastPassCode" class="form-label">FastPass Code
+        <label for="fastPassCode" class="form-label">
+          FastPass Code
           <span class="ms-1 text-primary"
             pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
-            tooltipPosition="top" style="
-              background-color: rgba(255, 255, 255, 0.8);
-              padding: 2px 4px;
-              border-radius: 50%;
-              cursor: pointer;
-            ">
+            tooltipPosition="top"
+            style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
             ?
           </span>
         </label>
-        <input type="text" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
+        <input type="password" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
           [(ngModel)]="generationRequest.fast_pass_code" (input)="onFastPassCodeChange($event)" />
       </div>
 
@@ -240,7 +238,8 @@
       </button>
 
       <!-- Delete all images -->
-      <button class="btn btn-danger" type="button" (click)="deleteAllImages()" id="delete-all-images-button" style="margin-left: 10px">
+      <button class="btn btn-danger" type="button" (click)="deleteAllImages()" id="delete-all-images-button"
+        style="margin-left: 10px">
         Delete Image History
       </button>
     </div>
