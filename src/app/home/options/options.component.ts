@@ -279,7 +279,7 @@ export class OptionsComponent {
     this.generationRequest.model = selectElement.value;
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "ponyDiffusionXL") {
+    if (selectElement.value == "autismMix") {
       this.generationRequest.guidance_scale = 4;
     }
     else {
