@@ -534,6 +534,8 @@ export class OptionsComponent {
           // Instead of storing the full base64 string, create a blob URL
           const blob = this.base64ToBlob(result.base64);
           image.blobUrl = URL.createObjectURL(blob);
+          image.base64 = result.base64.split(',')[1];
+          image.url = 'data:image/png;base64,' + image.base64;
         }
       };
 
