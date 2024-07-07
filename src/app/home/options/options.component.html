@@ -101,7 +101,7 @@
           <!-- Image History Panel -->
           <div class="history-grid">
             <div *ngFor="let image of paginatedImages" class="history-item">
-              <img [src]="image.url ?? image.thumbnailUrl" alt="Generated Image" (click)="openImageDetails(image)">
+              <img [src]="image.blobUrl || image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="history-details">
                 <span>{{ image.timestamp | date:'short' }}</span>
                 <span class="summary-text">{{ image.promptSummary }}</span>

@@ -95,7 +95,7 @@ export class OptionsComponent {
     , private messageService: MessageService
     , private notificationService: NotificationService
     , private swPush: SwPush
-  ) { 
+  ) {
     this.paginateImages = this.paginateImages.bind(this);
   }
 
@@ -106,59 +106,61 @@ export class OptionsComponent {
         reject(new Error("IndexedDB is not supported"));
         return;
       }
-  
-      const request = indexedDB.open(this.dbName, 12); // Increment the version number
-  
+
+      const request = indexedDB.open(this.dbName, 15); // Increment version number
+
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
         reject(new Error("Failed to open database"));
       };
-  
+
       request.onsuccess = (event) => {
         const db = request.result;
         resolve(db);
       };
-  
+
       request.onupgradeneeded = async (event) => {
         const db = request.result;
-  
+
         // Create the main object store if it doesn't exist
         if (!db.objectStoreNames.contains(this.storeName)) {
           db.createObjectStore(this.storeName, { keyPath: "UUID" });
-          console.log("Object store created");
-          console.log(this.storeName);
+          console.log("Object store created:", this.storeName);
         }
-  
+
+        // Create base64Store if it doesn't exist
+        if (!db.objectStoreNames.contains('base64Store')) {
+          db.createObjectStore('base64Store', { keyPath: "UUID" });
+          console.log("Base64 store created");
+        }
+
         const transaction = (event.target as IDBOpenDBRequest).transaction;
         if (transaction) {
           const store = transaction.objectStore(this.storeName);
-  
+          const base64Store = transaction.objectStore('base64Store');
+
           let lastCursor: IDBValidKey | null = null;
-  
-          const deleteEntriesWithBase64 = async () => {
+
+          const migrateBase64Data = async () => {
             const request = lastCursor ? store.openCursor(lastCursor) : store.openCursor();
-  
+
             request.onsuccess = async (event) => {
               if (event.target) {
                 const cursor = (event.target as IDBRequest).result;
-  
+
                 if (cursor) {
                   const image = cursor.value;
                   console.log("Processing image:", image);
-  
-                  if (image.base64) {
-                    console.log("Deleting image with base64:", image);
-                    const deleteRequest = cursor.delete();
-  
-                    deleteRequest.onsuccess = () => {
-                      console.log("Image deleted successfully");
-                    };
-  
-                    deleteRequest.onerror = (event: Event) => {
-                      console.error("Failed to delete image:", event);
-                    };
+
+                  if (image.url) {
+                    console.log("Migrating base64 data for image:", image.UUID);
+                    await base64Store.put({ UUID: image.UUID, base64: image.url });
+
+                    delete image.url;
+                    await cursor.update(image);
+                    console.log("Base64 data migrated and removed from main store");
                   }
-  
+
                   lastCursor = cursor.key;
                   cursor.continue();
                 } else {
@@ -167,11 +169,11 @@ export class OptionsComponent {
                 }
               }
             };
-  
+
             request.onerror = (event: Event) => {
               console.error("Error processing entries:", event);
             };
-  
+
             await new Promise((resolve) => {
               if (transaction.oncomplete !== null) {
                 transaction.oncomplete = () => {
@@ -181,16 +183,16 @@ export class OptionsComponent {
                 resolve(undefined);
               }
             });
-  
+
             if (lastCursor !== null) {
-              await deleteEntriesWithBase64();
+              await migrateBase64Data();
             }
           };
-  
-          await deleteEntriesWithBase64();
+
+          await migrateBase64Data();
         }
       };
-  
+
       request.onblocked = (event) => {
         console.error("Database access blocked:", event);
         reject(new Error("Database access blocked"));
@@ -198,20 +200,19 @@ export class OptionsComponent {
     });
   }
 
-  ngOnInit() {
+  async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.generationRequest.prompt = value;
     });
 
-    this.openDatabase().then(() => {
-      // Database and object store created successfully
-      // Perform any necessary operations
-      console.log('Database and object store created successfully')
-      this.loadSettings();
-    }).catch((error) => {
-      console.error('Failed to open database:', error);
+    try {
+      await this.openDatabase();
+      console.log('Database and object stores created/updated successfully');
+      await this.loadSettings();
+    } catch (error) {
+      console.error('Failed to open or upgrade database:', error);
       // Handle the error appropriately
-    });
+    }
 
     this.sharedService.setGenerationRequest(this.generationRequest);
     this.updateSharedPrompt();
@@ -224,8 +225,7 @@ export class OptionsComponent {
 
         // Set the aspect ratio
         this.changeAspectRatio(image.aspectRatio);
-      }
-      else {
+      } else {
         this.generationRequest.job_type = "txt2img";
         this.generationRequest.image = undefined;
         this.referenceImage = undefined;
@@ -258,6 +258,18 @@ export class OptionsComponent {
     if (this.referenceImageSubscription) {
       this.referenceImageSubscription.unsubscribe();
     }
+
+    // Existing code...
+    this.userGeneratedImages.forEach(image => {
+      if (image.blobUrl) {
+        URL.revokeObjectURL(image.blobUrl);
+        delete image.blobUrl;
+      }
+    });
+    // Clear arrays
+    this.userGeneratedImages = [];
+    this.filteredImages = [];
+    this.paginatedImages = [];
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -437,10 +449,13 @@ export class OptionsComponent {
       const transaction = db.transaction(this.storeName, 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
-    
+
       request.onsuccess = (event) => {
-        this.userGeneratedImages = request.result;
-    
+        this.userGeneratedImages = request.result.map(image => {
+          const { base64, ...metadataOnly } = image;
+          return metadataOnly;
+        });
+
         if (this.userGeneratedImages.length > 0) {
           // Sort the userGeneratedImages array based on the timestamp in descending order
           this.userGeneratedImages.sort((a, b) => {
@@ -448,10 +463,10 @@ export class OptionsComponent {
             const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
             return timestampB - timestampA;
           });
-    
+
           // Calculate the total number of pages
           this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
-    
+
           // Display the first page of images
           this.searchImages();
           this.paginateImages();
@@ -462,11 +477,11 @@ export class OptionsComponent {
           this.paginatedImages = [];
         }
       };
-    
+
       request.onerror = (event) => {
         console.error('Failed to retrieve images from IndexedDB', event);
       };
-    
+
       // Wait for the transaction to complete before proceeding
       await new Promise((resolve) => {
         transaction.oncomplete = () => {
@@ -503,8 +518,7 @@ export class OptionsComponent {
 
   async loadImageData(image: MobiansImage) {
     if (image.base64) {
-      // Image data is already loaded
-      return;
+      return; // Image data is already loaded
     }
 
     try {
@@ -517,7 +531,9 @@ export class OptionsComponent {
       request.onsuccess = (event) => {
         const result = request.result;
         if (result) {
-          image.base64 = result.base64;
+          // Instead of storing the full base64 string, create a blob URL
+          const blob = this.base64ToBlob(result.base64);
+          image.blobUrl = URL.createObjectURL(blob);
         }
       };
 
@@ -529,6 +545,17 @@ export class OptionsComponent {
     } catch (error) {
       console.error('Failed to load image data', error);
     }
+  }
+
+  // Helper function to convert base64 to Blob
+  base64ToBlob(base64: string): Blob {
+    const byteCharacters = atob(base64.split(',')[1]);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: 'image/png' });
   }
 
   // Send job to django api and retrieve job id.
@@ -669,13 +696,13 @@ export class OptionsComponent {
               const transaction = db.transaction([this.storeName, 'base64Store'], 'readwrite');
               const store = transaction.objectStore(this.storeName);
               const base64Store = transaction.objectStore('base64Store');
-      
+
               for (const image of generatedImages) {
                 // Save the image metadata
                 const imageMetadata = { ...image };
                 delete imageMetadata.base64; // Remove the base64 data from metadata
                 store.put(imageMetadata);
-      
+
                 // Save the base64 data separately
                 base64Store.put({ UUID: image.UUID, base64: image.base64 });
               }
@@ -769,7 +796,7 @@ export class OptionsComponent {
     this.sharedService.setReferenceImage(image);
 
     // update prompt
-    if (image.prompt){
+    if (image.prompt) {
       this.generationRequest.prompt = image.prompt;
       this.sharedService.setPrompt(image.prompt!);
     }
@@ -809,7 +836,7 @@ export class OptionsComponent {
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
     this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
-  
+
     // Load image data for the current page
     for (const image of this.paginatedImages) {
       await this.loadImageData(image);
@@ -824,12 +851,12 @@ export class OptionsComponent {
           image.base64 = "";
         }
       }
-  
+
       this.currentPage--;
       await this.paginateImages();
     }
   }
-  
+
   async nextPage() {
     if (this.currentPage < this.totalPages) {
       // Unload image data for the current page
@@ -838,7 +865,7 @@ export class OptionsComponent {
           image.base64 = "";
         }
       }
-  
+
       this.currentPage++;
       await this.paginateImages();
     }

@@ -10,5 +10,6 @@ export interface MobiansImage {
     prompt?: string;
     promptSummary?: string;
     thumbnailUrl?: string; // Add this line
+    blobUrl?: string; // Add this line
   }
   
