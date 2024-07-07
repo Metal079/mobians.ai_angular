@@ -65,7 +65,7 @@ export class OptionsComponent {
   // Pagination
   paginatedImages: MobiansImage[] = [];
   currentPage = 1;
-  imagesPerPage = 6; // Display 8 images per page (2 rows of 4 images each)
+  imagesPerPage = 4; // Display 8 images per page (2 rows of 4 images each)
   totalPages = 1;
 
   // Sorting
