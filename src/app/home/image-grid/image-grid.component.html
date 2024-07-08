@@ -3,7 +3,7 @@
      'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
   <!-- Prompt instructions -->
   <input type="file" id="fileInput" style="display: none" (change)="onFileSelected($event)">
-  <div *ngIf="showInstructions && !showLoading && images.length < 1" id="instructions">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a reference!</div>
+  <div *ngIf="this.sharedService.getInstructionValue() && !showLoading && images.length < 1" id="instructions">Type a prompt and hit generate to start! Or click/tap here to add an image to use as a reference!</div>
 
 
   <!-- Loading container -->

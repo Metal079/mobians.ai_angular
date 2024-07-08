@@ -20,7 +20,6 @@ export class ImageGridComponent {
   imageExpanded: boolean = false;
   screenWidth: number;
   screenHeight: number = window.innerHeight;
-  showInstructions: boolean = true;
   images: MobiansImage[] = [];
   prevRefImageBase64?: string;
   showReferenceImage: boolean = false;
@@ -40,7 +39,8 @@ export class ImageGridComponent {
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
 
-  constructor(public sharedService: SharedService
+  constructor(
+    public sharedService: SharedService
     , private inpaintingMaskService: InpaintingMaskService
   ) {
     this.screenWidth = window.innerWidth;
@@ -94,9 +94,9 @@ export class ImageGridComponent {
       if (image) {
         console.log('Reference Image changed:', image);
         this.showReferenceImage = true;
-        this.showInstructions = false;
+        this.sharedService.disableInstructions();
       }
-      else{
+      else {
         console.log('Reference Image removed');
       }
     });
@@ -253,10 +253,10 @@ export class ImageGridComponent {
       // Clear the canvas
       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
       this.inpaintingMaskService.clearCanvasData();
-    }    
+    }
     if (changes['referenceImage']) {
       if (this.images.length == 0 && this.sharedService.getReferenceImageValue() == null) {
-        this.showInstructions = true;
+        this.sharedService.enableInstructions();
       }
     }
   }
@@ -281,7 +281,7 @@ export class ImageGridComponent {
   }
 
   openFileDialog() {
-    if (this.showInstructions && !this.showLoading && this.images.length < 1) {
+    if (this.sharedService.getInstructionValue() && !this.showLoading && this.images.length < 1) {
       document.getElementById('fileInput')?.click();
     }
   }
@@ -335,12 +335,12 @@ export class ImageGridComponent {
         }
         else {
           console.log("Reference image already exists");
-          this.showInstructions = false;
+          this.sharedService.disableInstructions();
           return;
         }
 
         // Turn off the instructions
-        this.showInstructions = false;
+        this.sharedService.disableInstructions();
 
         // Set the aspect ratio
         if (this.aspectRatio.aspectRatio == 'square') {
@@ -368,9 +368,9 @@ export class ImageGridComponent {
     if (this.sharedService.getReferenceImageValue() && !this.imagesJustChanged) {
       // if there are no regular images, show the instructions
       if (this.images.length == 0) {
-        this.showInstructions = true;
+        this.sharedService.enableInstructions();
       }
-      else{
+      else {
         this.sharedService.setReferenceImage(null);
         this.showReferenceImage = false;
         this.imageExpandedChange.emit(false);

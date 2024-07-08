@@ -11,6 +11,7 @@ export class SharedService {
   private _images: BehaviorSubject<MobiansImage[]> = new BehaviorSubject<MobiansImage[]>([]);
   private _referenceImage: BehaviorSubject<MobiansImage | null> = new BehaviorSubject<MobiansImage | null>(null);
   private _userData: BehaviorSubject<any> = new BehaviorSubject<any>(null);
+  private _instructions: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(true);
 
 
   constructor() { }
@@ -83,11 +84,24 @@ export class SharedService {
   }
 
   getUserData(): Observable<any> {
-      return this._userData.asObservable();
+    return this._userData.asObservable();
   }
 
   getUserDataValue(): any {
-      return this._userData.getValue();
+    return this._userData.getValue();
+  }
+
+  // Set the instructions to show/hide
+  enableInstructions(): void {
+    this._instructions.next(true);
+  }
+
+  disableInstructions(): void {
+    this._instructions.next(false);
+  }
+
+  getInstructionValue(): boolean {
+    return this._instructions.getValue();
   }
 
 }

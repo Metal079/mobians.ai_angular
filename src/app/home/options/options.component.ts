@@ -773,6 +773,7 @@ export class OptionsComponent {
     this.generationRequest.image = undefined;
     this.sharedService.setReferenceImage(null);
     this.sharedService.setGenerationRequest(this.generationRequest);
+    this.sharedService.enableInstructions();
   }
 
   enableNotification() {
