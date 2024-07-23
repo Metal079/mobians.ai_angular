@@ -220,6 +220,7 @@ export class OptionsComponent {
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
         this.generationRequest.job_type = "img2img";
+        image.base64 = image.base64.includes('data:') ? image.base64.split(',')[1] : image.base64;
         this.generationRequest.image = image.base64;
         this.referenceImage = image;
 
@@ -534,7 +535,7 @@ export class OptionsComponent {
           // Instead of storing the full base64 string, create a blob URL
           const blob = this.base64ToBlob(result.base64);
           image.blobUrl = URL.createObjectURL(blob);
-          image.base64 = result.base64.split(',')[1];
+          image.base64 = result.base64.includes('data:') ? result.base64.split(',')[1] : result.base64;
           image.url = 'data:image/png;base64,' + image.base64;
         }
       };
@@ -551,7 +552,10 @@ export class OptionsComponent {
 
   // Helper function to convert base64 to Blob
   base64ToBlob(base64: string): Blob {
-    const byteCharacters = atob(base64.split(',')[1]);
+    // Check if the base64 string includes the data URL prefix
+    const base64Data = base64.includes('data:') ? base64.split(',')[1] : base64;
+    
+    const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -595,7 +599,7 @@ export class OptionsComponent {
         response => {
           console.log(response);  // handle the response
 
-          this.getJob(response.job_id, response.API_IP);
+          this.getJob(response.job_id);
         },
         error => {
           console.error(error);  // handle error
@@ -614,13 +618,12 @@ export class OptionsComponent {
   }
 
   // check for status of job
-  getJob(job_id: string, API_URL: string) {
+  getJob(job_id: string) {
     let jobComplete = false;
     let lastResponse: any;
 
     const getJobInfo = {
       "job_id": job_id,
-      "API_IP": API_URL
     }
 
     // Create an interval which fires every 1 second
@@ -719,19 +722,17 @@ export class OptionsComponent {
       )
       .subscribe(
         response => {
-          // If job is not found, throw error
           if (response.status === undefined) {
             const error = { error: { detail: "Job not found. Please try again later." } };
             console.error(error)
             this.showError(error);  // show the error modal
             this.enableGenerationButton = true;
             this.loadingChange.emit(false);
-
-            // Break out of the interval
-            subscription.unsubscribe();  // Unsubscribe here
-          }
-          else {
-            // This will be called every 3 seconds, so we do nothing here
+            subscription.unsubscribe();
+          } else if (response.status === 'failed' || response.status === 'error') {
+            this.handleFailedJob(response);
+            subscription.unsubscribe();
+          } else {
             console.log("queue position: " + response.queue_position ?? 0);
             this.queuePositionChange.emit(response.queue_position ?? 0);
           }
@@ -743,6 +744,14 @@ export class OptionsComponent {
           this.loadingChange.emit(false);
         }
       );
+  }
+
+  // Add this method to your class
+  private handleFailedJob(response: any) {
+    console.error('Job failed or encountered an error:', response);
+    this.showError({ error: { detail: `Job ${response.status}: ${response.error || 'Unknown error occurred'}` } });
+    this.enableGenerationButton = true;
+    this.loadingChange.emit(false);
   }
 
   enableInpaintCanvas() {
@@ -795,7 +804,7 @@ export class OptionsComponent {
 
     // Set the reference image to the selected image
     this.referenceImage = image;
-    this.generationRequest.image = image.base64;
+    this.generationRequest.image = image.url!.split(',')[1];
     this.sharedService.setReferenceImage(image);
 
     // update prompt

@@ -1,0 +1,23 @@
+<app-image-modal></app-image-modal>
+<div id="generation-space">
+  <div id="image-rating-section">
+    <app-image-grid
+      [showLoading]="showLoading"
+      [aspectRatio]="aspectRatio"
+      [inpaintingEnabled]="inpaintingEnabled"
+      [queuePosition]="queuePosition"
+      (inpaint_mask)="onInpaintMaskChange($event)"
+      (imageExpandedChange)="onImageExpandedChange($event)"
+    ></app-image-grid>
+  </div>
+  <app-options
+    (imagesChange)="onImagesChange($event)"
+    (loadingChange)="onShowLoadingChange($event)"
+    (aspectRatioChange)="onAspectRatioChange($event)"
+    (inpaintingChange)="onInpaintingChange($event)"
+    (queuePositionChange)="onQueuePositionChange($event)"
+    [inpaintMask]="inpaintMask"
+    (imageModalOpen)="onImageModalOpenChange($event)"
+  ></app-options>
+</div>
+<app-faq></app-faq>

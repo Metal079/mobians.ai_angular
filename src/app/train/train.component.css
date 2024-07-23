@@ -1,0 +1,57 @@
+:host ::ng-deep {
+    .p-card {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+    }
+
+    .p-card .p-card-body {
+        padding: 1.5rem;
+    }
+
+    .p-datatable .p-datatable-thead>tr>th {
+        background-color: #e9ecef;
+        color: #495057;
+        font-weight: 600;
+    }
+
+    .p-datatable .p-datatable-tbody>tr {
+        background-color: #ffffff;
+        transition: background-color 0.2s;
+    }
+
+    .p-datatable .p-datatable-tbody>tr:hover {
+        background-color: #e9ecef;
+    }
+
+    .p-button.p-button-raised {
+        box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px 0 rgba(0, 0, 0, .14), 0 1px 5px 0 rgba(0, 0, 0, .12);
+    }
+
+    .p-card .p-card-content {
+        padding-bottom: 1.5rem;
+    }
+
+    .mt-4 {
+        margin-top: 1.5rem;
+    }
+
+    /* New styles for the rounded button */
+    .create-lora-button {
+        border-radius: 1rem !important;
+        overflow: visible !important;
+    }
+
+    .create-lora-button .p-button {
+        border-radius: 1em !important;
+    }
+
+    .create-lora-button .p-button-label,
+    .create-lora-button .p-button-icon {
+        position: relative;
+        z-index: 1;
+    }
+}
+
+.mt-4 {
+    margin-top: 1.5rem;
+}

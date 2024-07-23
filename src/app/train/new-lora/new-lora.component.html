@@ -1,0 +1,51 @@
+<div class="page-container">
+    <div class="new-lora-container">
+        <h2>Create New LoRA</h2>
+
+        <p>
+            You can add an existing dataset for your model, or create a new one here. Not sure what to do?
+            Read our <a href="#">Dataset and Training Guidelines</a> for more info.
+        </p>
+
+        <p-fileUpload #fileUpload mode="advanced" [multiple]="true" accept="image/*,.zip" [maxFileSize]="50000000"
+            (onSelect)="onFileSelect($event)" (onRemove)="onFileRemove($event)" [customUpload]="true"
+            (uploadHandler)="onUpload($event)">
+            <ng-template pTemplate="content">
+                <p>Drag images (or a zip file) here or click to select files</p>
+                <p class="text-red-500">Changes made here are not permanently saved until you hit "Next"</p>
+                <p class="text-sm text-gray-600">
+                    Attach up to 1000 files<br>
+                    Accepted file types: .png, .jpeg, .jpg, .webp, .zip<br>
+                    Images cannot exceed 50 MB
+                </p>
+            </ng-template>
+        </p-fileUpload>
+
+        <div class="mt-4 flex justify-content-between align-items-center">
+            <span>{{ captionedImages }} / {{ totalImages }} captioned</span>
+            <p-button label="Auto Tag" icon="pi pi-tag" (onClick)="autoTag()"></p-button>
+            <p-button label="Download" icon="pi pi-download" (onClick)="downloadCaptions()"></p-button>
+            <p-button label="Reset" icon="pi pi-trash" (onClick)="reset()"></p-button>
+        </div>
+
+        <p-accordion [multiple]="true" styleClass="mt-4">
+            <p-accordionTab header="Caption Viewer" [selected]="true">
+                <div *ngFor="let image of uploadedImages; let i = index" class="mb-4">
+                    <p-image [src]="image.url" [alt]="'Uploaded image ' + (i + 1)" width="200"></p-image>
+                    <div class="ml-4">
+                        <p *ngIf="image.captions.length === 0">No Captions</p>
+                        <ul *ngIf="image.captions.length > 0">
+                            <li *ngFor="let caption of image.captions">{{ caption }}</li>
+                        </ul>
+                        <p-button label="Add caption" icon="pi pi-plus" (onClick)="addCaption(i)"></p-button>
+                    </div>
+                </div>
+            </p-accordionTab>
+        </p-accordion>
+
+        <div class="mt-4 flex justify-content-between">
+            <p-button label="Back" icon="pi pi-arrow-left" (onClick)="goBack()"></p-button>
+            <p-button label="Next" icon="pi pi-arrow-right" [disabled]="!canProceed()" (onClick)="proceed()"></p-button>
+        </div>
+    </div>
+</div>
