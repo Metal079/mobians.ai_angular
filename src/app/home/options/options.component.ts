@@ -24,6 +24,7 @@ export class OptionsComponent {
   private referenceImageSubscription!: Subscription;
   private dbName = 'ImageDatabase';
   private storeName = 'ImageStore';
+  private base64StoreName = 'base64Store';
 
   models = ["sonicDiffusionV4", "fluffySonic"]
   enableGenerationButton: boolean = true;
@@ -107,7 +108,7 @@ export class OptionsComponent {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 15); // Increment version number
+      const request = indexedDB.open(this.dbName, 18); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -138,6 +139,16 @@ export class OptionsComponent {
         if (transaction) {
           const store = transaction.objectStore(this.storeName);
           const base64Store = transaction.objectStore('base64Store');
+
+          if (!store.indexNames.contains('timestamp')) {
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            console.log("Timestamp index created");
+          }
+
+          if (!store.indexNames.contains('prompt')) {
+            store.createIndex('prompt', 'prompt', { unique: false });
+            console.log("Prompt index created");
+          }
 
           let lastCursor: IDBValidKey | null = null;
 
@@ -447,50 +458,61 @@ export class OptionsComponent {
 
     try {
       const db = await this.openDatabase();
-      const transaction = db.transaction(this.storeName, 'readonly');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.getAll();
+      const transaction = db.transaction([this.storeName, this.base64StoreName], 'readonly');
+      const metadataStore = transaction.objectStore(this.storeName);
+      const base64Store = transaction.objectStore(this.base64StoreName);
+      const index = metadataStore.index('timestamp');
 
-      request.onsuccess = (event) => {
-        this.userGeneratedImages = request.result.map(image => {
-          const { base64, ...metadataOnly } = image;
-          return metadataOnly;
-        });
+      // Count total records
+      const countRequest = metadataStore.count();
+      countRequest.onsuccess = (event) => {
+        const totalCount = (event.target as IDBRequest<number>).result;
 
-        if (this.userGeneratedImages.length > 0) {
-          // Sort the userGeneratedImages array based on the timestamp in descending order
-          this.userGeneratedImages.sort((a, b) => {
-            const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-            const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
-            return timestampB - timestampA;
-          });
+        let count = 0;
+        const newestImages: MobiansImage[] = [];
 
-          // Calculate the total number of pages
-          this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
+        // Open a cursor on the designated object store:
+        const cursor = index.openCursor(null, 'prev');
+        cursor.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (cursor && count < 8) {
+            const metadata = cursor.value;
 
-          // Display the first page of images
-          this.searchImages();
-          this.paginateImages();
-        } else {
-          // No images found, reset the pagination variables
-          this.currentPage = 1;
-          this.totalPages = 1;
-          this.paginatedImages = [];
-        }
-      };
+            // Fetch the base64 data
+            const request = base64Store.get(metadata.UUID);
+            request.onsuccess = function (event: Event) {
+              const result = (event.target as IDBRequest).result;
+              const base64Data = result ? result.base64 : '';
 
-      request.onerror = (event) => {
-        console.error('Failed to retrieve images from IndexedDB', event);
-      };
+              newestImages.push({ ...metadata, base64: base64Data });
+              count++;
+              cursor.continue();
+            };
+          } else {
+            // We've got our 8 newest images or reached the end
+            this.userGeneratedImages = newestImages;
 
-      // Wait for the transaction to complete before proceeding
-      await new Promise((resolve) => {
-        transaction.oncomplete = () => {
-          resolve(undefined);
+            // Calculate the total number of pages using the total count
+            this.totalPages = Math.ceil(totalCount / this.imagesPerPage);
+
+            if (newestImages.length > 0) {
+              // Display the first page of images
+              this.paginateImages();
+            } else {
+              // No images found, reset the pagination variables
+              this.currentPage = 1;
+              this.totalPages = Math.max(1, this.totalPages); // Ensure at least 1 page
+              this.paginatedImages = [];
+            }
+          }
         };
-      });
+      };
+
+      countRequest.onerror = (event) => {
+        console.error("Error counting records:", event);
+      };
     } catch (error) {
-      console.error('Failed to open database', error);
+      console.error("Error accessing database:", error);
     }
   }
 
@@ -554,7 +576,7 @@ export class OptionsComponent {
   base64ToBlob(base64: string): Blob {
     // Check if the base64 string includes the data URL prefix
     const base64Data = base64.includes('data:') ? base64.split(',')[1] : base64;
-    
+
     const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
@@ -845,6 +867,7 @@ export class OptionsComponent {
   }
 
   async paginateImages() {
+    console.log('paginateImages this:', this);  // Log context
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
     this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
