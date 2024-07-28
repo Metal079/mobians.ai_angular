@@ -497,6 +497,7 @@ export class OptionsComponent {
 
             if (newestImages.length > 0) {
               // Display the first page of images
+              this.searchImages();
               this.paginateImages();
             } else {
               // No images found, reset the pagination variables
@@ -850,28 +851,58 @@ export class OptionsComponent {
     }
   }
 
-  searchImages() {
-    if (this.searchQuery.trim() === '') {
-      this.filteredImages = [...this.userGeneratedImages];
-    } else {
-      const lowercaseQuery = this.searchQuery.toLowerCase();
-      this.filteredImages = this.userGeneratedImages.filter(image =>
-        // try first with prompt then with promptSummary if prompt is not available
-        image.prompt && image.prompt.toLowerCase().includes(lowercaseQuery) ||
-        image.promptSummary && image.promptSummary.toLowerCase().includes(lowercaseQuery)
-      );
+  async searchImages() {
+    try {
+      const db = await this.openDatabase();
+      const transaction = db.transaction([this.storeName], 'readonly');
+      const metadataStore = transaction.objectStore(this.storeName);
+      const index = metadataStore.index('timestamp');
+  
+      const lowercaseQuery = this.searchQuery.toLowerCase().trim();
+  
+      // Open a cursor in reverse order
+      const cursorRequest = index.openCursor(null, 'prev');
+      
+      let allMetadata: MobiansImage[] = [];
+      
+      cursorRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+        if (cursor) {
+          allMetadata.push(cursor.value);
+          cursor.continue();
+        } else {
+          // We've collected all metadata, now filter it
+          this.filteredImages = allMetadata.filter(metadata => 
+            lowercaseQuery === '' || 
+            (metadata.prompt && metadata.prompt.toLowerCase().includes(lowercaseQuery)) ||
+            (metadata.promptSummary && metadata.promptSummary.toLowerCase().includes(lowercaseQuery))
+          );
+  
+          // Update pagination once at the end
+          this.updatePagination(this.filteredImages);
+        }
+      };
+  
+      cursorRequest.onerror = (event) => {
+        console.error("Error in cursor request:", event);
+      };
+  
+    } catch (error) {
+      console.error("Error accessing database:", error);
     }
+  }
+  
+  private updatePagination(images: MobiansImage[]) {
     this.currentPage = 1;
-    this.totalPages = Math.ceil(this.filteredImages.length / this.imagesPerPage);
+    this.totalPages = Math.ceil(images.length / this.imagesPerPage);
     this.paginateImages();
   }
-
+  
   async paginateImages() {
-    console.log('paginateImages this:', this);  // Log context
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
     this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
-
+  
     // Load image data for the current page
     for (const image of this.paginatedImages) {
       await this.loadImageData(image);

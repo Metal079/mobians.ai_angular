@@ -51,6 +51,9 @@
   width: 100%;
   height: auto;
   border-radius: 4px;
+  aspect-ratio: 1 / 1; /* This will make the image container square, adjust if needed */
+  object-fit: cover; /* Ensure the image covers its container */
+
 }
 
 .history-details {
@@ -97,6 +100,23 @@
   color: #888;
 }
 
+.history-grid {
+  transition: all 0.3s ease-in-out;
+}
+
+.card-body {
+  min-height: 75vh; /* Start with 50% of the viewport height */
+  max-height: 80vh; /* Don't exceed 80% of the viewport height */
+  overflow-y: auto; /* Allow scrolling if content exceeds max-height */
+  transition: height 0.5s ease-in-out;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
 @media (max-width: 480px) {
   .input-button-container {
     display: flex;
@@ -138,5 +158,12 @@
 
   .p-inputtext{
     padding-right: 0px;
+  }
+
+  .card-body {
+    min-height: 70vh; /* Start with 50% of the viewport height */
+    max-height: 80vh; /* Don't exceed 80% of the viewport height */
+    overflow-y: auto; /* Allow scrolling if content exceeds max-height */
+    transition: height 0.5s ease-in-out;
   }
 }
