@@ -21,6 +21,7 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
 import { OverlayPanelModule } from 'primeng/overlaypanel';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 @NgModule({
   declarations: [
@@ -45,6 +46,7 @@ import { DropdownModule } from 'primeng/dropdown';
     OverlayPanelModule,
     InputTextModule,
     DropdownModule,
+    ProgressSpinnerModule,
   ],
   exports: [
     ImageGridComponent,
@@ -56,6 +58,7 @@ import { DropdownModule } from 'primeng/dropdown';
     OverlayPanelModule,
     InputTextModule,
     DropdownModule,
+    ProgressSpinnerModule,
   ],
   providers: [MessageService]
 })

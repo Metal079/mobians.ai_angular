@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -19,7 +19,7 @@ import { SwPush } from '@angular/service-worker';
   templateUrl: './options.component.html',
   styleUrls: ['./options.component.css'],
 })
-export class OptionsComponent {
+export class OptionsComponent implements OnInit{
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   private dbName = 'ImageDatabase';
@@ -78,6 +78,8 @@ export class OptionsComponent {
     { label: 'Date', value: 'timestamp' },
     { label: 'Alphabetical', value: 'promptSummary' }
   ];
+  debouncedSearch: () => void;
+  isSearching: boolean = false;
 
   @Input() inpaintMask?: string;
 
@@ -98,6 +100,10 @@ export class OptionsComponent {
     , private swPush: SwPush
   ) {
     this.paginateImages = this.paginateImages.bind(this);
+
+    this.debouncedSearch = this.debounce(() => {
+      this.searchImages();
+    }, 300); // Wait for 300ms after the last keystroke before searching
   }
 
   private openDatabase(): Promise<IDBDatabase> {
@@ -215,6 +221,10 @@ export class OptionsComponent {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.generationRequest.prompt = value;
     });
+
+    this.debouncedSearch = this.debounce(() => {
+      this.searchImages();
+    }, 300); // Wait for 300ms after the last keystroke before searching
 
     try {
       await this.openDatabase();
@@ -851,20 +861,35 @@ export class OptionsComponent {
     }
   }
 
+  debounce(func: Function, wait: number): (...args: any[]) => void {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    return (...args: any[]) => {
+      const later = () => {
+        timeout = null;
+        func(...args);
+      };
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(later, wait);
+    };
+  }
+
   async searchImages() {
+    this.isSearching = true; // Add this line
     try {
       const db = await this.openDatabase();
       const transaction = db.transaction([this.storeName], 'readonly');
       const metadataStore = transaction.objectStore(this.storeName);
       const index = metadataStore.index('timestamp');
-  
+
       const lowercaseQuery = this.searchQuery.toLowerCase().trim();
-  
+
       // Open a cursor in reverse order
       const cursorRequest = index.openCursor(null, 'prev');
-      
+
       let allMetadata: MobiansImage[] = [];
-      
+
       cursorRequest.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
         if (cursor) {
@@ -872,37 +897,39 @@ export class OptionsComponent {
           cursor.continue();
         } else {
           // We've collected all metadata, now filter it
-          this.filteredImages = allMetadata.filter(metadata => 
-            lowercaseQuery === '' || 
+          this.filteredImages = allMetadata.filter(metadata =>
+            lowercaseQuery === '' ||
             (metadata.prompt && metadata.prompt.toLowerCase().includes(lowercaseQuery)) ||
             (metadata.promptSummary && metadata.promptSummary.toLowerCase().includes(lowercaseQuery))
           );
-  
+
           // Update pagination once at the end
           this.updatePagination(this.filteredImages);
         }
       };
-  
+
       cursorRequest.onerror = (event) => {
         console.error("Error in cursor request:", event);
       };
-  
+
     } catch (error) {
       console.error("Error accessing database:", error);
+    } finally {
+      this.isSearching = false; // Add this line
     }
   }
-  
+
   private updatePagination(images: MobiansImage[]) {
     this.currentPage = 1;
     this.totalPages = Math.ceil(images.length / this.imagesPerPage);
     this.paginateImages();
   }
-  
+
   async paginateImages() {
     const startIndex = (this.currentPage - 1) * this.imagesPerPage;
     const endIndex = startIndex + this.imagesPerPage;
     this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
-  
+
     // Load image data for the current page
     for (const image of this.paginatedImages) {
       await this.loadImageData(image);
