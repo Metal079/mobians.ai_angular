@@ -932,6 +932,12 @@ export class OptionsComponent implements OnInit{
 
     // Load image data for the current page
     for (const image of this.paginatedImages) {
+      // delete images that are already loaded
+      if (!this.images.includes(image)) {
+        image.base64 = "";
+        image.url = "";
+        image.blobUrl = "";
+      }
       await this.loadImageData(image);
     }
   }
@@ -942,6 +948,8 @@ export class OptionsComponent implements OnInit{
       for (const image of this.paginatedImages) {
         if (!this.images.includes(image)) {
           image.base64 = "";
+          image.url = "";
+          image.blobUrl = "";
         }
       }
 
@@ -992,7 +1000,7 @@ export class OptionsComponent implements OnInit{
   async deleteAllImages() {
     try {
       const db = await this.openDatabase();
-      const transaction = db.transaction(this.storeName, 'readwrite');
+      let transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
 
       const request = store.clear();
@@ -1004,6 +1012,15 @@ export class OptionsComponent implements OnInit{
         this.paginatedImages = [];
         this.currentPage = 1;
         this.totalPages = 1;
+      };
+
+      // Delete second table too
+      transaction = db.transaction(this.base64StoreName, 'readwrite');
+      const base64Store = transaction.objectStore(this.base64StoreName);
+      const base64Request = base64Store.clear();
+
+      base64Request.onsuccess = (event) => {
+        console.log('All base64 data deleted from IndexedDB');
       };
 
       request.onerror = (event) => {
