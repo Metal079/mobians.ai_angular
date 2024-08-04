@@ -4,7 +4,7 @@ import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { interval } from 'rxjs';
-import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
+import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, skip } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { timer } from 'rxjs';
@@ -19,7 +19,7 @@ import { SwPush } from '@angular/service-worker';
   templateUrl: './options.component.html',
   styleUrls: ['./options.component.css'],
 })
-export class OptionsComponent implements OnInit{
+export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   private dbName = 'ImageDatabase';
@@ -61,19 +61,24 @@ export class OptionsComponent implements OnInit{
   currentSeed?: number;
   supporter: boolean = false;
   serverMember: boolean = false;
-  userGeneratedImages: MobiansImage[] = [];
 
   // Pagination
-  paginatedImages: MobiansImage[] = [];
-  currentPage = 1;
-  imagesPerPage = 4; // Display 8 images per page (2 rows of 4 images each)
+  currentPageImages: MobiansImage[] = [];
+  nextPageImages: MobiansImage[] = [];
+  prevPageImages: MobiansImage[] = [];
+  currentPageNumber = 1;
+  imagesPerPage = 4; // Display 4 images per page (2 rows of 2 images each)
   totalPages = 1;
+  isLoading: boolean = false;
+
+  // DB variables
+  private db: IDBDatabase | null = null;
+  private transaction: IDBTransaction | null = null;
 
   // Sorting
   selectedSortOption: string = 'timestamp';
   sortOrder: 'asc' | 'desc' = 'desc';
   searchQuery: string = '';
-  filteredImages: MobiansImage[] = [];
   dropdownOptions: { label: string, value: string }[] = [
     { label: 'Date', value: 'timestamp' },
     { label: 'Alphabetical', value: 'promptSummary' }
@@ -281,17 +286,10 @@ export class OptionsComponent implements OnInit{
       this.referenceImageSubscription.unsubscribe();
     }
 
-    // Existing code...
-    this.userGeneratedImages.forEach(image => {
-      if (image.blobUrl) {
-        URL.revokeObjectURL(image.blobUrl);
-        delete image.blobUrl;
-      }
-    });
     // Clear arrays
-    this.userGeneratedImages = [];
-    this.filteredImages = [];
-    this.paginatedImages = [];
+    this.prevPageImages = [];
+    this.currentPageImages = [];
+    this.nextPageImages = [];
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -324,23 +322,6 @@ export class OptionsComponent implements OnInit{
   changeAspectRatioSelector(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.changeAspectRatio(selectElement.value);
-
-    // If the model selected is SDXL, change the aspect ratio to the corresponding XL aspect ratio
-    // if (this.generationRequest.model == "sonicDiffusionXL") {
-    //   if (selectElement.value == 'portrait') {
-    //     this.changeAspectRatio('portrait-xl');
-    //   }
-    //   else if (selectElement.value == 'landscape') {
-    //     this.changeAspectRatio('landscape-xl');
-    //   }
-    //   else {
-    //     this.changeAspectRatio(selectElement.value);
-    //   }
-
-    // }
-    // else {
-    //   this.changeAspectRatio(selectElement.value);
-    // }
   }
 
   changeAspectRatio(aspectRatio: string) {
@@ -359,21 +340,6 @@ export class OptionsComponent implements OnInit{
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
-    // else if (aspectRatio == 'square-xl') {
-    //   this.aspectRatio = { width: 512, height: 512, model: "sonicDiffusionXL", aspectRatio: "portrait-xl" };
-    //   this.generationRequest.width = 1024;
-    //   this.generationRequest.height = 1024;
-    // }
-    // else if (aspectRatio == 'portrait-xl') {
-    //   this.aspectRatio = { width: 512, height: 658, model: "sonicDiffusionXL", aspectRatio: "portrait-xl" };
-    //   this.generationRequest.width = 896;
-    //   this.generationRequest.height = 1152;
-    // }
-    // else if (aspectRatio == 'landscape-xl') {
-    //   this.aspectRatio = { width: 658, height: 512, model: "sonicDiffusionXL", aspectRatio: "landscape-xl" };
-    //   this.generationRequest.width = 1152;
-    //   this.generationRequest.height = 896;
-    // }
 
     // Emit the aspectRatio object itself.
     this.aspectRatioChange.emit(this.aspectRatio);
@@ -441,6 +407,7 @@ export class OptionsComponent implements OnInit{
 
   // Load session storage info of changed settings
   async loadSettings() {
+    // Load other settings as before
     if (localStorage.getItem("prompt-input") != null) {
       this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
     }
@@ -467,61 +434,31 @@ export class OptionsComponent implements OnInit{
     }
 
     try {
-      const db = await this.openDatabase();
-      const transaction = db.transaction([this.storeName, this.base64StoreName], 'readonly');
-      const metadataStore = transaction.objectStore(this.storeName);
-      const base64Store = transaction.objectStore(this.base64StoreName);
-      const index = metadataStore.index('timestamp');
+      // Use the new queryImages function to load the initial set of images
+      this.currentPageImages = await this.paginateImages(1);
 
-      // Count total records
+      // Get the next page of images as well
+      this.nextPageImages = await this.paginateImages(2);
+
+      // Count total records to calculate total pages
+      const db = await this.openDatabase();
+      const transaction = db.transaction([this.storeName], 'readonly');
+      const metadataStore = transaction.objectStore(this.storeName);
       const countRequest = metadataStore.count();
+
       countRequest.onsuccess = (event) => {
         const totalCount = (event.target as IDBRequest<number>).result;
+        this.totalPages = Math.ceil(totalCount / this.imagesPerPage);
 
-        let count = 0;
-        const newestImages: MobiansImage[] = [];
-
-        // Open a cursor on the designated object store:
-        const cursor = index.openCursor(null, 'prev');
-        cursor.onsuccess = (event) => {
-          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-          if (cursor && count < 8) {
-            const metadata = cursor.value;
-
-            // Fetch the base64 data
-            const request = base64Store.get(metadata.UUID);
-            request.onsuccess = function (event: Event) {
-              const result = (event.target as IDBRequest).result;
-              const base64Data = result ? result.base64 : '';
-
-              newestImages.push({ ...metadata, base64: base64Data });
-              count++;
-              cursor.continue();
-            };
-          } else {
-            // We've got our 8 newest images or reached the end
-            this.userGeneratedImages = newestImages;
-
-            // Calculate the total number of pages using the total count
-            this.totalPages = Math.ceil(totalCount / this.imagesPerPage);
-
-            if (newestImages.length > 0) {
-              // Display the first page of images
-              this.searchImages();
-              this.paginateImages();
-            } else {
-              // No images found, reset the pagination variables
-              this.currentPage = 1;
-              this.totalPages = Math.max(1, this.totalPages); // Ensure at least 1 page
-              this.paginatedImages = [];
-            }
-          }
-        };
+        if (this.currentPageImages.length == 0) {
+          this.currentPageNumber = 1;
+        }
       };
 
       countRequest.onerror = (event) => {
         console.error("Error counting records:", event);
       };
+
     } catch (error) {
       console.error("Error accessing database:", error);
     }
@@ -565,11 +502,7 @@ export class OptionsComponent implements OnInit{
       request.onsuccess = (event) => {
         const result = request.result;
         if (result) {
-          // Instead of storing the full base64 string, create a blob URL
-          const blob = this.base64ToBlob(result.base64);
-          image.blobUrl = URL.createObjectURL(blob);
           image.base64 = result.base64.includes('data:') ? result.base64.split(',')[1] : result.base64;
-          image.url = 'data:image/png;base64,' + image.base64;
         }
       };
 
@@ -581,20 +514,6 @@ export class OptionsComponent implements OnInit{
     } catch (error) {
       console.error('Failed to load image data', error);
     }
-  }
-
-  // Helper function to convert base64 to Blob
-  base64ToBlob(base64: string): Blob {
-    // Check if the base64 string includes the data URL prefix
-    const base64Data = base64.includes('data:') ? base64.split(',')[1] : base64;
-
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: 'image/png' });
   }
 
   // Send job to django api and retrieve job id.
@@ -710,24 +629,23 @@ export class OptionsComponent implements OnInit{
             this.images = generatedImages;
             this.sharedService.setImages(this.images);
 
-            // Add the generated images to userGeneratedImages array
-            this.userGeneratedImages.push(...generatedImages);
+            // Add the generated images to currentPageImages array
+            // this.currentPageImages.push(...generatedImages);
 
-            // Sort the userGeneratedImages array based on the timestamp in descending order
-            this.userGeneratedImages.sort((a, b) => {
-              const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-              const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
-              return timestampB - timestampA;
-            });
+            // // Sort the currentPageImages array based on the timestamp in descending order
+            // this.currentPageImages.sort((a, b) => {
+            //   const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+            //   const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+            //   return timestampB - timestampA;
+            // });
 
             // Calculate the total number of pages
-            this.totalPages = Math.ceil(this.userGeneratedImages.length / this.imagesPerPage);
+            this.totalPages++;
+            this.currentPageNumber++;
 
             // Display the current page of images
-            this.paginateImages();
-
-            // update the view
-            this.sortImages();
+            // this.paginateImages();
+            // this.searchImages();
 
             try {
               const db = await this.openDatabase();
@@ -876,125 +794,204 @@ export class OptionsComponent implements OnInit{
   }
 
   async searchImages() {
-    this.isSearching = true; // Add this line
+    this.isSearching = true;
     try {
-      const db = await this.openDatabase();
+      const db = await this.getDatabase();
       const transaction = db.transaction([this.storeName], 'readonly');
       const metadataStore = transaction.objectStore(this.storeName);
       const index = metadataStore.index('timestamp');
-
+  
       const lowercaseQuery = this.searchQuery.toLowerCase().trim();
-
+  
       // Open a cursor in reverse order
       const cursorRequest = index.openCursor(null, 'prev');
-
-      let allMetadata: MobiansImage[] = [];
-
-      cursorRequest.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-        if (cursor) {
-          allMetadata.push(cursor.value);
-          cursor.continue();
-        } else {
-          // We've collected all metadata, now filter it
-          this.filteredImages = allMetadata.filter(metadata =>
-            lowercaseQuery === '' ||
-            (metadata.prompt && metadata.prompt.toLowerCase().includes(lowercaseQuery)) ||
-            (metadata.promptSummary && metadata.promptSummary.toLowerCase().includes(lowercaseQuery))
-          );
-
-          // Update pagination once at the end
-          this.updatePagination(this.filteredImages);
-        }
-      };
-
-      cursorRequest.onerror = (event) => {
-        console.error("Error in cursor request:", event);
-      };
-
+  
+      let totalMatchingImages = 0;
+      const currentPageImages: MobiansImage[] = [];
+  
+      return new Promise<void>((resolve, reject) => {
+        cursorRequest.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (cursor) {
+            const metadata = cursor.value as MobiansImage;
+            if (
+              lowercaseQuery === '' ||
+              (metadata.prompt && metadata.prompt.toLowerCase().includes(lowercaseQuery)) ||
+              (metadata.promptSummary && metadata.promptSummary.toLowerCase().includes(lowercaseQuery))
+            ) {
+              totalMatchingImages++;
+              if (currentPageImages.length < 4) {
+                currentPageImages.push(metadata);
+              }
+            }
+            cursor.continue();
+          } else {
+            // We've gone through all images
+            this.totalPages = Math.ceil(totalMatchingImages / 4);
+            this.currentPageImages = currentPageImages;
+            this.currentPageNumber = 1;
+            resolve();
+          }
+        };
+  
+        cursorRequest.onerror = (event) => {
+          console.error("Error in cursor request:", event);
+          reject(event);
+        };
+      });
+  
     } catch (error) {
       console.error("Error accessing database:", error);
     } finally {
-      this.isSearching = false; // Add this line
+      this.isSearching = false;
     }
   }
 
-  private updatePagination(images: MobiansImage[]) {
-    this.currentPage = 1;
-    this.totalPages = Math.ceil(images.length / this.imagesPerPage);
-    this.paginateImages();
+  async paginateImages(pageNumber: number): Promise<MobiansImage[]> {
+    try {
+      const queriedImages = await this.queryImages(
+        this.selectedSortOption, 
+        this.sortOrder, 
+        pageNumber, 
+        this.imagesPerPage,
+        this.searchQuery
+      );
+      console.log('Current page images:', queriedImages);
+      return queriedImages;
+    } catch (error) {
+      console.error('Error in paginateImages:', error);
+      throw error;
+    }
   }
 
-  async paginateImages() {
-    const startIndex = (this.currentPage - 1) * this.imagesPerPage;
-    const endIndex = startIndex + this.imagesPerPage;
-    this.paginatedImages = this.filteredImages.slice(startIndex, endIndex);
-
-    // Load image data for the current page
-    for (const image of this.paginatedImages) {
-      // delete images that are already loaded
-      if (!this.images.includes(image)) {
-        image.base64 = "";
-        image.url = "";
-        image.blobUrl = "";
-      }
-      await this.loadImageData(image);
+  async loadSoroundingImages(pageNumber: number) {
+    // First check if current page images are already loaded
+    console.log('this.currentPageImages:', this.currentPageImages); 
+    if (this.currentPageImages.length == 0 || !this.currentPageImages[0].url) {
+      this.currentPageImages = await this.paginateImages(pageNumber);
     }
+
+    // Check if next page images are already loaded
+    console.log('this.nextPageImages:', this.nextPageImages);
+    if (this.nextPageImages.length == 0 || (!this.nextPageImages[0].url && pageNumber + 1 < this.totalPages)) {
+      this.nextPageImages = await this.paginateImages(pageNumber + 1);
+    }
+
+    // Check if previous page images are already loaded
+    console.log('this.prevPageImages:', this.prevPageImages);
+    if (this.prevPageImages.length == 0 || (!this.prevPageImages[0].url && pageNumber - 1 > 0)) {
+      this.prevPageImages = await this.paginateImages(pageNumber - 1);
+    }
+  }
+
+  // Cache DB connection (not sure it was worth it)
+  private async getDatabase(): Promise<IDBDatabase> {
+    if (!this.db) {
+      this.db = await this.openDatabase();
+    }
+    return this.db;
+  }
+
+  async queryImages(
+    sortField: string,
+    sortOrder: 'asc' | 'desc',
+    page: number,
+    itemsPerPage: number,
+    searchQuery: string = ''
+  ): Promise<MobiansImage[]> {
+    const db = await this.getDatabase();
+    const transaction = db.transaction([this.storeName, this.base64StoreName], 'readonly');
+    const metadataStore = transaction.objectStore(this.storeName);
+    const index = metadataStore.index(sortField);
+  
+    const images: MobiansImage[] = [];
+    const skipCount = (page - 1) * itemsPerPage;
+    const cursorDirection: IDBCursorDirection = sortOrder === 'asc' ? 'next' : 'prev';
+    let currentPosition = 0;
+  
+    return new Promise((resolve, reject) => {
+      const cursorRequest = index.openCursor(null, cursorDirection);
+  
+      cursorRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+  
+        if (cursor) {
+          const metadata = cursor.value as MobiansImage;
+          if (searchQuery === '' ||
+              (metadata.prompt && metadata.prompt.toLowerCase().includes(searchQuery.toLowerCase())) ||
+              (metadata.promptSummary && metadata.promptSummary.toLowerCase().includes(searchQuery.toLowerCase()))) {
+            if (currentPosition >= skipCount && images.length < itemsPerPage) {
+              images.push({ ...metadata });
+            }
+            currentPosition++;
+          }
+          cursor.continue();
+        } else {
+          resolve(images);
+        }
+      };
+  
+      cursorRequest.onerror = () => reject(new Error('Failed to open cursor'));
+    });
   }
 
   async previousPage() {
-    if (this.currentPage > 1) {
-      // Unload image data for the current page (unless theyre currently being viewed in the modal) (this.userGeneratedImages)
-      for (const image of this.paginatedImages) {
-        if (!this.images.includes(image)) {
-          image.base64 = "";
-          image.url = "";
-          image.blobUrl = "";
-        }
-      }
-
-      this.currentPage--;
-      await this.paginateImages();
-    }
+    this.currentPageImages = this.clearBase64Data(this.currentPageImages);
+    this.currentPageImages = [];
+    this.currentPageNumber--;
+    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    
+    console.log('Current page number:', this.currentPageNumber);
+    console.log('Current page images:', this.currentPageImages);
+    console.log('Prev page images:', this.prevPageImages);
+    console.log('Next page images:', this.nextPageImages);
   }
 
   async nextPage() {
-    if (this.currentPage < this.totalPages) {
-      // Unload image data for the current page
-      for (const image of this.paginatedImages) {
-        if (!this.images.includes(image)) {
-          image.base64 = "";
-        }
-      }
+    this.currentPageImages = this.clearBase64Data(this.currentPageImages);
+    this.currentPageImages = [];
+    this.currentPageNumber++;
+    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+  
+    console.log('Current page number:', this.currentPageNumber);
+    console.log('Current page images:', this.currentPageImages);
+    console.log('Prev page images:', this.prevPageImages);
+    console.log('Next page images:', this.nextPageImages);
+  }
 
-      this.currentPage++;
-      await this.paginateImages();
+  clearBase64Data(images: MobiansImage[]) {
+    for (const image of images) {
+      image.base64 = ''; // Clear the base64 data
+      image.url = ''; // Clear the URL
+      image.prompt = ''; // Clear the prompt
+      image.promptSummary = ''; // Clear the prompt summary
     }
+    return images;
   }
 
   sortImages() {
-    if (this.selectedSortOption === 'timestamp') {
-      this.userGeneratedImages.sort((a, b) => {
-        const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-        const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
-        return this.sortOrder === 'asc' ? timestampA - timestampB : timestampB - timestampA;
-      });
-    } else if (this.selectedSortOption === 'promptSummary') {
-      this.userGeneratedImages.sort((a, b) => {
-        const summaryA = a.promptSummary ? a.promptSummary.toLowerCase() : '';
-        const summaryB = b.promptSummary ? b.promptSummary.toLowerCase() : '';
-        return this.sortOrder === 'asc' ? summaryA.localeCompare(summaryB) : summaryB.localeCompare(summaryA);
-      });
-    }
-    // Add more sorting options as needed
+    // if (this.selectedSortOption === 'timestamp') {
+    //   this.currentPageImages.sort((a, b) => {
+    //     const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+    //     const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+    //     return this.sortOrder === 'asc' ? timestampA - timestampB : timestampB - timestampA;
+    //   });
+    // } else if (this.selectedSortOption === 'promptSummary') {
+    //   this.currentPageImages.sort((a, b) => {
+    //     const summaryA = a.promptSummary ? a.promptSummary.toLowerCase() : '';
+    //     const summaryB = b.promptSummary ? b.promptSummary.toLowerCase() : '';
+    //     return this.sortOrder === 'asc' ? summaryA.localeCompare(summaryB) : summaryB.localeCompare(summaryA);
+    //   });
+    // }
+    // // Add more sorting options as needed
 
-    this.paginateImages();
-    this.searchImages();
+    // this.paginateImages();
+    // this.searchImages();
   }
 
   reverseSortOrder() {
     this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-    this.sortImages();
+    // this.sortImages();
   }
 
   async deleteAllImages() {
@@ -1007,10 +1004,8 @@ export class OptionsComponent implements OnInit{
 
       request.onsuccess = (event) => {
         console.log('All images deleted from IndexedDB');
-        this.userGeneratedImages = [];
-        this.filteredImages = [];
-        this.paginatedImages = [];
-        this.currentPage = 1;
+        this.currentPageImages = [];
+        this.currentPageNumber = 1;
         this.totalPages = 1;
       };
 

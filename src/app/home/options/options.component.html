@@ -102,24 +102,24 @@
           </div>
           <!-- Image History Panel -->
           <div class="history-grid">
-            <div *ngFor="let image of paginatedImages" class="history-item">
-              <img [src]="image.blobUrl || image.url" alt="Generated Image" (click)="openImageDetails(image)">
-              <div class="history-details">
-                <span>{{ image.timestamp | date:'short' }}</span>
-                <span class="summary-text">{{ image.promptSummary }}</span>
+              <div *ngFor="let image of currentPageImages" class="history-item">
+                <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
+                <div class="history-details">
+                  <span>{{ image.timestamp | date:'short' }}</span>
+                  <span class="summary-text">{{ image.promptSummary }}</span>
+                </div>
               </div>
-            </div>
           </div>
           <!-- Show message if no images are available -->
-          <div *ngIf="paginatedImages.length === 0" class="no-images-message">
+          <div *ngIf="currentPageImages.length === 0" class="no-images-message">
             No generated images available.
           </div>
           <div class="pagination">
             <button class="btn btn-sm btn-primary" (click)="previousPage()"
-              [disabled]="currentPage === 1">Previous</button>
-            <span>Page {{ currentPage }} of {{ totalPages }}</span>
+              [disabled]="currentPageNumber === 1">Previous</button>
+            <span>Page {{ currentPageNumber }} of {{ totalPages }}</span>
             <button class="btn btn-sm btn-primary" (click)="nextPage()"
-              [disabled]="currentPage === totalPages">Next</button>
+              [disabled]="currentPageNumber === totalPages">Next</button>
           </div>
         </div>
       </div>
