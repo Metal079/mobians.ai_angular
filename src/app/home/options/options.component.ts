@@ -961,6 +961,10 @@ export class OptionsComponent implements OnInit {
 
   clearBase64Data(images: MobiansImage[]) {
     for (const image of images) {
+      if (image.UUID == this.referenceImage?.UUID) {
+        continue; // Skip the reference image
+      }
+
       image.base64 = ''; // Clear the base64 data
       image.url = ''; // Clear the URL
       image.prompt = ''; // Clear the prompt
