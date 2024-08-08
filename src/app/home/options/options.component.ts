@@ -584,6 +584,12 @@ export class OptionsComponent implements OnInit {
       defaultSeed = false;
     }
     this.currentSeed = this.generationRequest.seed;
+
+    // set reference image if there is one
+    if (this.referenceImage) {
+      this.generationRequest.image = this.referenceImage.url!.split(',')[1];
+    }
+
     this.sharedService.setGenerationRequest(this.generationRequest);
 
     // set loading to true and submit job
@@ -671,22 +677,14 @@ export class OptionsComponent implements OnInit {
             this.images = generatedImages;
             this.sharedService.setImages(this.images);
 
-            // Add the generated images to currentPageImages array
-            // this.currentPageImages.push(...generatedImages);
-
-            // // Sort the currentPageImages array based on the timestamp in descending order
-            // this.currentPageImages.sort((a, b) => {
-            //   const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-            //   const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
-            //   return timestampB - timestampA;
-            // });
-
             // Calculate the total number of pages
             this.totalPages++;
             this.currentPageNumber++;
 
-            // Display the current page of images
-            // this.paginateImages();
+            // Add the images to the image history metadata
+            this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => { 
+              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width };
+            }));
 
             try {
               const db = await this.openDatabase();
