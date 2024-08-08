@@ -87,17 +87,9 @@
       <div class="collapse" id="historyCollapse">
         <div class="card card-body">
           <div class="sorting-options">
-            <div class="sort-dropdown">
-              <p-dropdown id="sortBy" [options]="dropdownOptions" [(ngModel)]="selectedSortOption"
-                (onChange)="sortImages()"></p-dropdown>
-              <button class="btn btn-sm btn-secondary" (click)="reverseSortOrder()">
-                {{ sortOrder === 'asc' ? '&#9650;' : '&#9660;' }}
-              </button>
-            </div>
             <div class="search-bar">
               <input type="text" pInputText placeholder="Search prompts" [(ngModel)]="searchQuery"
                 (input)="debouncedSearch()">
-              <p-progressSpinner *ngIf="isSearching"></p-progressSpinner>
             </div>
           </div>
           <!-- Image History Panel -->

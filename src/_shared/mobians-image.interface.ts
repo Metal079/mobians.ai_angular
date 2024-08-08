@@ -12,3 +12,5 @@ export interface MobiansImage {
     thumbnailUrl?: string; // Add this line
   }
   
+// Used just for the image history
+export type MobiansImageMetadata = Pick<MobiansImage, 'UUID' | 'prompt' | 'timestamp' | 'aspectRatio' | 'width'>;

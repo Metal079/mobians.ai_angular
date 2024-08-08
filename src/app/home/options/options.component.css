@@ -36,6 +36,15 @@
   margin-left: 10px;
 }
 
+.search-bar {
+  width: 100%;
+}
+
+.search-bar input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .history-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -63,25 +72,11 @@
   margin-top: 5px;
 }
 
-.sorting-options {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 10px;
-  padding-right: 10px;
-}
-
 .sort-dropdown {
   display: flex;
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
-}
-
-.search-bar {
-  flex: 1;
-  min-width: 0;
-  max-width: 200px;
 }
 
 .summary-text {
