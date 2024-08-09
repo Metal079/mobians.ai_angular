@@ -586,8 +586,9 @@ export class OptionsComponent implements OnInit {
     this.currentSeed = this.generationRequest.seed;
 
     // set reference image if there is one
-    if (this.referenceImage) {
-      this.generationRequest.image = this.referenceImage.url!.split(',')[1];
+    if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
+      // set image to base64 string if exists and non- "", else set to url
+      this.generationRequest.image = this.referenceImage.base64 ? this.referenceImage.base64 : this.referenceImage.url!.split(',')[1];
     }
 
     this.sharedService.setGenerationRequest(this.generationRequest);
