@@ -38,4 +38,9 @@ export class StableDiffusionService {
     const body = JSON.stringify(data);
     return this.http.post(url, body, {'headers':headers});
   }
+
+  getLoras(): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_loras/`;  // note the trailing slash
+    return this.http.get(url);
+  }
 }

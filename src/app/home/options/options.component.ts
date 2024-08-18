@@ -4,6 +4,7 @@ import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
 import { interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, skip } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
@@ -14,6 +15,8 @@ import { NotificationService } from 'src/app/notification.service';
 import { SwPush } from '@angular/service-worker';
 import { environment } from 'src/environments/environment';
 import { MemoryUsageService } from 'src/app/memory-usage.service';
+import { DialogService } from 'primeng/dynamicdialog';
+import { AddLorasComponent } from '../add-loras/add-loras.component';
 
 
 @Component({
@@ -28,7 +31,12 @@ export class OptionsComponent implements OnInit {
   private storeName = 'ImageStore';
   private base64StoreName = 'base64Store';
 
-  models = ["sonicDiffusionV4", "fluffySonic"]
+  models_types: { [model: string] : string; } = {
+    "sonicDiffusionV4": "SD 1.5",
+    "fluffySonic": "SD 1.5",
+    "sonicDiffusionXL": "Pony",
+    "autismMix": "Pony",
+  }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
@@ -57,6 +65,7 @@ export class OptionsComponent implements OnInit {
     model: "sonicDiffusionV4",
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
+    loras: [],
   };
   jobID: string = "";
   API_URL: string = "";
@@ -74,6 +83,23 @@ export class OptionsComponent implements OnInit {
   totalPages = 1;
   isLoading: boolean = false;
   imageHistoryMetadata: MobiansImageMetadata[] = [];
+
+  // New properties for menus
+  showOptions: boolean = false;
+  showHistory: boolean = false;
+  showLoras: boolean = false;
+  availableLoras: string[] = ['Loras1', 'Loras2', 'Loras3']; // Example Loras names
+
+  // loras info
+  loras: any[] = [];
+  loraSearchQuery: string = '';
+  filteredLoras: any[] = [];
+  selectedLoras: any[] = [];
+  maxLoras: number = 3;
+
+  // to show full sized lora image
+  displayModal: boolean = false;
+  selectedImageUrl: string | null = null;
 
   // DB variables
   private db: IDBDatabase | null = null;
@@ -107,7 +133,11 @@ export class OptionsComponent implements OnInit {
     , private notificationService: NotificationService
     , private swPush: SwPush
     , private memoryUsageService: MemoryUsageService
+    , private dialogService: DialogService
   ) {
+      // Load in loras info
+      this.loadLoras();
+
     this.paginateImages = this.paginateImages.bind(this);
 
     this.debouncedSearch = this.debounce(() => {
@@ -332,6 +362,8 @@ export class OptionsComponent implements OnInit {
     else {
       this.generationRequest.guidance_scale = 7;
     }
+
+    this.filterLoras();
   }
 
   changeAspectRatioSelector(event: any) {
@@ -683,7 +715,7 @@ export class OptionsComponent implements OnInit {
             this.currentPageNumber++;
 
             // Add the images to the image history metadata
-            this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => { 
+            this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
               return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width };
             }));
 
@@ -741,7 +773,7 @@ export class OptionsComponent implements OnInit {
   // Add this method to your class
   private handleFailedJob(response: any) {
     console.error('Job failed or encountered an error:', response);
-    this.showError({ error: { detail: `Job ${response.status}: ${response.error || 'Unknown error occurred'}` } });
+    this.showError({ error: { detail: `Job ${response.status}: ${response.message || 'Unknown error occurred'}` } });
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);
   }
@@ -811,12 +843,34 @@ export class OptionsComponent implements OnInit {
     if (historyCollapse) {
       historyCollapse.classList.remove('show');
     }
+
+    const lorasCollapse = document.getElementById('lorasCollapse');
+    if (lorasCollapse) {
+      lorasCollapse.classList.remove('show');
+    }
   }
 
   toggleHistory() {
     const optionsCollapse = document.getElementById('collapseExample');
     if (optionsCollapse) {
       optionsCollapse.classList.remove('show');
+    }
+
+    const lorasCollapse = document.getElementById('lorasCollapse');
+    if (lorasCollapse) {
+      lorasCollapse.classList.remove('show');
+    }
+  }
+
+  toggleLoras() {
+    const optionsCollapse = document.getElementById('collapseExample');
+    if (optionsCollapse) {
+      optionsCollapse.classList.remove('show');
+    }
+
+    const historyCollapse = document.getElementById('historyCollapse');
+    if (historyCollapse) {
+      historyCollapse.classList.remove('show');
     }
   }
 
@@ -1161,5 +1215,99 @@ export class OptionsComponent implements OnInit {
 
   onFastPassCodeChange(event: any) {
     this.generationRequest.fast_pass_code = event.target.value.toLowerCase().replace(/\s/g, '');
+  }
+
+  openAddLorasDialog() {
+    this.dialogService.open(AddLorasComponent, {
+      header: 'Add Your Own Loras (Coming Soon)',
+      width: '50%'
+    });
+  }
+
+  loadLoras() {
+    this.stableDiffusionService.getLoras().pipe(
+      takeUntilDestroyed()
+    ).subscribe({
+      next: (response: any[]) => {
+        this.loras = response;
+        this.filterLoras();
+      },
+      error: (error) => {
+        console.error('Error loading Loras:', error);
+      }
+    });
+  }
+
+  filterLoras() {
+    // First filter by model type
+    this.filteredLoras = this.loras.filter(lora => lora.base_model === this.models_types[this.generationRequest.model]);
+    
+    // Then filter by search query
+    this.filteredLoras = this.filteredLoras.filter(lora => 
+      (lora.name.toLowerCase().includes(this.loraSearchQuery.toLowerCase()) ||  lora.version.toLowerCase().includes(this.loraSearchQuery.toLowerCase()))
+    );
+
+    // Sort by most uses
+    this.filteredLoras = this.filteredLoras.sort((a, b) => b.uses - a.uses);
+  }
+
+  // Function to select a LoRA
+  selectLora(lora: any) {
+    // Make sure the user doesn't select more than 3 LoRAs
+    if (this.selectedLoras.length >= this.maxLoras ) {
+      alert('You can only select up to 3 LoRAs at a time.');
+    } 
+    // If selecting an already selected LoRA, remove it
+    else if (this.selectedLoras.find(item => item === lora))
+    {
+      this.removeLora(lora);
+    }
+    else {
+      lora.strength = 1.0; // Set the default strength to 1.0
+      this.selectedLoras.push(lora);
+      this.generationRequest.loras = this.selectedLoras;
+
+      // Add the trigger prompt, if it exists to the prompt input
+      if (lora.trigger_words) {
+        lora.trigger_words.forEach((element: String) => {
+          this.generationRequest.prompt += ', ' + element;
+        });
+        this.sharedService.setPrompt(this.generationRequest.prompt);
+      }
+    }
+  }
+
+  // Function to update the strength of a LoRA
+  updateStrength(lora: any, newStrength: number) {
+    const loraItem = this.selectedLoras.find(item => item === lora);
+    if (loraItem) {
+      loraItem.strength = newStrength;
+    }
+  }
+
+  // Function to remove a selected LoRA
+  removeLora(lora: any) {
+    this.selectedLoras = this.selectedLoras.filter(item => item !== lora);
+    this.generationRequest.loras = this.selectedLoras;
+
+    // Remove the trigger prompt from the prompt input
+    if (lora.trigger_words) {
+      lora.trigger_words.forEach((element: String) => {
+        this.generationRequest.prompt = this.generationRequest.prompt.replace(', ' + element, '');
+      });
+      this.sharedService.setPrompt(this.generationRequest.prompt);
+    }
+  }
+
+  // Method to open the modal with the full-sized image
+  openImageModalLoraPreview(imageUrl: string) {
+    this.selectedImageUrl = imageUrl;
+    this.displayModal = true;
+  }
+
+  // Optional: Method to close the modal (if needed)
+  closeModal() {
+    this.displayModal = false;
+    this.selectedImageUrl = null;
   }
 }

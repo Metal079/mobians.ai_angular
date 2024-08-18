@@ -22,6 +22,7 @@ import { OverlayPanelModule } from 'primeng/overlaypanel';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { DialogModule } from 'primeng/dialog'; 
 
 @NgModule({
   declarations: [
@@ -47,6 +48,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
     InputTextModule,
     DropdownModule,
     ProgressSpinnerModule,
+    DialogModule
   ],
   exports: [
     ImageGridComponent,

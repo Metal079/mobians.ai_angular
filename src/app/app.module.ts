@@ -14,6 +14,7 @@ import { FaqComponent } from './home/faq/faq.component';
 import { TrainComponent } from './train/train.component';
 import { NewLoraComponent } from './train/new-lora/new-lora.component';
 import { HomeComponent } from './home/home.component';
+import { AddLorasComponent } from './home/add-loras/add-loras.component';
 
 // PrimeNG imports
 import { TableModule } from 'primeng/table';
@@ -22,6 +23,8 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { AccordionModule } from 'primeng/accordion';
 import { ImageModule } from 'primeng/image';
 import { CardModule } from 'primeng/card';
+import { DialogService } from 'primeng/dynamicdialog';
+
 
 const routes: Routes = [
   { path: '', component: HomeComponent },
@@ -36,6 +39,7 @@ const routes: Routes = [
     TrainComponent,
     HomeComponent,
     NewLoraComponent, // Add this line
+    AddLorasComponent, // Add this line
   ],
   imports: [
     BrowserModule,
@@ -54,9 +58,9 @@ const routes: Routes = [
     FileUploadModule,
     AccordionModule,
     ImageModule,
-    CardModule
+    CardModule,
   ],
-  providers: [SharedService],
+  providers: [SharedService, DialogService],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

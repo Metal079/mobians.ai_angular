@@ -1,0 +1,23 @@
+<div class="p-fluid">
+    <div class="p-field d-flex justify-content-around mb-4">
+      <button pButton type="button" label="Enter SHA256" class="p-button-info" (click)="selectOption('sha256')"></button>
+      <button pButton type="button" label="Upload File" class="p-button-secondary" (click)="selectOption('upload')"></button>
+    </div>
+  
+    <div *ngIf="selectedOption === 'sha256'" class="p-field">
+      <label for="loraSha256">Enter Lora SHA256</label>
+      <input id="loraSha256" type="text" pInputText [(ngModel)]="loraSha256" placeholder="Enter the SHA256 hash" [disabled]="true"/>
+    </div>
+  
+    <div *ngIf="selectedOption === 'upload'" class="p-field">
+      <label for="loraFile">Select Lora File</label>
+      <input id="loraFile" type="file" (change)="onFileSelected($event)" [disabled]="true"/>
+    </div>
+  
+    <div *ngIf="selectedOption" class="p-field">
+      <button pButton type="button" label="Add Lora" (click)="addLora()" 
+              [disabled]="!canAddLora()"></button>
+      <button pButton type="button" label="Cancel" (click)="close()" class="p-button-secondary"></button>
+    </div>
+  </div>
+  
