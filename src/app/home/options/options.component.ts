@@ -364,6 +364,9 @@ export class OptionsComponent implements OnInit {
     }
 
     this.filterLoras();
+
+    // Remove any selected loras that are not available for the selected model
+    this.selectedLoras = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
   }
 
   changeAspectRatioSelector(event: any) {
