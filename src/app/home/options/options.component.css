@@ -106,7 +106,7 @@
 
 .card-body {
   min-height: 75vh; /* Start with 50% of the viewport height */
-  max-height: 80vh; /* Don't exceed 80% of the viewport height */
+  max-height: fit-content ; 
   overflow-y: auto; /* Allow scrolling if content exceeds max-height */
   transition: height 0.5s ease-in-out;
   max-width: 600px;
@@ -209,6 +209,10 @@
   margin-left: 20px;
 }
 
+#lorasDropdown{
+  max-height: 75vh;
+}
+
 @media (max-width: 768px) {
   .button-group {
     flex-direction: row;
@@ -304,5 +308,10 @@
   
   #lorasCollapse{
     margin-left: 0;
+  }
+
+  #lorasDropdown{
+    min-height: 60vh;
+    max-height: 70vh;
   }
 }

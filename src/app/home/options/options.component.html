@@ -89,7 +89,7 @@
 
 <!-- Loras Content Panel -->
 <div class="collapse w-100" id="lorasCollapse">
-  <div class="card card-body">
+  <div class="card card-body" id="lorasDropdown">
     <p>
       Select and apply LoRAs to your image generation
       <span class="ms-1 text-primary"
@@ -108,7 +108,7 @@
     <div class="d-flex justify-content-between mb-3">
       <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [(ngModel)]="loraSearchQuery"
         (ngModelChange)="filterLoras()">
-      <button class="btn btn-outline-primary" type="button" (click)="openAddLorasDialog()">
+      <button class="btn btn-primary" type="button" (click)="openAddLorasDialog()">
         Add Custom LoRAs
       </button>
     </div>

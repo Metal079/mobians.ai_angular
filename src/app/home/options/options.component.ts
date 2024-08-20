@@ -71,6 +71,9 @@ export class OptionsComponent implements OnInit {
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
+
+  // Discord login info
+  loginInfo: any;
   supporter: boolean = false;
   serverMember: boolean = false;
 
@@ -307,6 +310,7 @@ export class OptionsComponent implements OnInit {
     // Discord userdata check
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
+        this.loginInfo = userData;
         this.supporter = userData.has_required_role;
         this.serverMember = userData.is_member_of_your_guild;
         console.log('premium member!');
@@ -1221,6 +1225,17 @@ export class OptionsComponent implements OnInit {
   }
 
   openAddLorasDialog() {
+    // Ensure the user is logged in before opening the dialog
+    if (!this.loginInfo && !this.serverMember) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error Message',
+        detail: 'You must be logged in to add your own LoRAs. (discord)',
+        life: 3000 
+      });
+      return;
+    }
+
     this.dialogService.open(AddLorasComponent, {
       header: 'Add Your Own Loras (Coming Soon)',
       width: '50%'
