@@ -764,7 +764,7 @@ export class OptionsComponent implements OnInit {
             this.handleFailedJob(response);
             subscription.unsubscribe();
           } else {
-            console.log("queue position: " + response.queue_position ?? 0);
+            console.log("queue position: " + response.queue_position);
             this.queuePositionChange.emit(response.queue_position ?? 0);
           }
         },
