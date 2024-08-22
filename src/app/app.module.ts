@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core';
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { HomeModule } from '../modules/home.module';
@@ -33,34 +33,27 @@ const routes: Routes = [
   { path: 'train/new', component: NewLoraComponent },
 ];
 
-@NgModule({
-  declarations: [
-    AppComponent,
-    TrainComponent,
-    HomeComponent,
-    NewLoraComponent, // Add this line
-    AddLorasComponent, // Add this line
-  ],
-  imports: [
-    BrowserModule,
-    BrowserAnimationsModule,
-    HttpClientModule,
-    FormsModule,
-    HomeModule,
-    RouterModule.forRoot(routes),
-    ServiceWorkerModule.register('ngsw-worker.js', {
-      enabled: true,
-      registrationStrategy: 'registerWhenStable:30000'
-    }),
-    // PrimeNG modules
-    TableModule,
-    ButtonModule,
-    FileUploadModule,
-    AccordionModule,
-    ImageModule,
-    CardModule,
-  ],
-  providers: [SharedService, DialogService],
-  bootstrap: [AppComponent]
-})
+@NgModule({ declarations: [
+        AppComponent,
+        TrainComponent,
+        HomeComponent,
+        NewLoraComponent, // Add this line
+        AddLorasComponent, // Add this line
+    ],
+    bootstrap: [AppComponent], imports: [BrowserModule,
+        BrowserAnimationsModule,
+        FormsModule,
+        HomeModule,
+        RouterModule.forRoot(routes),
+        ServiceWorkerModule.register('ngsw-worker.js', {
+            enabled: true,
+            registrationStrategy: 'registerWhenStable:30000'
+        }),
+        // PrimeNG modules
+        TableModule,
+        ButtonModule,
+        FileUploadModule,
+        AccordionModule,
+        ImageModule,
+        CardModule], providers: [SharedService, DialogService, provideHttpClient(withInterceptorsFromDi())] })
 export class AppModule { }
