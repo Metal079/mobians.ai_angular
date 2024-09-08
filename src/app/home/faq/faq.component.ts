@@ -16,6 +16,7 @@ export class FaqComponent implements OnInit, OnDestroy {
   private redirectUri = encodeURIComponent(environment.discordRedirectUri);
   prompt!: string;
   serverMember: boolean = false;
+  discordUserID: string = '';
   characterNames: string[] = [
     'Amy Rose', 'Barry the quokka', 'Big the cat', 'Blaze the cat', 'Bunnie Rabbot', 'Charmy the bee',
     'Cosmo the seedrian', 'Cream the rabbit', 'Eggman', 'Espio the chameleon', 'Fiona Fox', 'Honey the cat', 
@@ -55,6 +56,7 @@ export class FaqComponent implements OnInit, OnDestroy {
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
         this.serverMember = userData.is_member_of_your_guild;
+        this.discordUserID = userData;
       }
     });
   }

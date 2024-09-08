@@ -43,4 +43,27 @@ export class StableDiffusionService {
     const url = `${this.apiBaseUrl}/get_loras/`;  // note the trailing slash
     return this.http.get(url);
   }
+
+  //#region CivitAI API calls
+  searchByQuery(query: string): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_query/${query}`;  // note the trailing slash
+    return this.http.get(url);
+  }
+
+  searchByID(id: string): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_id/${id}`;  // note the trailing slash
+    return this.http.get(url);
+  }
+
+  searchByUser(username: string): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_user/${username}`;  // note the trailing slash
+    return this.http.get(url);
+  }
+
+  addLoraSuggestion(data: any): Observable<any> {
+    const url = `${this.apiBaseUrl}/add_lora_suggestion/`; 
+    const headers = { 'content-type': 'application/json' };
+    const body = JSON.stringify(data);
+    return this.http.post(url, body, {'headers':headers});
+  }
 }

@@ -8,6 +8,7 @@ import { FaqComponent } from 'src/app/home/faq/faq.component';
 import { ImageModalComponent } from 'src/app/home/image-modal/image-modal.component';
 import { GligenDisplayComponent } from 'src/app/home/gligen-display/gligen-display.component';
 import { InpaintingDisplayComponent } from 'src/app/home/inpainting-display/inpainting-display.component';
+import { AddLorasComponent } from 'src/app/home/add-loras/add-loras.component';
 
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -23,6 +24,10 @@ import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { DialogModule } from 'primeng/dialog'; 
+import { TableModule } from 'primeng/table';
+import { PanelModule } from 'primeng/panel';
+import { ChipModule } from 'primeng/chip';
+
 
 @NgModule({
   declarations: [
@@ -32,6 +37,7 @@ import { DialogModule } from 'primeng/dialog';
     ImageModalComponent,
     GligenDisplayComponent, 
     InpaintingDisplayComponent,
+    AddLorasComponent,
   ],
   imports: [
     BrowserModule,
@@ -48,7 +54,10 @@ import { DialogModule } from 'primeng/dialog';
     InputTextModule,
     DropdownModule,
     ProgressSpinnerModule,
-    DialogModule
+    DialogModule,
+    TableModule,
+    PanelModule,  
+    ChipModule    
   ],
   exports: [
     ImageGridComponent,
@@ -61,6 +70,7 @@ import { DialogModule } from 'primeng/dialog';
     InputTextModule,
     DropdownModule,
     ProgressSpinnerModule,
+    AddLorasComponent,
   ],
   providers: [MessageService]
 })

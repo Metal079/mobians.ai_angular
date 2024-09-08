@@ -1,0 +1,168 @@
+/* Card layout for LoRA search results on mobile */
+.mobile-results {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#lora-search-field {
+    margin-top: 15px;
+}
+
+.lora-card-body {
+    position: relative;
+  }
+  
+  .lora-model-link {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    font-size: 0.8rem; /* Smaller font size */
+    color: #666; /* Light grey color */
+  }
+  
+  .lora-model-link a {
+    text-decoration: none;
+    color: #666;
+  }
+  
+  .lora-model-link a:hover {
+    text-decoration: underline;
+    color: #000; /* Darker color on hover */
+  }
+
+/* Card style */
+.lora-card {
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
+    /* Add margin for spacing between cards */
+    border: 1px solid #ddd;
+    /* Add a subtle border for visual separation */
+}
+
+/* Header part of the card with LoRA name and preview */
+.lora-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    /* Add spacing between header and body */
+}
+
+.preview-image {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 5px;
+}
+
+.lora-card-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+/* Body part with creator and stats */
+.lora-card-body {
+    margin-top: 10px;
+}
+
+.lora-creator {
+    margin-bottom: 10px;
+}
+
+.lora-stats {
+    margin-bottom: 10px;
+}
+
+.lora-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    width: 85%;
+}
+
+/* Button at the bottom of the card */
+.lora-button {
+    margin-top: 15px;
+    text-align: center;
+}
+
+/* Add a subtle divider between cards */
+.lora-card:not(:last-child) {
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 15px;
+}
+
+/* Card style */
+.lora-card {
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    /* Make it clear that the card is clickable */
+    transition: background-color 0.3s ease;
+}
+
+/* Highlight the selected card */
+.lora-card.selected {
+    background-color: #e0f7fa;
+    /* Light blue highlight */
+    border-color: #00796b;
+}
+
+.lora-card:hover {
+    background-color: #e0f7fa;
+    /* Slight hover effect */
+}
+
+.preview-image {
+    cursor: pointer;
+}
+
+/* Target PrimeNG buttons */
+:host ::ng-deep .p-button {
+    border-radius: 5px !important; /* Increased curvature */
+    transition: all 0.3s ease;
+    overflow: hidden; /* Ensures content doesn't overflow rounded corners */
+}
+
+/* Hover effect for better interactivity */
+:host ::ng-deep .p-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Specific styling for primary buttons */
+:host ::ng-deep .p-button.p-button-primary {
+    background: linear-gradient(45deg, #4a90e2, #63b3ed);
+    border: none;
+}
+
+
+.lora-request-button {
+    /* we want this to be always showing at the botomn of the window */
+    position: sticky;
+    bottom: 10px; 
+}
+
+@media screen and (max-width: 600px) {
+    .p-field.mobile-results {
+        padding: 10px;
+    }
+
+    .p-dialog {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    #search-options {
+        font-size: 0.7rem;
+    }
+}

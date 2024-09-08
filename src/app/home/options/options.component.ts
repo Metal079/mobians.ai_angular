@@ -31,7 +31,7 @@ export class OptionsComponent implements OnInit {
   private storeName = 'ImageStore';
   private base64StoreName = 'base64Store';
 
-  models_types: { [model: string] : string; } = {
+  models_types: { [model: string]: string; } = {
     "sonicDiffusionV4": "SD 1.5",
     "fluffySonic": "SD 1.5",
     "sonicDiffusionXL": "Pony",
@@ -76,6 +76,7 @@ export class OptionsComponent implements OnInit {
   loginInfo: any;
   supporter: boolean = false;
   serverMember: boolean = false;
+  discordUserID: string = "";
 
   // Pagination
   currentPageImages: MobiansImage[] = [];
@@ -138,8 +139,8 @@ export class OptionsComponent implements OnInit {
     , private memoryUsageService: MemoryUsageService
     , private dialogService: DialogService
   ) {
-      // Load in loras info
-      this.loadLoras();
+    // Load in loras info
+    this.loadLoras();
 
     this.paginateImages = this.paginateImages.bind(this);
 
@@ -310,11 +311,12 @@ export class OptionsComponent implements OnInit {
     // Discord userdata check
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
-        this.loginInfo = userData;
-        this.supporter = userData.has_required_role;
-        this.serverMember = userData.is_member_of_your_guild;
-        console.log('premium member!');
-        this.onDiscordLoginSuccess(userData);
+        // If we dont have discordUserID, we need them to login again
+        if (userData.discordUserID) {
+          this.loginInfo = userData;
+          console.log('premium member!');
+          this.onDiscordLoginSuccess(userData);
+        }
       }
     });
 
@@ -323,7 +325,6 @@ export class OptionsComponent implements OnInit {
       const userData = JSON.parse(storedUserData);
       this.supporter = userData.has_required_role;
       this.serverMember = userData.is_member_of_your_guild;
-      this.sharedService.setUserData(userData);
     }
   }
 
@@ -1226,21 +1227,31 @@ export class OptionsComponent implements OnInit {
 
   openAddLorasDialog() {
     // Ensure the user is logged in before opening the dialog
-    if (!this.loginInfo && !this.serverMember) {
+    if (!this.loginInfo) {
       this.messageService.add({
         severity: 'error',
         summary: 'Error Message',
-        detail: 'You must be logged in to add your own LoRAs. (discord)',
-        life: 3000 
+        detail: 'You must be logged in to suggest LoRAs. (Discord button in the FAQ section)',
+        life: 3000
       });
       return;
     }
 
+    // Detect screen width to adjust dialog size for mobile and desktop
+    const screenWidth = window.innerWidth;
+    let dialogWidth = '50%'; // Default for desktop
+
+    if (screenWidth <= 600) {
+      dialogWidth = '90%'; // Set to 90% for mobile screens
+    }
+
+    // Open the dialog with the dynamic width
     this.dialogService.open(AddLorasComponent, {
-      header: 'Add Your Own Loras (Coming Soon)',
-      width: '50%'
+      header: 'Request Loras To Be Added!',
+      width: dialogWidth
     });
   }
+
 
   loadLoras() {
     this.stableDiffusionService.getLoras().pipe(
@@ -1259,10 +1270,10 @@ export class OptionsComponent implements OnInit {
   filterLoras() {
     // First filter by model type
     this.filteredLoras = this.loras.filter(lora => lora.base_model === this.models_types[this.generationRequest.model]);
-    
+
     // Then filter by search query
-    this.filteredLoras = this.filteredLoras.filter(lora => 
-      (lora.name.toLowerCase().includes(this.loraSearchQuery.toLowerCase()) ||  lora.version.toLowerCase().includes(this.loraSearchQuery.toLowerCase()))
+    this.filteredLoras = this.filteredLoras.filter(lora =>
+      (lora.name.toLowerCase().includes(this.loraSearchQuery.toLowerCase()) || lora.version.toLowerCase().includes(this.loraSearchQuery.toLowerCase()))
     );
 
     // Sort by most uses
@@ -1272,12 +1283,11 @@ export class OptionsComponent implements OnInit {
   // Function to select a LoRA
   selectLora(lora: any) {
     // Make sure the user doesn't select more than 3 LoRAs
-    if (this.selectedLoras.length >= this.maxLoras ) {
+    if (this.selectedLoras.length >= this.maxLoras) {
       alert('You can only select up to 3 LoRAs at a time.');
-    } 
+    }
     // If selecting an already selected LoRA, remove it
-    else if (this.selectedLoras.find(item => item === lora))
-    {
+    else if (this.selectedLoras.find(item => item === lora)) {
       this.removeLora(lora);
     }
     else {

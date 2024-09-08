@@ -5,12 +5,12 @@
       <div class="col-md-12 ">
         <h2 class="mb-4">FAQ</h2>
         <div class="card">
-          <div class="card-header" *ngIf="!serverMember">
+          <div class="card-header" *ngIf="!discordUserID">
             <h5 class="mb-0">
               Login with Discord! Members get access to more features! (Upscaling images with more detail, and get fastpasses for participating in our weekly image events!)
             </h5>
           </div>
-          <div class="card-body" *ngIf="!serverMember">
+          <div class="card-body" *ngIf="!discordUserID">
             <button (click)="authenticateWithDiscord()">
               <img src="assets/DiscordLogin.png" alt="Login with Discord">
           </button>

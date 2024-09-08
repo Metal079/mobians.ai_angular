@@ -1,23 +1,94 @@
 <div class="p-fluid">
-    <div class="p-field d-flex justify-content-around mb-4">
-      <button pButton type="button" label="Enter SHA256" class="p-button-info" (click)="selectOption('sha256')"></button>
-      <button pButton type="button" label="Upload File" class="p-button-secondary" (click)="selectOption('upload')"></button>
-    </div>
-  
-    <div *ngIf="selectedOption === 'sha256'" class="p-field">
-      <label for="loraSha256">Enter Lora SHA256</label>
-      <input id="loraSha256" type="text" pInputText [(ngModel)]="loraSha256" placeholder="Enter the SHA256 hash" [disabled]="true"/>
-    </div>
-  
-    <div *ngIf="selectedOption === 'upload'" class="p-field">
-      <label for="loraFile">Select Lora File</label>
-      <input id="loraFile" type="file" (change)="onFileSelected($event)" [disabled]="true"/>
-    </div>
-  
-    <div *ngIf="selectedOption" class="p-field">
-      <button pButton type="button" label="Add Lora" (click)="addLora()" 
-              [disabled]="!canAddLora()"></button>
-      <button pButton type="button" label="Cancel" (click)="close()" class="p-button-secondary"></button>
+  <!-- Option to choose between Name or Model ID using PrimeNG buttons -->
+  <div class="p-field d-flex justify-content-center" id="search-options">
+    <p-button label="Search by Name" icon="pi pi-search" 
+      [class]="selectedSearchOption === 'lora_name' ? 'p-button-primary' : 'p-button-outlined'" 
+      (click)="selectOption('lora_name')" class="mr-2"></p-button>
+      
+    <p-button label="Search by Model ID" icon="pi pi-id-card" 
+      [class]="selectedSearchOption === 'model_id' ? 'p-button-primary' : 'p-button-outlined'" 
+      (click)="selectOption('model_id')" class="mr-2"></p-button>
+
+    <p-button label="Search by creator" icon="pi pi-user" 
+      [class]="selectedSearchOption === 'username' ? 'p-button-primary' : 'p-button-outlined'" 
+      (click)="selectOption('username')"></p-button>
+  </div>
+
+  <!-- Search Input Field (Conditionally show based on option) -->
+  <div class="p-field d-flex align-items-center" id="lora-search-field">
+    <input 
+      *ngIf="selectedSearchOption === 'lora_name'" 
+      type="text" 
+      pInputText 
+      [(ngModel)]="searchField" 
+      placeholder="Search LoRA by Name" 
+    />
+    
+    <input 
+      *ngIf="selectedSearchOption === 'model_id'" 
+      type="text" 
+      pInputText 
+      [(ngModel)]="searchField" 
+      placeholder="Enter LoRA Model ID" 
+    />
+
+    <input 
+      *ngIf="selectedSearchOption === 'username'" 
+      type="text" 
+      pInputText 
+      [(ngModel)]="searchField" 
+      placeholder="Enter LoRA Creator's CivitAI Username"
+    />
+  </div>
+  <div>
+    <button 
+    pButton 
+    type="button" 
+    label="Search" 
+    (click)="search()" 
+    class="p-button-primary mt-2 ml-2" 
+    [disabled]="isLoading || (!searchField)">
+  </button>
+
+  <!-- Loading Spinner -->
+  <p-progressSpinner *ngIf="isLoading" styleClass="ml-2" strokeWidth="4" animationDuration=".5s"></p-progressSpinner>
+  </div>
+
+  <!-- Mobile View: Card layout for LoRA results -->
+  <div *ngIf="!isLoading && searchResults && searchResults.length > 0" class="p-field mobile-results">
+    <div *ngFor="let lora of searchResults" class="lora-card" [ngClass]="{'selected': lora === selectedLoRA}" (click)="selectLora(lora)">
+      <div class="lora-card-header">
+        <!-- Image click triggers the image expansion dialog -->
+        <img *ngIf="lora.images && lora.images.length > 0" [src]="lora.images[0].url" alt="LoRA Preview" class="preview-image" (click)="openImageDialog(lora.images[0].url)" />
+        <div class="lora-card-title">{{ lora.name }}</div>
+      </div>
+      <div class="lora-card-body">
+        <div class="lora-creator">
+          <span><strong>Creator:</strong> {{ lora.creator.username }}</span>
+        </div>
+        <div class="lora-stats">
+          <div><strong>Downloads:</strong> {{ lora.stats.downloadCount }}</div>
+          <div><strong>Rating:</strong> <i class="pi pi-thumbs-up"></i> {{ lora.stats.thumbsUpCount }} <i class="pi pi-thumbs-down"></i> {{ lora.stats.thumbsDownCount }}</div>
+        </div>
+        <div class="lora-tags">
+          <strong>Tags:</strong>
+          <p-chip *ngFor="let tag of lora.tags" label="{{ tag }}"></p-chip>
+        </div>
+        <!-- Show link to civitAi page on right corner -->
+        <div class="lora-model-link">
+          <a [href]="'https://example.com/model/' + lora.id" target="_blank">View Model Page</a>
+        </div>
+      </div>
     </div>
   </div>
-  
+
+  <!-- Button to select the chosen LoRA -->
+  <div *ngIf="selectedLoRA" class="p-field mt-3 lora-request-button">
+    <button pButton type="button" label="Request Selected LoRA" (click)="requestSelectedLoRA()" class="p-button-primary"></button>
+  </div>
+
+  <!-- Dialog to show full-size image -->
+  <p-dialog header="Preview Image" [(visible)]="showImageDialog" [draggable]="false" (onHide)="showImageDialog = false">
+    <img [src]="imageToShow" alt="Expanded Preview" style="width: 100%;" />
+  </p-dialog>
+</div>
