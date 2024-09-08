@@ -312,7 +312,7 @@ export class OptionsComponent implements OnInit {
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
         // If we dont have discordUserID, we need them to login again
-        if (userData.discordUserID) {
+        if (userData.discord_user_id) {
           this.loginInfo = userData;
           console.log('premium member!');
           this.onDiscordLoginSuccess(userData);
@@ -325,6 +325,7 @@ export class OptionsComponent implements OnInit {
       const userData = JSON.parse(storedUserData);
       this.supporter = userData.has_required_role;
       this.serverMember = userData.is_member_of_your_guild;
+      this.sharedService.setUserData(userData);
     }
   }
 
@@ -507,12 +508,15 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("cfg");
     localStorage.removeItem("aspect-ratio");
     localStorage.removeItem("fast-pass-code");
+    localStorage.removeItem('discordUserData');
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 7;
     this.generationRequest.model = "sonicDiffusionV4";
+    this.loginInfo = null;
+    this.sharedService.setUserData(null);
     this.changeAspectRatio("square");
 
     this.loadSettings();
@@ -1227,6 +1231,7 @@ export class OptionsComponent implements OnInit {
 
   openAddLorasDialog() {
     // Ensure the user is logged in before opening the dialog
+    console.log('Login info:', this.loginInfo);
     if (!this.loginInfo) {
       this.messageService.add({
         severity: 'error',

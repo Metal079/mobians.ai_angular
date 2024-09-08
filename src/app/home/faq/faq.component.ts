@@ -56,7 +56,7 @@ export class FaqComponent implements OnInit, OnDestroy {
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
         this.serverMember = userData.is_member_of_your_guild;
-        this.discordUserID = userData;
+        this.discordUserID = userData.discord_user_id;
       }
     });
   }
