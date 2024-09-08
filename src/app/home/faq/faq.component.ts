@@ -78,7 +78,7 @@ export class FaqComponent implements OnInit, OnDestroy {
     }
   }
   
-  ngOnDestroy() {
+  ngOnDestroy() { 
     this.subscription.unsubscribe();
   }
 

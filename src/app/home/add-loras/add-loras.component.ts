@@ -3,6 +3,7 @@ import { DynamicDialogRef } from 'primeng/dynamicdialog';
 import { DynamicDialogConfig } from 'primeng/dynamicdialog';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MessageService } from 'primeng/api';
+import { SharedService } from 'src/app/shared.service';
 
 
 @Component({
@@ -28,6 +29,7 @@ export class AddLorasComponent {
     , public config: DynamicDialogConfig
     , private stableDiffusionService: StableDiffusionService
     , private messageService: MessageService
+    , private sharedService: SharedService
   ) { }
 
   selectOption(option: string) {
@@ -124,13 +126,16 @@ export class AddLorasComponent {
     if (this.selectedLoRA) {
       console.log(`Selected LoRA: ${this.selectedLoRA.name}`);
 
+      // Get the user's discord ID
+      const discordUserID = this.sharedService.getUserDataValue().discord_user_id;
+
       // Create data to send to the backend
       const data = {
         'lora_version_id': this.selectedLoRA.model_version_id,
         'name': this.selectedLoRA.name,
         'version': this.selectedLoRA.model_name,
         'status': 'pending',
-        'requestor': 'metal',
+        'requestor': discordUserID,
         'is_nsfw': this.selectedLoRA.nsfw,
         'is_minor': this.selectedLoRA.minor,
         'preview_image': this.selectedLoRA.images[0].url,
