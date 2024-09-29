@@ -175,28 +175,39 @@ export class BlobMigrationService {
   }
 
   async convertToWebP(blob: Blob): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx!.drawImage(img, 0, 0);
-        canvas.toBlob(
-          (webpBlob) => {
-            if (webpBlob) resolve(webpBlob);
-            else reject('Conversion to WebP failed');
-          },
-          'image/webp',
-          0.95 // Quality parameter set to 95%
-        );
-      };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(blob);
+    // Decode the image using createImageBitmap
+    const bitmap = await createImageBitmap(blob);
+  
+    // Create a canvas with the same dimensions as the image
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas context is null');
+    }
+  
+    // Draw the image onto the canvas
+    ctx.drawImage(bitmap, 0, 0);
+  
+    // Convert the canvas content to a WebP blob
+    const webpBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject('Conversion to WebP failed');
+          }
+        },
+        'image/webp',
+        0.95 // Quality parameter set to 95%
+      );
     });
+  
+    return webpBlob;
   }
-
+  
   async convertWebPToPNG(webpBlob: Blob): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const img = new Image();

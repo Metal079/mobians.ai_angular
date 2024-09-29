@@ -245,9 +245,6 @@ export class OptionsComponent implements OnInit {
                 const uuid = data.UUID;
                 const base64Data = data.base64;
 
-                // Continue the cursor immediately to keep the transaction active only for necessary operations
-                cursor.continue();
-
                 // Process the data asynchronously outside the transaction
                 (async () => {
                   let blob = null;
@@ -290,6 +287,8 @@ export class OptionsComponent implements OnInit {
                   };
                 })();
 
+                // Continue the cursor immediately to keep the transaction active only for necessary operations
+                cursor.continue();
               } else {
                 console.log("No more entries to process");
               }
