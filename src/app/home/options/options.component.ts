@@ -242,51 +242,53 @@ export class OptionsComponent implements OnInit {
   //#endregion
 
   async migrateBase64ToBlobStore() {
-    interface Base64Data {
-      UUID: string;
-      base64: string;
-    }
-    
     const db = await this.getDatabase();
-  
     const batchSize = 100; // Adjust batch size as needed
-    let batch: Base64Data[] = [];
   
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(['base64Store', 'blobStore'], 'readwrite');
+    let cursorPosition: IDBValidKey | undefined = undefined;
+    let hasMore = true;
+  
+    while (hasMore) {
+      const batch = await this.readBatch(db, cursorPosition, batchSize);
+      if (batch.length > 0) {
+        cursorPosition = batch[batch.length - 1].UUID; // Update cursor position
+        await this.processBatch(batch, db);
+      } else {
+        hasMore = false; // No more records to process
+      }
+    }
+  
+    console.log('Migration completed.');
+  }
+  
+  async readBatch(db: IDBDatabase, startAfter: IDBValidKey | undefined, batchSize: number): Promise<any[]> {
+    return new Promise<any[]>((resolve, reject) => {
+      const transaction = db.transaction('base64Store', 'readonly');
       const base64Store = transaction.objectStore('base64Store');
-      const blobStore = transaction.objectStore('blobStore');
+      const request = startAfter
+        ? base64Store.openCursor(IDBKeyRange.lowerBound(startAfter, true)) // Exclude startAfter
+        : base64Store.openCursor();
   
-      const request = base64Store.openCursor();
-      request.onsuccess = async (event) => {
+      const batch: any[] = [];
+  
+      request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-  
-        if (cursor) {
+        if (cursor && batch.length < batchSize) {
           batch.push(cursor.value);
-  
-          if (batch.length >= batchSize) {
-            await this.processBatch(batch, base64Store, blobStore);
-            batch = [];
-          }
-  
           cursor.continue();
         } else {
-          if (batch.length > 0) {
-            await this.processBatch(batch, base64Store, blobStore);
-          }
-          console.log('Migration completed.');
-          resolve();
+          resolve(batch);
         }
       };
   
       request.onerror = (event) => {
-        console.error('Error during migration:', event);
+        console.error('Error reading batch:', event);
         reject(event);
       };
     });
   }
   
-  async processBatch(batch: any[], base64Store: IDBObjectStore, blobStore: IDBObjectStore) {
+  async processBatch(batch: any[], db: IDBDatabase) {
     for (const data of batch) {
       const uuid = data.UUID;
       const base64Data = data.base64;
@@ -295,13 +297,23 @@ export class OptionsComponent implements OnInit {
         let blob = this.blobMigrationService.base64ToBlob(base64Data);
         blob = await this.blobMigrationService.convertToWebP(blob);
   
-        // Store the blob
+        // Open a new transaction for each write operation
         await new Promise<void>((resolve, reject) => {
+          const transaction = db.transaction(['blobStore', 'base64Store'], 'readwrite');
+          const base64Store = transaction.objectStore('base64Store');
+          const blobStore = transaction.objectStore('blobStore');
+  
           const blobRequest = blobStore.put({ UUID: uuid, blob: blob });
           blobRequest.onsuccess = () => {
             // Delete the base64 data
-            base64Store.delete(uuid);
-            resolve();
+            const deleteRequest = base64Store.delete(uuid);
+            deleteRequest.onsuccess = () => {
+              resolve();
+            };
+            deleteRequest.onerror = (error) => {
+              console.error('Error deleting base64 data:', error);
+              reject(error);
+            };
           };
           blobRequest.onerror = (error) => {
             console.error('Error storing blob:', error);
@@ -309,7 +321,7 @@ export class OptionsComponent implements OnInit {
           };
         });
       } catch (error) {
-        console.error('Error converting base64 to blob:', error);
+        console.error('Error processing data:', error);
       }
     }
   }
