@@ -189,7 +189,7 @@ export class BlobMigrationService {
             else reject('Conversion to WebP failed');
           },
           'image/webp',
-          1 // Quality parameter for lossless compression
+          0.95 // Quality parameter set to 95%
         );
       };
       img.onerror = reject;

@@ -176,7 +176,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 25); // Increment version number
+      const request = indexedDB.open(this.dbName, 30); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -230,56 +230,6 @@ export class OptionsComponent implements OnInit {
             console.warn("Full-text index not supported in this browser:", error);
           }
 
-          let lastCursor: IDBValidKey | null = null;
-
-          const migrateBase64Data = async () => {
-            const request = lastCursor ? store.openCursor(lastCursor) : store.openCursor();
-
-            request.onsuccess = async (event) => {
-              if (event.target) {
-                const cursor = (event.target as IDBRequest).result;
-
-                if (cursor) {
-                  const image = cursor.value;
-                  console.log("Processing image:", image);
-
-                  if (image.url) {
-                    console.log("Migrating base64 data for image:", image.UUID);
-                    await base64Store.put({ UUID: image.UUID, base64: image.url });
-
-                    delete image.url;
-                    await cursor.update(image);
-                    console.log("Base64 data migrated and removed from main store");
-                  }
-
-                  lastCursor = cursor.key;
-                  cursor.continue();
-                } else {
-                  lastCursor = null;
-                  console.log("No more entries to process");
-                }
-              }
-            };
-
-            request.onerror = (event: Event) => {
-              console.error("Error processing entries:", event);
-            };
-
-            await new Promise((resolve) => {
-              if (transaction.oncomplete !== null) {
-                transaction.oncomplete = () => {
-                  resolve(undefined);
-                };
-              } else {
-                resolve(undefined);
-              }
-            });
-
-            if (lastCursor !== null) {
-              await migrateBase64Data();
-            }
-          };
-
           //#region Migrate base64 data from main store to blobStore
           const migrateBase64ToBlobStore = async () => {
             const request = base64Store.openCursor();
@@ -291,42 +241,55 @@ export class OptionsComponent implements OnInit {
                 const data = cursor.value;
                 console.log("Processing base64 data for image:", data.UUID);
 
-                let blob = null;
-                try {
-                  blob = this.base64ToBlob(data.base64, 'image/png');
+                // Clone the data you need
+                const uuid = data.UUID;
+                const base64Data = data.base64;
 
-                  // Then convert to webp to save space
-                  const webpBlob = await this.blobMigrationService.convertToWebP(blob);
-                  blob = webpBlob;
-                }
-                catch (error) {
-                  console.error("Failed to convert base64 data to blob:", error);
-                  cursor.continue();
-                }
+                // Continue the cursor immediately to keep the transaction active only for necessary operations
+                cursor.continue();
 
-                if (blob === null) {
-                  console.error("Failed to convert base64 data to blob");
-                  cursor.continue();
-                }
+                // Process the data asynchronously outside the transaction
+                (async () => {
+                  let blob = null;
+                  try {
+                    blob = this.blobMigrationService.base64ToBlob(base64Data);
 
-                // Delete the base64 data from base64Store
-                const deleteRequest = cursor.delete();
-                deleteRequest.onsuccess = () => {
-                  // Add the blob data to blobStore
-                  const blobStoreRequest = blobStore.add({ UUID: data.UUID, blob: blob });
-                  blobStoreRequest.onsuccess = () => {
-                    console.log("Base64 data migrated to blobStore and removed from base64Store");
-                    cursor.continue();
+                    // Then convert to webp to save space
+                    const webpBlob = await this.blobMigrationService.convertToWebP(blob);
+                    blob = webpBlob;
+                  } catch (error) {
+                    console.error("Failed to convert base64 data to blob:", error);
+                    return;
+                  }
+
+                  if (blob === null) {
+                    console.error("Failed to convert base64 data to blob");
+                    return;
+                  }
+
+                  // Open a new transaction to delete and add data
+                  const db = await this.openDatabase();
+                  const transaction = db.transaction(['base64Store', 'blobStore'], 'readwrite');
+                  const base64Store = transaction.objectStore('base64Store');
+                  const blobStore = transaction.objectStore('blobStore');
+
+                  // Delete the base64 data from base64Store
+                  const deleteRequest = base64Store.delete(uuid);
+                  deleteRequest.onsuccess = () => {
+                    // Add the blob data to blobStore
+                    const blobStoreRequest = blobStore.add({ UUID: uuid, blob: blob });
+                    blobStoreRequest.onsuccess = () => {
+                      console.log("Base64 data migrated to blobStore and removed from base64Store");
+                    };
+                    blobStoreRequest.onerror = (event) => {
+                      console.error("Failed to add blob to blobStore:", event);
+                    };
                   };
-                  blobStoreRequest.onerror = (event) => {
-                    console.error("Failed to add blob to blobStore:", event);
-                    cursor.continue();
+                  deleteRequest.onerror = (event) => {
+                    console.error("Failed to delete base64 data from base64Store:", event);
                   };
-                };
-                deleteRequest.onerror = (event) => {
-                  console.error("Failed to delete base64 data from base64Store:", event);
-                  cursor.continue();
-                };
+                })();
+
               } else {
                 console.log("No more entries to process");
               }
@@ -336,13 +299,14 @@ export class OptionsComponent implements OnInit {
               console.error("Error processing entries:", event);
             };
           };
-          //#endregion
-
-
-          await migrateBase64Data();
+          // Migrate base64 data from main store to blobStore
           await migrateBase64ToBlobStore();
+
+          // After migration completes, reload the page
+          window.location.reload();
         }
       };
+      //#endregion
 
       request.onblocked = (event) => {
         console.error("Database access blocked:", event);
@@ -541,6 +505,9 @@ export class OptionsComponent implements OnInit {
       localStorage.setItem("fast-pass-code", this.generationRequest.fast_pass_code);
     }
 
+    // Save if lossy images are enabled
+    localStorage.setItem("lossy-images", this.generationRequest.lossy_images.toString());
+
     // Save model
     localStorage.setItem("model", this.generationRequest.model);
   }
@@ -571,6 +538,9 @@ export class OptionsComponent implements OnInit {
     }
     if (localStorage.getItem("model") != null) {
       this.generationRequest.model = localStorage.getItem("model")!;
+    }
+    if (localStorage.getItem("lossy-images") != null) {
+      this.generationRequest.lossy_images = localStorage.getItem("lossy-images") == 'true';
     }
 
     try {
@@ -628,10 +598,11 @@ export class OptionsComponent implements OnInit {
       const requests = uuids.map((uuid, index) => {
         return new Promise((resolve, reject) => {
           const request = store.get(uuid);
-          request.onsuccess = (event) => {
+          request.onsuccess = async (event) => {
             const result = request.result;
             if (result) {
-              const blob = result.blob;
+              let blob = result.blob;
+
               // Convert to URL
               intermediateImages[index].url = URL.createObjectURL(blob);
               this.blobUrls.push(intermediateImages[index].url);
@@ -810,11 +781,19 @@ export class OptionsComponent implements OnInit {
               };
             });
             this.images = generatedImages;
+            this.sharedService.disableInstructions();
             this.sharedService.setImages(this.images);
 
             // Calculate the total number of pages
             this.totalPages++;
             this.currentPageNumber++;
+
+            // Convert to webp if image is png
+            if (generatedImages[0].blob.type == "image/png") {
+              for (let i = 0; i < generatedImages.length; i++) {
+                generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob);
+              }
+            }
 
             // Add the images to the image history metadata
             this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
@@ -914,7 +893,7 @@ export class OptionsComponent implements OnInit {
       this.sharedService.enableInstructions();
     }
     else {
-      
+
     }
   }
 
@@ -931,14 +910,20 @@ export class OptionsComponent implements OnInit {
     this.imageModalOpen.emit(true);
   }
 
-  openImageDetails(image: MobiansImage) {
+  async openImageDetails(image: MobiansImage) {
     // Implement the logic to open the image details modal or view
     console.log('Opening image details for:', image);
 
     // Get blob info from url
     fetch(image.url!)
       .then(response => response.blob())
-      .then(blob => {
+      .then(async blob => {
+
+        // Convert to png if generationRequest.lossy_images is false
+        if (!this.generationRequest.lossy_images) {
+          blob = await this.blobMigrationService.convertWebPToPNG(blob);
+        }
+
         // Set the reference image to the selected image
         image.blob = blob;
         this.referenceImage = image;
@@ -1446,28 +1431,4 @@ export class OptionsComponent implements OnInit {
     this.displayModal = false;
     this.selectedImageUrl = null;
   }
-
-  // Convert Base64 to Blob
-  base64ToBlob(base64: string, mimeType: string): Blob {
-    const byteCharacters = atob(base64);
-    const byteArrays: Uint8Array[] = [];
-    const sliceSize = 512;
-
-    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-      const slice = byteCharacters.slice(offset, offset + sliceSize);
-      const byteNumbers = new Array(slice.length);
-
-      for (let i = 0; i < slice.length; i++) {
-        byteNumbers[i] = slice.charCodeAt(i);
-      }
-
-      const byteArray = new Uint8Array(byteNumbers as any);
-      byteArrays.push(byteArray);
-    }
-
-    return new Blob(byteArrays, { type: mimeType });
-  }
-
-  
-
 }
