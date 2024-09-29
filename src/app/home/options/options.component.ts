@@ -176,7 +176,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 31); // Increment version number
+      const request = indexedDB.open(this.dbName, 32); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -230,79 +230,8 @@ export class OptionsComponent implements OnInit {
             console.warn("Full-text index not supported in this browser:", error);
           }
 
-          //#region Migrate base64 data from main store to blobStore
-          const migrateBase64ToBlobStore = async () => {
-            const request = base64Store.openCursor();
-
-            request.onsuccess = async (event) => {
-              const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-
-              if (cursor) {
-                const data = cursor.value;
-                console.log("Processing base64 data for image:", data.UUID);
-
-                // Clone the data you need
-                const uuid = data.UUID;
-                const base64Data = data.base64;
-
-                // Process the data asynchronously outside the transaction
-                (async () => {
-                  let blob = null;
-                  try {
-                    blob = this.blobMigrationService.base64ToBlob(base64Data);
-
-                    // Then convert to webp to save space
-                    const webpBlob = await this.blobMigrationService.convertToWebP(blob);
-                    blob = webpBlob;
-                  } catch (error) {
-                    console.error("Failed to convert base64 data to blob:", error);
-                    return;
-                  }
-
-                  if (blob === null) {
-                    console.error("Failed to convert base64 data to blob");
-                    return;
-                  }
-
-                  // Open a new transaction to delete and add data
-                  const db = await this.openDatabase();
-                  const transaction = db.transaction(['base64Store', 'blobStore'], 'readwrite');
-                  const base64Store = transaction.objectStore('base64Store');
-                  const blobStore = transaction.objectStore('blobStore');
-
-                  // Delete the base64 data from base64Store
-                  const deleteRequest = base64Store.delete(uuid);
-                  deleteRequest.onsuccess = () => {
-                    // Add the blob data to blobStore
-                    const blobStoreRequest = blobStore.add({ UUID: uuid, blob: blob });
-                    blobStoreRequest.onsuccess = () => {
-                      console.log("Base64 data migrated to blobStore and removed from base64Store");
-                    };
-                    blobStoreRequest.onerror = (event) => {
-                      console.error("Failed to add blob to blobStore:", event);
-                    };
-                  };
-                  deleteRequest.onerror = (event) => {
-                    console.error("Failed to delete base64 data from base64Store:", event);
-                  };
-                })();
-
-                // Continue the cursor immediately to keep the transaction active only for necessary operations
-                cursor.continue();
-              } else {
-                console.log("No more entries to process");
-              }
-            };
-
-            request.onerror = (event: Event) => {
-              console.error("Error processing entries:", event);
-            };
-          };
-          // Migrate base64 data from main store to blobStore
-          await migrateBase64ToBlobStore();
         }
       };
-      //#endregion
 
       request.onblocked = (event) => {
         console.error("Database access blocked:", event);
@@ -311,6 +240,80 @@ export class OptionsComponent implements OnInit {
     });
   }
   //#endregion
+
+  async migrateBase64ToBlobStore() {
+    interface Base64Data {
+      UUID: string;
+      base64: string;
+    }
+    
+    const db = await this.getDatabase();
+  
+    const batchSize = 100; // Adjust batch size as needed
+    let batch: Base64Data[] = [];
+  
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(['base64Store', 'blobStore'], 'readwrite');
+      const base64Store = transaction.objectStore('base64Store');
+      const blobStore = transaction.objectStore('blobStore');
+  
+      const request = base64Store.openCursor();
+      request.onsuccess = async (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+  
+        if (cursor) {
+          batch.push(cursor.value);
+  
+          if (batch.length >= batchSize) {
+            await this.processBatch(batch, base64Store, blobStore);
+            batch = [];
+          }
+  
+          cursor.continue();
+        } else {
+          if (batch.length > 0) {
+            await this.processBatch(batch, base64Store, blobStore);
+          }
+          console.log('Migration completed.');
+          resolve();
+        }
+      };
+  
+      request.onerror = (event) => {
+        console.error('Error during migration:', event);
+        reject(event);
+      };
+    });
+  }
+  
+  async processBatch(batch: any[], base64Store: IDBObjectStore, blobStore: IDBObjectStore) {
+    for (const data of batch) {
+      const uuid = data.UUID;
+      const base64Data = data.base64;
+  
+      try {
+        let blob = this.blobMigrationService.base64ToBlob(base64Data);
+        blob = await this.blobMigrationService.convertToWebP(blob);
+  
+        // Store the blob
+        await new Promise<void>((resolve, reject) => {
+          const blobRequest = blobStore.put({ UUID: uuid, blob: blob });
+          blobRequest.onsuccess = () => {
+            // Delete the base64 data
+            base64Store.delete(uuid);
+            resolve();
+          };
+          blobRequest.onerror = (error) => {
+            console.error('Error storing blob:', error);
+            reject(error);
+          };
+        });
+      } catch (error) {
+        console.error('Error converting base64 to blob:', error);
+      }
+    }
+  }
+  
 
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
@@ -324,6 +327,10 @@ export class OptionsComponent implements OnInit {
     try {
       await this.openDatabase();
       console.log('Database and object stores created/updated successfully');
+
+      // Perform data migration here
+      await this.migrateBase64ToBlobStore();
+
       await this.loadSettings();
     } catch (error) {
       console.error('Failed to open or upgrade database:', error);
