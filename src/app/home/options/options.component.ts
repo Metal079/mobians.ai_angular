@@ -301,9 +301,6 @@ export class OptionsComponent implements OnInit {
           };
           // Migrate base64 data from main store to blobStore
           await migrateBase64ToBlobStore();
-
-          // After migration completes, reload the page
-          window.location.reload();
         }
       };
       //#endregion
