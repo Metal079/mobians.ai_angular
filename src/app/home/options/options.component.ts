@@ -176,7 +176,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 30); // Increment version number
+      const request = indexedDB.open(this.dbName, 31); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
