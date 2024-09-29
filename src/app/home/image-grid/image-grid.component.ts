@@ -115,8 +115,8 @@ export class ImageGridComponent {
 
       // Here, you'll need to define how you determine if an image is considered "changed."
       // This could be based on one or more properties, depending on your needs.
-      // For example, you might compare the base64 strings:
-      if (newImage.base64 == prevImage.base64) {
+      // For example, you might compare the url strings:
+      if (newImage.url == prevImage.url) {
         return false; // If any image hasn't changed, return false
       }
     }
@@ -382,26 +382,23 @@ export class ImageGridComponent {
       // Create new image element to get dimensions
       let img = new Image();
       const imageInfo = this.sharedService.getImage(imageIndex);
-      img.src = 'data:image/png;base64,' + imageInfo!.base64;
 
-      img.onload = () => {
-        // Calculate the aspect ratio (Square, Portrait, Landscape)
-        let tempAspectRatio = img.naturalWidth / img.naturalHeight;
+      // Calculate the aspect ratio (Square, Portrait, Landscape)
+      let tempAspectRatio = imageInfo!.width / imageInfo!.height;
 
-        // Set the reference image
-        const referenceImage = {
-          url: img.src,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
-          base64: imageInfo!.base64,
-          UUID: imageInfo!.UUID,
-          rating: imageInfo?.rating
-        };
-        this.sharedService.setReferenceImage(referenceImage);
-        this.showReferenceImage = true;
-        this.imageExpandedChange.emit(true);
-      }
+      // Set the reference image
+      const referenceImage = {
+        url: imageInfo!.url,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
+        blob: imageInfo!.blob,
+        UUID: imageInfo!.UUID,
+        rating: imageInfo?.rating
+      };
+      this.sharedService.setReferenceImage(referenceImage);
+      this.showReferenceImage = true;
+      this.imageExpandedChange.emit(true);
     }
   }
 }

@@ -9,6 +9,7 @@ import { ImageModalComponent } from 'src/app/home/image-modal/image-modal.compon
 import { GligenDisplayComponent } from 'src/app/home/gligen-display/gligen-display.component';
 import { InpaintingDisplayComponent } from 'src/app/home/inpainting-display/inpainting-display.component';
 import { AddLorasComponent } from 'src/app/home/add-loras/add-loras.component';
+import { BlobMigrationService } from 'src/app/blob-migration.service';
 
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -27,6 +28,7 @@ import { DialogModule } from 'primeng/dialog';
 import { TableModule } from 'primeng/table';
 import { PanelModule } from 'primeng/panel';
 import { ChipModule } from 'primeng/chip';
+import { RouterModule } from '@angular/router';
 
 
 @NgModule({
@@ -57,7 +59,8 @@ import { ChipModule } from 'primeng/chip';
     DialogModule,
     TableModule,
     PanelModule,  
-    ChipModule    
+    ChipModule,
+    RouterModule,
   ],
   exports: [
     ImageGridComponent,
@@ -72,7 +75,7 @@ import { ChipModule } from 'primeng/chip';
     ProgressSpinnerModule,
     AddLorasComponent,
   ],
-  providers: [MessageService]
+  providers: [MessageService, BlobMigrationService]
 })
 export class HomeModule { }  // PascalCase
 

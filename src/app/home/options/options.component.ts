@@ -17,6 +17,7 @@ import { environment } from 'src/environments/environment';
 import { MemoryUsageService } from 'src/app/memory-usage.service';
 import { DialogService } from 'primeng/dynamicdialog';
 import { AddLorasComponent } from '../add-loras/add-loras.component';
+import { BlobMigrationService } from 'src/app/blob-migration.service';
 
 
 @Component({
@@ -29,7 +30,7 @@ export class OptionsComponent implements OnInit {
   private referenceImageSubscription!: Subscription;
   private dbName = 'ImageDatabase';
   private storeName = 'ImageStore';
-  private base64StoreName = 'base64Store';
+  private blobStoreName = 'blobStore';
 
   models_types: { [model: string]: string; } = {
     "sonicDiffusionV4": "SD 1.5",
@@ -66,11 +67,14 @@ export class OptionsComponent implements OnInit {
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
     loras: [],
+    lossy_images: false,
   };
   jobID: string = "";
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
+
+  showMigration: boolean = false;
 
   // Discord login info
   loginInfo: any;
@@ -87,6 +91,7 @@ export class OptionsComponent implements OnInit {
   totalPages = 1;
   isLoading: boolean = false;
   imageHistoryMetadata: MobiansImageMetadata[] = [];
+  blobUrls: string[] = [];
 
   // New properties for menus
   showOptions: boolean = false;
@@ -138,6 +143,7 @@ export class OptionsComponent implements OnInit {
     , private swPush: SwPush
     , private memoryUsageService: MemoryUsageService
     , private dialogService: DialogService
+    , private blobMigrationService: BlobMigrationService
   ) {
     // Load in loras info
     this.loadLoras();
@@ -147,9 +153,22 @@ export class OptionsComponent implements OnInit {
     this.debouncedSearch = this.debounce(() => {
       this.searchImages();
     }, 300); // Wait for 300ms after the last keystroke before searching
+
+    this.blobMigrationService.progress$.subscribe(
+      () => {
+        this.showMigration = true;
+      },
+      () => {
+        this.showMigration = false;
+      },
+      () => {
+        this.showMigration = false;
+      }
+    );
   }
 
-  private openDatabase(): Promise<IDBDatabase> {
+  //#region Create and open the database
+  async openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) {
         console.error("IndexedDB is not supported in this browser.");
@@ -157,7 +176,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 19); // Increment version number
+      const request = indexedDB.open(this.dbName, 25); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -178,16 +197,17 @@ export class OptionsComponent implements OnInit {
           console.log("Object store created:", this.storeName);
         }
 
-        // Create base64Store if it doesn't exist
-        if (!db.objectStoreNames.contains('base64Store')) {
-          db.createObjectStore('base64Store', { keyPath: "UUID" });
-          console.log("Base64 store created");
+        // Create blobStore if it doesn't exist
+        if (!db.objectStoreNames.contains('blobStore')) {
+          db.createObjectStore('blobStore', { keyPath: "UUID" });
+          console.log("blobStore store created");
         }
 
         const transaction = (event.target as IDBOpenDBRequest).transaction;
         if (transaction) {
           const store = transaction.objectStore(this.storeName);
           const base64Store = transaction.objectStore('base64Store');
+          const blobStore = transaction.objectStore('blobStore'); // Added this line
 
           if (!store.indexNames.contains('timestamp')) {
             store.createIndex('timestamp', 'timestamp', { unique: false });
@@ -260,7 +280,67 @@ export class OptionsComponent implements OnInit {
             }
           };
 
+          //#region Migrate base64 data from main store to blobStore
+          const migrateBase64ToBlobStore = async () => {
+            const request = base64Store.openCursor();
+
+            request.onsuccess = async (event) => {
+              const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+
+              if (cursor) {
+                const data = cursor.value;
+                console.log("Processing base64 data for image:", data.UUID);
+
+                let blob = null;
+                try {
+                  blob = this.base64ToBlob(data.base64, 'image/png');
+
+                  // Then convert to webp to save space
+                  const webpBlob = await this.blobMigrationService.convertToWebP(blob);
+                  blob = webpBlob;
+                }
+                catch (error) {
+                  console.error("Failed to convert base64 data to blob:", error);
+                  cursor.continue();
+                }
+
+                if (blob === null) {
+                  console.error("Failed to convert base64 data to blob");
+                  cursor.continue();
+                }
+
+                // Delete the base64 data from base64Store
+                const deleteRequest = cursor.delete();
+                deleteRequest.onsuccess = () => {
+                  // Add the blob data to blobStore
+                  const blobStoreRequest = blobStore.add({ UUID: data.UUID, blob: blob });
+                  blobStoreRequest.onsuccess = () => {
+                    console.log("Base64 data migrated to blobStore and removed from base64Store");
+                    cursor.continue();
+                  };
+                  blobStoreRequest.onerror = (event) => {
+                    console.error("Failed to add blob to blobStore:", event);
+                    cursor.continue();
+                  };
+                };
+                deleteRequest.onerror = (event) => {
+                  console.error("Failed to delete base64 data from base64Store:", event);
+                  cursor.continue();
+                };
+              } else {
+                console.log("No more entries to process");
+              }
+            };
+
+            request.onerror = (event: Event) => {
+              console.error("Error processing entries:", event);
+            };
+          };
+          //#endregion
+
+
           await migrateBase64Data();
+          await migrateBase64ToBlobStore();
         }
       };
 
@@ -270,6 +350,7 @@ export class OptionsComponent implements OnInit {
       };
     });
   }
+  //#endregion
 
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
@@ -295,7 +376,7 @@ export class OptionsComponent implements OnInit {
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
         this.generationRequest.job_type = "img2img";
-        image.base64 = image.base64.includes('data:') ? image.base64.split(',')[1] : image.base64;
+        image.blob = image.blob
         this.generationRequest.image = image.base64;
         this.referenceImage = image;
 
@@ -336,6 +417,9 @@ export class OptionsComponent implements OnInit {
     if (this.referenceImageSubscription) {
       this.referenceImageSubscription.unsubscribe();
     }
+
+    // Revoke all object URLs to prevent memory leaks
+    this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
 
     // Clear arrays
     this.prevPageImages = [];
@@ -527,6 +611,9 @@ export class OptionsComponent implements OnInit {
 
   // Load the next page of images
   async loadImagePage(pageNumber: number) {
+    // Delete all blob URLs to prevent memory leaks
+    this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
+
     const images = this.imageHistoryMetadata.slice((pageNumber - 1) * this.imagesPerPage, pageNumber * this.imagesPerPage);
     const uuids = images.map(image => image.UUID);
 
@@ -534,8 +621,8 @@ export class OptionsComponent implements OnInit {
 
     try {
       const db = await this.openDatabase();
-      const transaction = db.transaction('base64Store', 'readonly');
-      const store = transaction.objectStore('base64Store');
+      const transaction = db.transaction('blobStore', 'readonly');
+      const store = transaction.objectStore('blobStore');
 
       // Create a promise for each UUID
       const requests = uuids.map((uuid, index) => {
@@ -544,13 +631,10 @@ export class OptionsComponent implements OnInit {
           request.onsuccess = (event) => {
             const result = request.result;
             if (result) {
-              const base64 = result.base64.includes('data:') ? result.base64.split(',')[1] : result.base64;
-              // Convert to base64 URL
-              intermediateImages[index].url = 'data:image/png;base64,' + base64;
-              // intermediateImages[index].promptSummary = this.generationRequest.prompt.slice(0, 50) + '...'; // Truncate prompt summary
-              // intermediateImages[index].height = result.height;
-              // intermediateImages[index].width = result.width;
-              // intermediateImages[index].aspectRatio = result.aspectRatio;
+              const blob = result.blob;
+              // Convert to URL
+              intermediateImages[index].url = URL.createObjectURL(blob);
+              this.blobUrls.push(intermediateImages[index].url);
             }
             resolve(undefined);
           };
@@ -577,18 +661,18 @@ export class OptionsComponent implements OnInit {
 
     try {
       const db = await this.openDatabase();
-      const transaction = db.transaction('base64Store', 'readonly');
-      const store = transaction.objectStore('base64Store');
+      const transaction = db.transaction('blobStore', 'readonly');
+      const store = transaction.objectStore('blobStore');
 
       const request = store.get(image.UUID);
 
       request.onsuccess = (event) => {
         const result = request.result;
         if (result) {
-          const base64 = result.base64.includes('data:') ? result.base64.split(',')[1] : result.base64;
+          const blob = result.blob
 
           // Convert to base64 URL
-          image.url = 'data:image/png;base64,' + base64;
+          image.url = URL.createObjectURL(blob);
         }
       };
 
@@ -603,7 +687,7 @@ export class OptionsComponent implements OnInit {
   }
 
   // Send job to django api and retrieve job id.
-  submitJob(upscale: boolean = false) {
+  async submitJob(upscale: boolean = false) {
     if (upscale) {
       this.generationRequest.job_type = "upscale";
     }
@@ -629,10 +713,13 @@ export class OptionsComponent implements OnInit {
     }
     this.currentSeed = this.generationRequest.seed;
 
+    // If to return lossy webp images
+
+
     // set reference image if there is one
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
       // set image to base64 string if exists and non- "", else set to url
-      this.generationRequest.image = this.referenceImage.base64 ? this.referenceImage.base64 : this.referenceImage.url!.split(',')[1];
+      this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob!);
     }
 
     this.sharedService.setGenerationRequest(this.generationRequest);
@@ -706,8 +793,11 @@ export class OptionsComponent implements OnInit {
           if (jobComplete && lastResponse) {
             console.log(lastResponse);
             const generatedImages = lastResponse.result.map((base64String: string) => {
+              const blob = this.blobMigrationService.base64ToBlob(base64String)
+              const blobUrl = URL.createObjectURL(blob);
+
               return {
-                base64: base64String,
+                blob: blob,
                 width: this.generationRequest.width,
                 height: this.generationRequest.height,
                 aspectRatio: this.aspectRatio.aspectRatio,
@@ -716,7 +806,7 @@ export class OptionsComponent implements OnInit {
                 timestamp: new Date(),
                 prompt: this.generationRequest.prompt,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
-                url: 'data:image/png;base64,' + base64String // Generate URL
+                url: blobUrl // Generate URL
               };
             });
             this.images = generatedImages;
@@ -733,19 +823,19 @@ export class OptionsComponent implements OnInit {
 
             try {
               const db = await this.openDatabase();
-              const transaction = db.transaction([this.storeName, 'base64Store'], 'readwrite');
+              const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
               const store = transaction.objectStore(this.storeName);
-              const base64Store = transaction.objectStore('base64Store');
+              const blobStore = transaction.objectStore('blobStore');
 
               for (const image of generatedImages) {
                 // Save the image metadata
                 const imageMetadata = { ...image };
-                delete imageMetadata.base64; // Remove the base64 data from metadata
+                delete imageMetadata.blob; // Remove the base64 data from metadata
                 delete imageMetadata.url; // Remove the URL from metadata
                 store.put(imageMetadata);
 
                 // Save the base64 data separately
-                base64Store.put({ UUID: image.UUID, base64: image.base64 });
+                blobStore.put({ UUID: image.UUID, blob: image.blob });
               }
             } catch (error) {
               console.error('Failed to store image data', error);
@@ -818,7 +908,14 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.image = undefined;
     this.sharedService.setReferenceImage(null);
     this.sharedService.setGenerationRequest(this.generationRequest);
-    this.sharedService.enableInstructions();
+
+    // If there are no images to unexpand enable the instructions
+    if (this.images.length == 0) {
+      this.sharedService.enableInstructions();
+    }
+    else {
+      
+    }
   }
 
   enableNotification() {
@@ -838,16 +935,22 @@ export class OptionsComponent implements OnInit {
     // Implement the logic to open the image details modal or view
     console.log('Opening image details for:', image);
 
-    // Set the reference image to the selected image
-    this.referenceImage = image;
-    this.generationRequest.image = image.url!.split(',')[1];
-    this.sharedService.setReferenceImage(image);
+    // Get blob info from url
+    fetch(image.url!)
+      .then(response => response.blob())
+      .then(blob => {
+        // Set the reference image to the selected image
+        image.blob = blob;
+        this.referenceImage = image;
+        this.generationRequest.image = image.blob;
+        this.sharedService.setReferenceImage(image);
 
-    // update prompt
-    if (image.prompt) {
-      this.generationRequest.prompt = image.prompt;
-      this.sharedService.setPrompt(image.prompt!);
-    }
+        // update prompt
+        if (image.prompt) {
+          this.generationRequest.prompt = image.prompt;
+          this.sharedService.setPrompt(image.prompt!);
+        }
+      });
   }
 
   toggleOptions() {
@@ -1197,12 +1300,12 @@ export class OptionsComponent implements OnInit {
       };
 
       // Delete second table too
-      transaction = db.transaction(this.base64StoreName, 'readwrite');
-      const base64Store = transaction.objectStore(this.base64StoreName);
-      const base64Request = base64Store.clear();
+      transaction = db.transaction(this.blobStoreName, 'readwrite');
+      const blobstore = transaction.objectStore(this.blobStoreName);
+      const blobRequest = blobstore.clear();
 
-      base64Request.onsuccess = (event) => {
-        console.log('All base64 data deleted from IndexedDB');
+      blobRequest.onsuccess = (event) => {
+        console.log('All blob data deleted from IndexedDB');
       };
 
       request.onerror = (event) => {
@@ -1343,4 +1446,28 @@ export class OptionsComponent implements OnInit {
     this.displayModal = false;
     this.selectedImageUrl = null;
   }
+
+  // Convert Base64 to Blob
+  base64ToBlob(base64: string, mimeType: string): Blob {
+    const byteCharacters = atob(base64);
+    const byteArrays: Uint8Array[] = [];
+    const sliceSize = 512;
+
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+      const slice = byteCharacters.slice(offset, offset + sliceSize);
+      const byteNumbers = new Array(slice.length);
+
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+
+      const byteArray = new Uint8Array(byteNumbers as any);
+      byteArrays.push(byteArray);
+    }
+
+    return new Blob(byteArrays, { type: mimeType });
+  }
+
+  
+
 }
