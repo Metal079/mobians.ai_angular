@@ -244,10 +244,10 @@ export class OptionsComponent implements OnInit {
   async migrateBase64ToBlobStore() {
     const db = await this.getDatabase();
     const batchSize = 100; // Adjust batch size as needed
-  
+
     let cursorPosition: IDBValidKey | undefined = undefined;
     let hasMore = true;
-  
+
     while (hasMore) {
       const batch = await this.readBatch(db, cursorPosition, batchSize);
       if (batch.length > 0) {
@@ -257,10 +257,10 @@ export class OptionsComponent implements OnInit {
         hasMore = false; // No more records to process
       }
     }
-  
+
     console.log('Migration completed.');
   }
-  
+
   async readBatch(db: IDBDatabase, startAfter: IDBValidKey | undefined, batchSize: number): Promise<any[]> {
     return new Promise<any[]>((resolve, reject) => {
       const transaction = db.transaction('base64Store', 'readonly');
@@ -268,9 +268,9 @@ export class OptionsComponent implements OnInit {
       const request = startAfter
         ? base64Store.openCursor(IDBKeyRange.lowerBound(startAfter, true)) // Exclude startAfter
         : base64Store.openCursor();
-  
+
       const batch: any[] = [];
-  
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
         if (cursor && batch.length < batchSize) {
@@ -280,29 +280,29 @@ export class OptionsComponent implements OnInit {
           resolve(batch);
         }
       };
-  
+
       request.onerror = (event) => {
         console.error('Error reading batch:', event);
         reject(event);
       };
     });
   }
-  
+
   async processBatch(batch: any[], db: IDBDatabase) {
     for (const data of batch) {
       const uuid = data.UUID;
       const base64Data = data.base64;
-  
+
       try {
         let blob = this.blobMigrationService.base64ToBlob(base64Data);
         blob = await this.blobMigrationService.convertToWebP(blob);
-  
+
         // Open a new transaction for each write operation
         await new Promise<void>((resolve, reject) => {
           const transaction = db.transaction(['blobStore', 'base64Store'], 'readwrite');
           const base64Store = transaction.objectStore('base64Store');
           const blobStore = transaction.objectStore('blobStore');
-  
+
           const blobRequest = blobStore.put({ UUID: uuid, blob: blob });
           blobRequest.onsuccess = () => {
             // Delete the base64 data
@@ -325,7 +325,7 @@ export class OptionsComponent implements OnInit {
       }
     }
   }
-  
+
 
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
@@ -1405,9 +1405,27 @@ export class OptionsComponent implements OnInit {
       this.selectedLoras.push(lora);
       this.generationRequest.loras = this.selectedLoras;
 
-      // Add the trigger prompt, if it exists to the prompt input
+      // Add the trigger prompt, if it exists to the prompt input (only if it's not already there)
       if (lora.trigger_words) {
-        lora.trigger_words.forEach((element: String) => {
+        // Check if the prompt already contains the trigger words and single out the missing ones
+        const missing_trigger_words: string[] = [];
+
+        // seperate this.generationRequest.prompt into an array of words and remove any whitespace and sanitize
+        let prompt_words = this.generationRequest.prompt.split(',');
+        prompt_words = prompt_words.map((word: string) => word.trim().toLowerCase());
+
+        // sanitize trigger words and check if they are in the prompt
+        let trigger_words = lora.trigger_words;
+        trigger_words = trigger_words.map((word: string) => word.trim().toLowerCase());
+
+        trigger_words.forEach((element: string) => {
+          if (!prompt_words.includes(element)) {
+            missing_trigger_words.push(element);
+          }
+        });
+
+        // Add missing trigger words if they exists
+        missing_trigger_words.forEach((element: String) => {
           this.generationRequest.prompt += ', ' + element;
         });
         this.sharedService.setPrompt(this.generationRequest.prompt);
