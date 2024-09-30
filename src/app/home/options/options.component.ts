@@ -699,9 +699,6 @@ export class OptionsComponent implements OnInit {
     }
     this.currentSeed = this.generationRequest.seed;
 
-    // If to return lossy webp images
-
-
     // set reference image if there is one
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
       // set image to base64 string if exists and non- "", else set to url
@@ -937,6 +934,11 @@ export class OptionsComponent implements OnInit {
         // Convert to png if generationRequest.lossy_images is false
         if (!this.generationRequest.lossy_images) {
           blob = await this.blobMigrationService.convertWebPToPNG(blob);
+
+          // New url
+          URL.revokeObjectURL(image.url!);
+          const newUrl = URL.createObjectURL(blob);
+          image.url = newUrl;
         }
 
         // Set the reference image to the selected image
