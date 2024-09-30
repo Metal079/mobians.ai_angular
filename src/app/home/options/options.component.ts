@@ -1448,7 +1448,11 @@ export class OptionsComponent implements OnInit {
 
     // Remove the trigger prompt from the prompt input
     if (lora.trigger_words) {
-      lora.trigger_words.forEach((element: String) => {
+      // sanitize trigger words
+      let trigger_words = lora.trigger_words;
+      trigger_words = trigger_words.map((word: string) => word.trim().toLowerCase());
+
+      trigger_words.forEach((element: String) => {
         this.generationRequest.prompt = this.generationRequest.prompt.replace(', ' + element, '');
       });
       this.sharedService.setPrompt(this.generationRequest.prompt);
