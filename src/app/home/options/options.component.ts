@@ -1600,6 +1600,18 @@ export class OptionsComponent implements OnInit {
   }
 
   updateFavoriteImages() {
+    if (this.favoriteSearchQuery){
+      const filteredImages = this.imageHistoryMetadata;
+      this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
+
+      // Only show images that match the search query
+      this.favoriteImageHistoryMetadata = this.favoriteImageHistoryMetadata.filter(image =>
+        image.prompt && image.prompt.toLowerCase().includes(this.favoriteSearchQuery.toLowerCase())
+      );
+    }
+    else {
+      this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
+    }
     this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
 
     if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
@@ -1810,7 +1822,15 @@ export class OptionsComponent implements OnInit {
 
       // **Update the UI or any other necessary actions**
       this.favoriteImageHistoryMetadata = filteredResults;
-      this.updateFavoriteImages();
+      this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
+
+      if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
+        this.favoriteCurrentPageNumber = 1;
+      }
+  
+      this.paginateFavoriteImages(this.favoriteCurrentPageNumber).then(images => {
+        this.favoritePageImages = images;
+      });
 
     } catch (error) {
       console.error("Error accessing database:", error);
