@@ -93,6 +93,17 @@ export class OptionsComponent implements OnInit {
   imageHistoryMetadata: MobiansImageMetadata[] = [];
   blobUrls: string[] = [];
 
+  // For Favorites tab
+  favoritePageImages: MobiansImage[] = [];
+  favoriteCurrentPageNumber: number = 1;
+  favoriteTotalPages: number = 1;
+  favoriteImagesPerPage: number = 4;
+  favoriteSearchQuery: string = '';
+  debouncedFavoriteSearch: () => void;
+
+  // For storing favorite images metadata
+  favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
+
   // New properties for menus
   showOptions: boolean = false;
   showHistory: boolean = false;
@@ -154,6 +165,10 @@ export class OptionsComponent implements OnInit {
       this.searchImages();
     }, 300); // Wait for 300ms after the last keystroke before searching
 
+    this.debouncedFavoriteSearch = this.debounce(() => {
+      this.favoriteSearchImages();
+    }, 300); // Wait for 300ms after the last keystroke before searching
+
     this.blobMigrationService.progress$.subscribe(
       () => {
         this.showMigration = true;
@@ -176,7 +191,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 32); // Increment version number
+      const request = indexedDB.open(this.dbName, 36); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -226,10 +241,35 @@ export class OptionsComponent implements OnInit {
               (store as any).createIndex('promptFullText', 'prompt', { type: 'text' });
               console.log("Full-text prompt index created");
             }
+
+            // Create 'favorite' index if it doesn't exist
+            if (!store.indexNames.contains('favorite')) {
+              store.createIndex('favorite', 'favorite', { unique: false });
+              console.log("Favorite index created");
+            }
           } catch (error) {
             console.warn("Full-text index not supported in this browser:", error);
           }
 
+          // Iterate over all existing records and set 'favorite' to false if missing
+          try {
+            const allRequest = store.getAll();
+            allRequest.onsuccess = () => {
+              const allRecords = allRequest.result as MobiansImage[];
+              allRecords.forEach(record => {
+                if (typeof record.favorite !== 'boolean') {
+                  record.favorite = false;
+                  store.put(record);
+                }
+              });
+              console.log("All existing records have been initialized with 'favorite' property.");
+            };
+            allRequest.onerror = (event) => {
+              console.error("Error initializing 'favorite' property for existing records:", event);
+            };
+          } catch (error) {
+            console.error("Error during records initialization:", error);
+          }
         }
       };
 
@@ -334,6 +374,10 @@ export class OptionsComponent implements OnInit {
 
     this.debouncedSearch = this.debounce(() => {
       this.searchImages();
+    }, 300); // Wait for 300ms after the last keystroke before searching
+
+    this.debouncedFavoriteSearch = this.debounce(() => {
+      this.favoriteSearchImages();
     }, 300); // Wait for 300ms after the last keystroke before searching
 
     try {
@@ -809,7 +853,7 @@ export class OptionsComponent implements OnInit {
 
             // Add the images to the image history metadata
             this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
-              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width };
+              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false };
             }));
 
             try {
@@ -1043,7 +1087,7 @@ export class OptionsComponent implements OnInit {
                 aspectRatio: item.aspectRatio,
                 width: item.width,
                 height: item.height,
-                base64: ""
+                favorite: item.favorite
               }));
               console.log('Full-text search results:', projectedResults);
               console.log('Number of results:', projectedResults.length);
@@ -1088,11 +1132,14 @@ export class OptionsComponent implements OnInit {
 
       // ... (rest of your code for sorting and pagination)
       this.imageHistoryMetadata = results;
+      this.favoriteImageHistoryMetadata = results.filter(image => image.favorite);
       this.currentPageNumber = 1;
       this.totalPages = Math.ceil(results.length / this.imagesPerPage);
 
       // Load the first page of images
       this.currentPageImages = await this.paginateImages(1);
+
+      this.updateFavoriteImages();
 
     } catch (error) {
       console.error("Error accessing database:", error);
@@ -1253,10 +1300,13 @@ export class OptionsComponent implements OnInit {
         continue; // Skip the reference image
       }
 
-      image.base64 = ''; // Clear the base64 data
+      // Skip the wipe if the image is in the current favorite list page
+      if (this.favoriteImageHistoryMetadata.find(item => item.UUID === image.UUID)) {
+        continue;
+      }
+
+      URL.revokeObjectURL(image.url!);
       image.url = ''; // Clear the URL
-      // image.prompt = ''; // Clear the prompt
-      // image.promptSummary = ''; // Clear the prompt summary
     }
     return images;
   }
@@ -1470,4 +1520,309 @@ export class OptionsComponent implements OnInit {
     this.displayModal = false;
     this.selectedImageUrl = null;
   }
+
+  //#region Favorite Images
+  toggleFavorite(image: MobiansImage) {
+    image.favorite = !image.favorite;
+    this.updateImageInDB(image);
+    this.updateFavoriteImages();
+  }
+
+  async deleteImage(image: MobiansImage) {
+    // Remove from current images arrays
+    this.currentPageImages = this.currentPageImages.filter(img => img.UUID !== image.UUID);
+    this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => img.UUID !== image.UUID);
+
+    // Update total pages
+    this.totalPages = Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage);
+
+    // Delete from favorites if necessary
+    if (image.favorite) {
+      this.favoritePageImages = this.favoritePageImages.filter(img => img.UUID !== image.UUID);
+      this.favoriteImageHistoryMetadata = this.favoriteImageHistoryMetadata.filter(img => img.UUID !== image.UUID);
+      this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
+    }
+
+    // Delete the image from IndexedDB
+    this.deleteImageFromDB(image);
+
+    // After deleting a single image we want to load the next image into this page to replace the deleted one if there are any
+    const nextImageIndex = this.imagesPerPage * (this.currentPageNumber) - 1;
+    if (this.imageHistoryMetadata.length > nextImageIndex) {
+      await this.loadImageData(this.imageHistoryMetadata[nextImageIndex]);
+      this.currentPageImages.push(this.imageHistoryMetadata[nextImageIndex]);
+    }
+
+    // Do the same for the favorite images
+    const nextFavoriteImageIndex = this.favoriteImagesPerPage * (this.favoriteCurrentPageNumber) - 1;
+    if (this.favoriteImageHistoryMetadata.length > nextFavoriteImageIndex) {
+      await this.loadImageData(this.favoriteImageHistoryMetadata[nextFavoriteImageIndex]);
+      this.favoritePageImages.push(this.favoriteImageHistoryMetadata[nextFavoriteImageIndex]);
+    }
+  }
+
+  async updateImageInDB(image: MobiansImage) {
+    try {
+      // Remove excess fields, we only need the favorite field
+      let imageMetadata: MobiansImage = { ...image };
+      if (imageMetadata.blob) {
+        delete imageMetadata.blob;
+      }
+      if (imageMetadata.url) {
+        delete imageMetadata.url;
+      }
+
+      const db = await this.getDatabase();
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      store.put(imageMetadata);
+      console.log('Image favorited:', imageMetadata);
+    } catch (error) {
+      console.error('Failed to update image in IndexedDB', error);
+    }
+  }
+
+  async deleteImageFromDB(image: MobiansImage) {
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const blobStore = transaction.objectStore('blobStore');
+
+      // Delete from metadata store
+      store.delete(image.UUID!);
+
+      // Delete from blobStore
+      blobStore.delete(image.UUID!);
+    } catch (error) {
+      console.error('Failed to delete image from IndexedDB', error);
+    }
+  }
+
+  updateFavoriteImages() {
+    this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
+
+    if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
+      this.favoriteCurrentPageNumber = 1;
+    }
+
+    this.paginateFavoriteImages(this.favoriteCurrentPageNumber).then(images => {
+      this.favoritePageImages = images;
+    });
+  }
+
+  async paginateFavoriteImages(pageNumber: number): Promise<MobiansImage[]> {
+    try {
+      const queriedImages = await this.loadFavoriteImagePage(pageNumber);
+      return queriedImages;
+    } catch (error) {
+      console.error('Error in paginateFavoriteImages:', error);
+      throw error;
+    }
+  }
+
+  async loadFavoriteImagePage(pageNumber: number) {
+    const images = this.favoriteImageHistoryMetadata.slice(
+      (pageNumber - 1) * this.favoriteImagesPerPage,
+      pageNumber * this.favoriteImagesPerPage
+    );
+    const uuids = images.map(image => image.UUID);
+
+    let intermediateImages: any[] = [...images];
+
+    try {
+      const db = await this.openDatabase();
+      const transaction = db.transaction('blobStore', 'readonly');
+      const store = transaction.objectStore('blobStore');
+
+      const requests = uuids.map((uuid, index) => {
+        return new Promise((resolve, reject) => {
+          const request = store.get(uuid);
+          request.onsuccess = async (event) => {
+            const result = request.result;
+            if (result) {
+              let blob = result.blob;
+              intermediateImages[index].url = URL.createObjectURL(blob);
+              this.blobUrls.push(intermediateImages[index].url);
+            }
+            resolve(undefined);
+          };
+          request.onerror = () => {
+            reject(`Failed to load image data for UUID: ${uuid}`);
+          };
+        });
+      });
+
+      await Promise.all(requests);
+
+    } catch (error) {
+      console.error('Failed to load image data', error);
+    }
+
+    return intermediateImages;
+  }
+
+  async previousFavoritePage() {
+    this.favoriteCurrentPageNumber--;
+    this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+  }
+
+  async nextFavoritePage() {
+    this.favoriteCurrentPageNumber++;
+    this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+  }
+
+  async favoriteSearchImages() {
+    this.isSearching = true;
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+
+      const query = this.favoriteSearchQuery.trim().toLowerCase();
+      console.log('Doing favorite Search query:', query);
+
+      let favoritedResults: MobiansImage[] = [];
+
+      // Helper function to project results
+      const projectResults = (searchResults: MobiansImage[]): MobiansImage[] => {
+        return searchResults.map(item => ({
+          UUID: item.UUID,
+          prompt: item.prompt,
+          promptSummary: item.prompt?.slice(0, 50) + '...', // Truncate prompt summary
+          timestamp: item.timestamp,
+          aspectRatio: item.aspectRatio,
+          width: item.width,
+          height: item.height,
+          favorite: item.favorite
+        }));
+      };
+
+      // **Step 1: Fetch Favorited Images**
+      if (store.indexNames.contains('favorite') && 'getAll' in IDBIndex.prototype) {
+        try {
+          const favoriteIndex = store.index('favorite');
+          console.log('Using favorite index:', favoriteIndex.name);
+
+          const favRequest = favoriteIndex.getAll(IDBKeyRange.only(true));
+
+          favoritedResults = await new Promise<MobiansImage[]>((resolve, reject) => {
+            favRequest.onsuccess = () => {
+              const favResults = favRequest.result as MobiansImage[];
+              const projectedFavResults = projectResults(favResults);
+              console.log('Favorited images:', projectedFavResults);
+              console.log('Number of favorited images:', projectedFavResults.length);
+              resolve(projectedFavResults);
+            };
+            favRequest.onerror = (event) => {
+              console.error('Error fetching favorited images:', event);
+              reject(favRequest.error);
+            };
+          });
+        } catch (error) {
+          console.warn("Fetching favorited images failed:", error);
+          // **Fallback: Use a cursor to iterate and find favorited images**
+          favoritedResults = await new Promise<MobiansImage[]>((resolve, reject) => {
+            const favResults: MobiansImage[] = [];
+            const cursorRequest = store.openCursor();
+
+            cursorRequest.onsuccess = (event) => {
+              const cursor = (event.target as IDBRequest).result;
+              if (cursor) {
+                const image = cursor.value as MobiansImage;
+                if (image.favorite === true) { // Explicitly check for true
+                  favResults.push({
+                    UUID: image.UUID,
+                    prompt: image.prompt,
+                    promptSummary: image.prompt?.slice(0, 50) + '...',
+                    timestamp: image.timestamp,
+                    aspectRatio: image.aspectRatio,
+                    width: image.width,
+                    height: image.height,
+                    favorite: image.favorite
+                  });
+                }
+                cursor.continue();
+              } else {
+                console.log('Cursor iteration complete. Favorited images:', favResults);
+                resolve(favResults);
+              }
+            };
+
+            cursorRequest.onerror = (event) => {
+              console.error('Error iterating with cursor:', event);
+              reject(cursorRequest.error);
+            };
+          });
+        }
+      } else {
+        console.log('Favorite index not available, using cursor to fetch favorited images');
+        // **Fallback: Use a cursor to iterate and find favorited images**
+        favoritedResults = await new Promise<MobiansImage[]>((resolve, reject) => {
+          const favResults: MobiansImage[] = [];
+          const cursorRequest = store.openCursor();
+
+          cursorRequest.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest).result;
+            if (cursor) {
+              const image = cursor.value as MobiansImage;
+              if (image.favorite === true) { // Explicitly check for true
+                favResults.push({
+                  UUID: image.UUID,
+                  prompt: image.prompt,
+                  promptSummary: image.prompt?.slice(0, 50) + '...',
+                  timestamp: image.timestamp,
+                  aspectRatio: image.aspectRatio,
+                  width: image.width,
+                  height: image.height,
+                  favorite: image.favorite
+                });
+              }
+              cursor.continue();
+            } else {
+              console.log('Cursor iteration complete. Favorited images:', favResults);
+              resolve(favResults);
+            }
+          };
+
+          cursorRequest.onerror = (event) => {
+            console.error('Error iterating with cursor:', event);
+            reject(cursorRequest.error);
+          };
+        });
+      }
+
+      // **Step 2: Apply Prompt Search Filter to Favorited Images**
+      let filteredResults = favoritedResults.filter(image =>
+        image.prompt && image.prompt.toLowerCase().includes(query)
+      );
+
+      // **Step 3: Sort the Results by Timestamp (Descending)**
+      filteredResults.sort((a, b) => {
+        const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
+        const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+        return timestampB - timestampA;
+      });
+
+      console.log('Filtered results:', filteredResults.length);
+      const memoryUsage = this.memoryUsageService.roughSizeOfArrayOfObjects(filteredResults);
+      console.log(`Approximate memory usage: ${memoryUsage} bytes`);
+
+      // **Update the UI or any other necessary actions**
+      this.favoriteImageHistoryMetadata = filteredResults;
+      this.updateFavoriteImages();
+
+    } catch (error) {
+      console.error("Error accessing database:", error);
+      // **Optional: Provide Error Feedback**
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Search Failed',
+        detail: 'Unable to perform favorite image search.'
+      });
+    } finally {
+      this.isSearching = false;
+    }
+  }
+  //#endregion  
 }

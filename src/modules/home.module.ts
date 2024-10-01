@@ -28,6 +28,7 @@ import { DialogModule } from 'primeng/dialog';
 import { TableModule } from 'primeng/table';
 import { PanelModule } from 'primeng/panel';
 import { ChipModule } from 'primeng/chip';
+import { TabViewModule } from 'primeng/tabview';
 import { RouterModule } from '@angular/router';
 
 
@@ -60,6 +61,7 @@ import { RouterModule } from '@angular/router';
     TableModule,
     PanelModule,  
     ChipModule,
+    TabViewModule,
     RouterModule,
   ],
   exports: [

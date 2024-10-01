@@ -23,6 +23,57 @@ body {
   margin: 0 auto;
 }
 
+
+/* Make each tab item take equal space */
+.p-tabview .p-tabview-nav li {
+  flex: 1;
+  text-align: center; /* Center the tab text */
+}
+
+/* Ensure the anchor fills the entire tab */
+.p-tabview .p-tabview-nav li a {
+  display: block;
+  width: 100%;
+  padding: 1em 0; /* Adjust padding for vertical spacing */
+  color: white; /* Optional: Change text color for better contrast */
+}
+
+/* Image History Panel Tabs */
+.p-tabview .p-tabview-nav {
+  background-color: #3880ec;
+  margin-bottom: 0;
+  padding-left: 0;
+  border: 1px solid deepskyblue;
+  border-width: 0 0 2px 0;
+  display: flex;
+}
+
+.p-tabview .p-tabview-nav li a {
+  background-color: #2fa5e9;
+  color: #fff; /* Optional: Change text color for better contrast */
+}
+
+.p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  border: solid deepskyblue;
+  border-width: 0 0 2px 0;
+}
+
+.p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  border: solid #3880ec;
+  border-width: 0 0 2px 0;
+  background: #3880ec;
+}
+
+.p-tabview .p-tabview-panels {
+  background-color: #3880ec;
+  color:#000;
+}
+
+.p-tabview .p-tabview-panel {
+  background-color: #3880ec;
+}
+
+
 @media (max-width: 768px) {
   .page-container {
     padding: 1rem;
