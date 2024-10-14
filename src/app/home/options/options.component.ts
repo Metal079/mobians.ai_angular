@@ -37,6 +37,7 @@ export class OptionsComponent implements OnInit {
     "fluffySonic": "SD 1.5",
     "sonicDiffusionXL": "Pony",
     "autismMix": "Pony",
+    "fluffySonicXL": "Pony",
   }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;

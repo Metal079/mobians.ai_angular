@@ -167,6 +167,7 @@
       <option value="fluffySonic">fluffySonic</option>
       <option value="sonicDiffusionXL">sonicDiffusionXL</option>
       <option value="autismMix">autismMix</option>
+      <option value="fluffySonicXL">fluffySonicXL</option>
     </select>
 
     <label for="floatingSelect">Image aspect-ratio</label>
@@ -311,13 +312,13 @@
               <div class="top-left-icon">
                 <i
                   class="fa"
-                  [ngClass]="image.favorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"
+                  [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="toggleFavorite(image)"
                   aria-label="Toggle Favorite"
                 ></i>
               </div>
               <div class="top-right-icon">
-                <i class="fa-solid fa-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
+                <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
               </div>
             </div>
             <div class="history-details">
@@ -355,13 +356,13 @@
               <div class="top-left-icon">
                 <i
                   class="fa"
-                  [ngClass]="image.favorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"
+                  [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="toggleFavorite(image)"
                   aria-label="Toggle Favorite"
                 ></i>
               </div>
               <div class="top-right-icon">
-                <i class="fa-solid fa-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
+                <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
               </div>
             </div>
             <div class="history-details">
