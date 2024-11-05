@@ -24,12 +24,13 @@ import { OverlayPanelModule } from 'primeng/overlaypanel';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
-import { DialogModule } from 'primeng/dialog'; 
+import { DialogModule } from 'primeng/dialog';
 import { TableModule } from 'primeng/table';
 import { PanelModule } from 'primeng/panel';
 import { ChipModule } from 'primeng/chip';
 import { TabViewModule } from 'primeng/tabview';
 import { RouterModule } from '@angular/router';
+import { MessagesModule } from 'primeng/messages';
 
 
 @NgModule({
@@ -38,7 +39,7 @@ import { RouterModule } from '@angular/router';
     OptionsComponent,
     FaqComponent,
     ImageModalComponent,
-    GligenDisplayComponent, 
+    GligenDisplayComponent,
     InpaintingDisplayComponent,
     AddLorasComponent,
   ],
@@ -59,17 +60,18 @@ import { RouterModule } from '@angular/router';
     ProgressSpinnerModule,
     DialogModule,
     TableModule,
-    PanelModule,  
+    PanelModule,
     ChipModule,
     TabViewModule,
     RouterModule,
+    MessagesModule,
   ],
   exports: [
     ImageGridComponent,
     OptionsComponent,
     FaqComponent,
     ImageModalComponent,
-    GligenDisplayComponent, 
+    GligenDisplayComponent,
     InpaintingDisplayComponent,
     OverlayPanelModule,
     InputTextModule,

@@ -192,7 +192,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 36); // Increment version number
+      const request = indexedDB.open(this.dbName, 37); // Increment version number
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -204,8 +204,20 @@ export class OptionsComponent implements OnInit {
         resolve(db);
       };
 
-      request.onupgradeneeded = async (event) => {
+      request.onupgradeneeded = (event) => {
         const db = request.result;
+
+        // Now, wait for the transaction to complete
+        const upgradeTransaction = request.transaction;
+
+        upgradeTransaction!.oncomplete = () => {
+          console.log("Upgrade transaction completed.");
+        };
+
+        upgradeTransaction!.onerror = (event) => {
+          console.error("Upgrade transaction failed:", event);
+          reject(new Error("Upgrade transaction failed"));
+        };
 
         // Create the main object store if it doesn't exist
         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -222,8 +234,6 @@ export class OptionsComponent implements OnInit {
         const transaction = (event.target as IDBOpenDBRequest).transaction;
         if (transaction) {
           const store = transaction.objectStore(this.storeName);
-          const base64Store = transaction.objectStore('base64Store');
-          const blobStore = transaction.objectStore('blobStore'); // Added this line
 
           if (!store.indexNames.contains('timestamp')) {
             store.createIndex('timestamp', 'timestamp', { unique: false });
@@ -288,6 +298,11 @@ export class OptionsComponent implements OnInit {
 
     let cursorPosition: IDBValidKey | undefined = undefined;
     let hasMore = true;
+
+    if (!db.objectStoreNames.contains('base64Store')) {
+      console.log("No base64Store object store found. Migration not required.");
+      return
+    }
 
     while (hasMore) {
       const batch = await this.readBatch(db, cursorPosition, batchSize);
@@ -481,6 +496,7 @@ export class OptionsComponent implements OnInit {
 
     // Remove any selected loras that are not available for the selected model
     this.selectedLoras = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
+    this.generationRequest.loras = this.selectedLoras;
   }
 
   changeAspectRatioSelector(event: any) {
@@ -1828,7 +1844,7 @@ export class OptionsComponent implements OnInit {
       if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
         this.favoriteCurrentPageNumber = 1;
       }
-  
+
       this.paginateFavoriteImages(this.favoriteCurrentPageNumber).then(images => {
         this.favoritePageImages = images;
       });
@@ -1845,5 +1861,5 @@ export class OptionsComponent implements OnInit {
       this.isSearching = false;
     }
   }
-  //#endregion  
+  //#endregion
 }

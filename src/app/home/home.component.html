@@ -1,6 +1,13 @@
+<p-messages *ngIf="!loginInfo"
+  [value]="headerMessage"
+  [closable]="true"
+  [key]="'msgKey'"
+  [escape]="false"
+></p-messages>
+
 <app-image-modal></app-image-modal>
 <div id="generation-space">
-  <div id="image-rating-section">
+    <div id="image-rating-section">
     <app-image-grid
       [showLoading]="showLoading"
       [aspectRatio]="aspectRatio"
