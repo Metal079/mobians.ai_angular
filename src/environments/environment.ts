@@ -1,7 +1,7 @@
 export const environment = {
     production: false,
     discordRedirectUri: 'http://localhost:4200/',  // Replace with your development redirect URI
-    apiBaseUrl: 'http://localhost:9000',
+    apiBaseUrl: 'http://localhost:9001',
     isDevJob: true,
   };
   
