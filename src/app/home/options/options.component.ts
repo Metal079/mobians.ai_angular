@@ -112,6 +112,9 @@ export class OptionsComponent implements OnInit {
   availableLoras: string[] = ['Loras1', 'Loras2', 'Loras3']; // Example Loras names
 
   // loras info
+  showNSFWLoras: boolean = false;
+  loraTagOptions: { optionLabel: string, optionValue: string, count: number }[] = [];
+  selectedTags: string[] = [];
   loras: any[] = [];
   loraSearchQuery: string = '';
   filteredLoras: any[] = [];
@@ -493,6 +496,7 @@ export class OptionsComponent implements OnInit {
     }
 
     this.filterLoras();
+    this.refreshLoraFiltersList();
 
     // Remove any selected loras that are not available for the selected model
     this.selectedLoras = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
@@ -586,6 +590,9 @@ export class OptionsComponent implements OnInit {
 
     // Save model
     localStorage.setItem("model", this.generationRequest.model);
+
+    // Save showNSFWLoras
+    localStorage.setItem("showNSFWLoras", this.showNSFWLoras.toString());
   }
 
   // Load session storage info of changed settings
@@ -618,6 +625,9 @@ export class OptionsComponent implements OnInit {
     if (localStorage.getItem("lossy-images") != null) {
       this.generationRequest.lossy_images = localStorage.getItem("lossy-images") == 'true';
     }
+    if (localStorage.getItem("showNSFWLoras") != null) {
+      this.showNSFWLoras = localStorage.getItem("showNSFWLoras") == 'true';
+    }
 
     try {
       // Use the new queryImages function to load the initial set of images
@@ -639,6 +649,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("aspect-ratio");
     localStorage.removeItem("fast-pass-code");
     localStorage.removeItem('discordUserData');
+    localStorage.removeItem('showNSFWLoras');
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
@@ -646,6 +657,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.guidance_scale = 7;
     this.generationRequest.model = "sonicDiffusionV4";
     this.loginInfo = null;
+    this.showNSFWLoras = false;
     this.sharedService.setUserData(null);
     this.changeAspectRatio("square");
 
@@ -1437,6 +1449,7 @@ export class OptionsComponent implements OnInit {
       next: (response: any[]) => {
         this.loras = response;
         this.filterLoras();
+        this.refreshLoraFiltersList();
       },
       error: (error) => {
         console.error('Error loading Loras:', error);
@@ -1448,6 +1461,11 @@ export class OptionsComponent implements OnInit {
     // First filter by model type
     this.filteredLoras = this.loras.filter(lora => lora.base_model === this.models_types[this.generationRequest.model]);
 
+    // Filter by nsfw (ie. Hide nsfw if showNSFWLoras is false)
+    if (!this.showNSFWLoras) {
+      this.filteredLoras = this.filteredLoras.filter(lora => !lora.is_nsfw);
+    }
+
     // Then filter by search query
     this.filteredLoras = this.filteredLoras.filter(lora =>
       (lora.name.toLowerCase().includes(this.loraSearchQuery.toLowerCase()) || lora.version.toLowerCase().includes(this.loraSearchQuery.toLowerCase()))
@@ -1455,6 +1473,11 @@ export class OptionsComponent implements OnInit {
 
     // Sort by most uses
     this.filteredLoras = this.filteredLoras.sort((a, b) => b.uses - a.uses);
+
+    // Filter by selected filters
+    if (this.selectedTags.length > 0) {
+      this.filteredLoras = this.filteredLoras.filter(lora => lora.tags.some((tag: string) => this.selectedTags.includes(tag)));
+    }
   }
 
   // Function to select a LoRA
@@ -1617,7 +1640,7 @@ export class OptionsComponent implements OnInit {
   }
 
   updateFavoriteImages() {
-    if (this.favoriteSearchQuery){
+    if (this.favoriteSearchQuery) {
       const filteredImages = this.imageHistoryMetadata;
       this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
 
@@ -1862,4 +1885,46 @@ export class OptionsComponent implements OnInit {
     }
   }
   //#endregion
+
+  toggleFilter(filter: string) {
+    const index = this.selectedTags.indexOf(filter);
+    if (index > -1) {
+      // If filter is already active, remove it
+      this.selectedTags.splice(index, 1);
+    } else {
+      // Otherwise, add it
+      this.selectedTags.push(filter);
+    }
+    this.filterLoras();
+  }
+
+  refreshLoraFiltersList() {
+    // Start fresh
+    this.loraTagOptions = [];
+  
+    // First, just count occurrences
+    this.filteredLoras.forEach((lora: any) => {
+      lora.tags.forEach((tag: string) => {
+        // Try to find existing option by optionValue (which we won't alter later)
+        let existing = this.loraTagOptions.find(option => option.optionValue === tag);
+        if (!existing) {
+          this.loraTagOptions.push({ 
+            optionLabel: tag, 
+            optionValue: tag, // keep original tag here for lookups 
+            count: 1 
+          });
+        } else {
+          existing.count++;
+        }
+      });
+    });
+  
+    // Sort by count now that counting is complete
+    this.loraTagOptions.sort((a, b) => b.count - a.count);
+  
+    // Now, after sorting and finalizing counts, modify the displayed label
+    this.loraTagOptions.forEach(option => {
+      option.optionLabel = `${option.optionValue} (${option.count})`;
+    });
+  }
 }

@@ -26,6 +26,10 @@ import { DialogService } from 'primeng/dynamicdialog';
 import { PanelModule } from 'primeng/panel';
 import { ChipModule } from 'primeng/chip';
 import { DialogModule } from 'primeng/dialog'; 
+import { InputSwitchModule } from 'primeng/inputswitch';
+import { SelectButtonModule } from 'primeng/selectbutton';
+import { ChipsModule } from 'primeng/chips';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 
 const routes: Routes = [
@@ -56,6 +60,10 @@ const routes: Routes = [
         ChipModule,
         ButtonModule,
         DialogModule,  
+        InputSwitchModule,
+        SelectButtonModule,
+        ChipsModule,
+        MultiSelectModule,
         FileUploadModule,
         AccordionModule,
         ImageModule,
