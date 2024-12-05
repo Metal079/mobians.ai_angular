@@ -88,74 +88,6 @@
   </div>
 </div>
 
-<!-- Loras Content Panel -->
-<div class="collapse w-100" id="lorasCollapse">
-  <div class="card card-body" id="lorasDropdown">
-    <p>
-      Select and apply LoRAs to your image generation
-      <span class="ms-1 text-primary"
-        pTooltip="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."
-        tooltipPosition="top" style="
-          background-color: rgba(255, 255, 255, 0.8);
-          padding: 2px 4px;
-          border-radius: 50%;
-          cursor: pointer;
-        ">
-        ?
-      </span>
-    </p>
-
-    <!-- Search and Add Custom LoRA -->
-    <div class="d-flex justify-content-between mb-3">
-      <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [(ngModel)]="loraSearchQuery"
-        (ngModelChange)="filterLoras()">
-      <button class="btn btn-primary" type="button" (click)="openAddLorasDialog()">
-        Request LoRAs!
-      </button>
-    </div>
-
-    <!-- Full-Sized Image Dialog -->
-    <p-dialog [(visible)]="displayModal" [modal]="true" [closable]="true" [style]="{width: 'auto'}">
-      <ng-template pTemplate="header">
-        <h5>Full Lora Preview</h5>
-      </ng-template>
-      <ng-template pTemplate="content">
-        <img [src]="selectedImageUrl" alt="Full Lora Preview" class="img-fluid">
-      </ng-template>
-    </p-dialog>
-
-    <!-- LoRAs Grid -->
-    <div class="loras-grid">
-      <div *ngFor="let lora of filteredLoras" class="lora-card">
-        <img [src]="lora.image_url" [alt]="lora.name" class="lora-image"
-          (click)="openImageModalLoraPreview(lora.image_url)">
-        <div class="lora-info">
-          <h5 class="lora-name">{{ lora.name }}</h5>
-          <p class="lora-version">{{ lora.version }}</p>
-        </div>
-        <button class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">Select</button>
-      </div>
-    </div>
-
-    <!-- Selected LoRA Display with Sliders -->
-    <div *ngIf="selectedLoras.length > 0" class="mt-3">
-      <h6>Selected LoRAs:</h6>
-      <div *ngFor="let loraItem of selectedLoras" class="selected-lora-item">
-        <div class="d-flex align-items-center">
-          <img [src]="loraItem.image_url" [alt]="loraItem.name" class="selected-lora-image">
-          <div class="selected-lora-details">
-            <h5 class="lora-name">{{ loraItem.name }}</h5>
-            <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
-              (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
-            <span>Strength: {{ loraItem.strength }}</span>
-          </div>
-          <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Options Content Panel -->
 <div class="collapse w-100" id="collapseExample">
   <div class="card card-body">
@@ -292,7 +224,6 @@
 </div>
 
 <!-- Image History Content Panel -->
-<!-- Image History Content Panel -->
 <div class="collapse w-100" id="historyCollapse">
   <div class="card card-body">
     <p-tabView>
@@ -310,12 +241,8 @@
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="top-left-icon">
-                <i
-                  class="fa"
-                  [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                  (click)="toggleFavorite(image)"
-                  aria-label="Toggle Favorite"
-                ></i>
+                <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
+                  (click)="toggleFavorite(image)" aria-label="Toggle Favorite"></i>
               </div>
               <div class="top-right-icon">
                 <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
@@ -354,12 +281,8 @@
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="top-left-icon">
-                <i
-                  class="fa"
-                  [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                  (click)="toggleFavorite(image)"
-                  aria-label="Toggle Favorite"
-                ></i>
+                <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
+                  (click)="toggleFavorite(image)" aria-label="Toggle Favorite"></i>
               </div>
               <div class="top-right-icon">
                 <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
@@ -387,5 +310,84 @@
   </div>
 </div>
 
+<!-- Loras Content Panel -->
+<div class="collapse w-100" id="lorasCollapse">
+  <div class="card card-body" id="lorasDropdown">
+    <p class="d-flex justify-content-between" [style]="{ marginBottom: '0px' }">
+      <span>
+        View and apply LoRAs to your image generation
+        <span class="ms-1 text-primary"
+          pTooltip="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."
+          tooltipPosition="top" style="
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 1px 6px; 
+            border-radius: 50%;
+            cursor: pointer;
+          ">
+          ?
+        </span>
+      </span>
+      <span class="d-flex" [style]="{ marginLeft: '5px' }">
+        Show NSFW Loras?
+        <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (click)="filterLoras()"></p-inputSwitch>
+      </span>
+    </p>
+
+    <!-- Tag Selection Buttons -->
+    <p-multiSelect [options]="loraTagOptions" [(ngModel)]="selectedTags" optionLabel="optionLabel"
+      optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43" placeholder="Filter Loras by tags"
+      [style]="{ width: '100%', marginBottom: '10px' }" (onChange)="filterLoras()">
+    </p-multiSelect>
+
+    <!-- Search and Add Custom LoRA -->
+    <div class="d-flex justify-content-between mb-3">
+      <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [(ngModel)]="loraSearchQuery"
+        (ngModelChange)="filterLoras()">
+    </div>
+
+    <!-- Full-Sized Image Dialog -->
+    <p-dialog [(visible)]="displayModal" [modal]="true" [closable]="true" [style]="{width: 'auto'}">
+      <ng-template pTemplate="header">
+        <h5>Full Lora Preview</h5>
+      </ng-template>
+      <ng-template pTemplate="content">
+        <img [src]="selectedImageUrl" alt="Full Lora Preview" class="img-fluid">
+      </ng-template>
+    </p-dialog>
+
+    <!-- LoRAs Grid -->
+    <div class="loras-grid">
+      <button class="btn btn-primary lora-request-btn" type="button" (click)="openAddLorasDialog()">
+        Request LoRAs!
+      </button>
+      <div *ngFor="let lora of filteredLoras" class="lora-card">
+        <img [src]="lora.image_url" [alt]="lora.name" class="lora-image"
+          (click)="openImageModalLoraPreview(lora.image_url)">
+        <div class="lora-info">
+          <h5 class="lora-name">{{ lora.name }}</h5>
+          <p class="lora-version">{{ lora.version }}</p>
+        </div>
+        <button class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">Select</button>
+      </div>
+    </div>
+
+    <!-- Selected LoRA Display with Sliders -->
+    <div *ngIf="selectedLoras.length > 0" class="mt-3">
+      <h6>Selected LoRAs:</h6>
+      <div *ngFor="let loraItem of selectedLoras" class="selected-lora-item">
+        <div class="d-flex align-items-center">
+          <img [src]="loraItem.image_url" [alt]="loraItem.name" class="selected-lora-image">
+          <div class="selected-lora-details">
+            <h5 class="lora-name">{{ loraItem.name }}</h5>
+            <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
+              (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
+            <span>Strength: {{ loraItem.strength }}</span>
+          </div>
+          <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <router-outlet></router-outlet>

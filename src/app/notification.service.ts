@@ -12,7 +12,7 @@ export class NotificationService {
   public userId: string = uuidv4();  // Generate a new UUID for the user
 
   //private apiBaseUrl = 'http://76.157.184.213:9000';
-  private apiBaseUrl = 'https://mobians.azurewebsites.net'
+  private apiBaseUrl = 'https://api.mobians.ai';
 
   constructor(private http: HttpClient, private swPush: SwPush) { }
 

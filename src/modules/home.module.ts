@@ -31,6 +31,10 @@ import { ChipModule } from 'primeng/chip';
 import { TabViewModule } from 'primeng/tabview';
 import { RouterModule } from '@angular/router';
 import { MessagesModule } from 'primeng/messages';
+import { InputSwitchModule } from 'primeng/inputswitch';
+import { SelectButtonModule } from 'primeng/selectbutton';
+import { ChipsModule } from 'primeng/chips';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 
 @NgModule({
@@ -65,6 +69,10 @@ import { MessagesModule } from 'primeng/messages';
     TabViewModule,
     RouterModule,
     MessagesModule,
+    InputSwitchModule,
+    SelectButtonModule,
+    MultiSelectModule,
+    ChipsModule,
   ],
   exports: [
     ImageGridComponent,
