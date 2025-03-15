@@ -38,7 +38,7 @@ export class OptionsComponent implements OnInit {
     "sonicDiffusionXL": "Pony",
     "autismMix": "Pony",
     "fluffySonicXL": "Pony",
-    "novaFurryXL_V3": "Illustrious"
+    "novaFurryXL_V5": "Illustrious"
   }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
@@ -489,7 +489,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.model = selectElement.value;
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_V3") {
+    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_V5") {
       this.generationRequest.guidance_scale = 4;
     }
     else {
