@@ -39,33 +39,39 @@ const routes: Routes = [
   { path: 'train/new', component: NewLoraComponent },
 ];
 
-@NgModule({ declarations: [
-        AppComponent,
-        TrainComponent,
-        HomeComponent,
-        NewLoraComponent, // Add this line
-    ],
-    bootstrap: [AppComponent], imports: [BrowserModule,
-        BrowserAnimationsModule,
-        FormsModule,
-        HomeModule,
-        RouterModule.forRoot(routes),
-        ServiceWorkerModule.register('ngsw-worker.js', {
-            enabled: true,
-            registrationStrategy: 'registerWhenStable:30000'
-        }),
-        // PrimeNG modules
-        TableModule,
-        PanelModule,
-        ChipModule,
-        ButtonModule,
-        DialogModule,  
-        InputSwitchModule,
-        SelectButtonModule,
-        ChipsModule,
-        MultiSelectModule,
-        FileUploadModule,
-        AccordionModule,
-        ImageModule,
-        CardModule], providers: [SharedService, DialogService, provideHttpClient(withInterceptorsFromDi())] })
-export class AppModule { }
+@NgModule({
+  declarations: [
+    AppComponent,
+    TrainComponent,
+    HomeComponent,
+    NewLoraComponent, // Add this line
+  ],
+  imports: [
+    BrowserModule,
+    BrowserAnimationsModule,
+    FormsModule,
+    HomeModule,
+    RouterModule.forRoot(routes),
+    ServiceWorkerModule.register('ngsw-worker.js', {
+      enabled: true,
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
+    // PrimeNG modules
+    TableModule,
+    PanelModule,
+    ChipModule,
+    ButtonModule,
+    DialogModule,
+    InputSwitchModule,
+    SelectButtonModule,
+    ChipsModule,
+    MultiSelectModule,
+    FileUploadModule,
+    AccordionModule,
+    ImageModule,
+    CardModule,
+  ],
+  providers: [SharedService, DialogService, provideHttpClient(withInterceptorsFromDi())],
+  bootstrap: [AppComponent],
+})
+export class AppModule {}
