@@ -636,6 +636,10 @@ export class OptionsComponent implements OnInit {
 
   // Reset session storage info of changed settings and reset view
   resetSessionStorage() {
+    // Confirm before clearing saved options
+    if (!confirm('Are you sure you want to reset all saved options? This will clear your saved preferences.')) {
+      return;
+    }
     localStorage.removeItem("prompt-input");
     localStorage.removeItem("negative-prompt-input");
     localStorage.removeItem("custom-denoise");
@@ -1187,7 +1191,7 @@ export class OptionsComponent implements OnInit {
 
   private async fallbackSearch(store: IDBObjectStore, query: string): Promise<MobiansImage[]> {
     const index = store.index('timestamp');
-    return new Promise((resolve, reject) => {
+    return new Promise<MobiansImage[]>((resolve, reject) => {
       const cursorRequest = index.openCursor(null, 'prev');
       const matchingImages: MobiansImage[] = [];
 
@@ -1374,42 +1378,46 @@ export class OptionsComponent implements OnInit {
   }
 
   async deleteAllImages() {
-    try {
-      const db = await this.getDatabase();
-      let transaction = db.transaction(this.storeName, 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-
-      const request = store.clear();
-
-      request.onsuccess = (event) => {
-        console.log('All images deleted from IndexedDB');
-        this.currentPageImages = [];
-        this.currentPageNumber = 1;
-        this.totalPages = 1;
-      };
-
-      // Delete second table too
-      transaction = db.transaction(this.blobStoreName, 'readwrite');
-      const blobstore = transaction.objectStore(this.blobStoreName);
-      const blobRequest = blobstore.clear();
-
-      blobRequest.onsuccess = (event) => {
-        console.log('All blob data deleted from IndexedDB');
-      };
-
-      request.onerror = (event) => {
-        console.error('Failed to delete images from IndexedDB', event);
-      };
-
-      // Wait for the transaction to complete before proceeding
-      await new Promise((resolve) => {
-        transaction.oncomplete = () => {
-          resolve(undefined);
-        };
-      });
-    } catch (error) {
-      console.error('Failed to open database', error);
+    // Confirm before deleting all images
+    if (!confirm('Are you sure you want to permanently delete your entire image history? This cannot be undone.')) {
+      return;
     }
+     try {
+       const db = await this.getDatabase();
+       let transaction = db.transaction(this.storeName, 'readwrite');
+       const store = transaction.objectStore(this.storeName);
+
+       const request = store.clear();
+
+       request.onsuccess = (event) => {
+         console.log('All images deleted from IndexedDB');
+         this.currentPageImages = [];
+         this.currentPageNumber = 1;
+         this.totalPages = 1;
+       };
+
+       // Delete second table too
+       transaction = db.transaction(this.blobStoreName, 'readwrite');
+       const blobstore = transaction.objectStore(this.blobStoreName);
+       const blobRequest = blobstore.clear();
+
+       blobRequest.onsuccess = (event) => {
+         console.log('All blob data deleted from IndexedDB');
+       };
+
+       request.onerror = (event) => {
+         console.error('Failed to delete images from IndexedDB', event);
+       };
+
+       // Wait for the transaction to complete before proceeding
+       await new Promise((resolve) => {
+         transaction.oncomplete = () => {
+           resolve(undefined);
+         };
+       });
+     } catch (error) {
+       console.error('Failed to open database', error);
+     }
   }
 
   // Example function called after successful Discord login
