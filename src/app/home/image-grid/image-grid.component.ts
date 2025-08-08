@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
@@ -13,7 +13,7 @@ import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
   templateUrl: './image-grid.component.html',
   styleUrls: ['./image-grid.component.css']
 })
-export class ImageGridComponent {
+export class ImageGridComponent implements OnDestroy {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   imagesIDs: string[] = [];
@@ -38,6 +38,8 @@ export class ImageGridComponent {
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
+
+  private objectUrls: string[] = [];
 
   constructor(
     public sharedService: SharedService
@@ -303,6 +305,7 @@ export class ImageGridComponent {
   processFile(file: File) {
     // Create a URL that points to the file
     let url = URL.createObjectURL(file);
+    this.objectUrls.push(url);
 
     // Create new image element to get dimensions
     let img = new Image();
@@ -400,5 +403,13 @@ export class ImageGridComponent {
       this.showReferenceImage = true;
       this.imageExpandedChange.emit(true);
     }
+  }
+
+  ngOnDestroy() {
+    // Revoke any object URLs created for local files to avoid memory leaks
+    this.objectUrls.forEach((u) => {
+      try { URL.revokeObjectURL(u); } catch { /* no-op */ }
+    });
+    this.objectUrls = [];
   }
 }

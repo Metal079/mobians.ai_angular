@@ -18,6 +18,7 @@ import { MemoryUsageService } from 'src/app/memory-usage.service';
 import { DialogService } from 'primeng/dynamicdialog';
 import { AddLorasComponent } from '../add-loras/add-loras.component';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
+import { DestroyRef, inject } from '@angular/core';
 
 
 @Component({
@@ -150,6 +151,7 @@ export class OptionsComponent implements OnInit {
   @Output() imageModalOpen = new EventEmitter<boolean>();
 
   readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
     private stableDiffusionService: StableDiffusionService
@@ -392,16 +394,8 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.prompt = value;
     });
 
-    this.debouncedSearch = this.debounce(() => {
-      this.searchImages();
-    }, 300); // Wait for 300ms after the last keystroke before searching
-
-    this.debouncedFavoriteSearch = this.debounce(() => {
-      this.favoriteSearchImages();
-    }, 300); // Wait for 300ms after the last keystroke before searching
-
     try {
-      await this.openDatabase();
+      await this.getDatabase();
       console.log('Database and object stores created/updated successfully');
 
       // Perform data migration here
@@ -679,7 +673,7 @@ export class OptionsComponent implements OnInit {
     let intermediateImages: any[] = [...images]
 
     try {
-      const db = await this.openDatabase();
+      const db = await this.getDatabase();
       const transaction = db.transaction('blobStore', 'readonly');
       const store = transaction.objectStore('blobStore');
 
@@ -720,7 +714,7 @@ export class OptionsComponent implements OnInit {
     }
 
     try {
-      const db = await this.openDatabase();
+      const db = await this.getDatabase();
       const transaction = db.transaction('blobStore', 'readonly');
       const store = transaction.objectStore('blobStore');
 
@@ -731,8 +725,9 @@ export class OptionsComponent implements OnInit {
         if (result) {
           const blob = result.blob
 
-          // Convert to base64 URL
+          // Convert to object URL and track it for cleanup
           image.url = URL.createObjectURL(blob);
+          this.blobUrls.push(image.url);
         }
       };
 
@@ -743,6 +738,12 @@ export class OptionsComponent implements OnInit {
       });
     } catch (error) {
       console.error('Failed to load image data', error);
+    }
+  }
+
+  private safeRevoke(url?: string) {
+    if (url) {
+      try { URL.revokeObjectURL(url); } catch { /* no-op */ }
     }
   }
 
@@ -841,6 +842,7 @@ export class OptionsComponent implements OnInit {
         tap(response => lastResponse = response),
         // Only continue the stream while the job is incomplete
         takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
+        takeUntilDestroyed(this.destroyRef),
         // Once the stream completes, do any cleanup if necessary
         finalize(async () => {
           if (this.enableNotifications) {
@@ -866,6 +868,10 @@ export class OptionsComponent implements OnInit {
                 url: blobUrl // Generate URL
               };
             });
+            // Track created URLs for later revocation
+            generatedImages.forEach((img: MobiansImage) => {
+              if (img.url) this.blobUrls.push(img.url);
+            });
             this.images = generatedImages;
             this.sharedService.disableInstructions();
             this.sharedService.setImages(this.images);
@@ -887,21 +893,21 @@ export class OptionsComponent implements OnInit {
             }));
 
             try {
-              const db = await this.openDatabase();
-              const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
-              const store = transaction.objectStore(this.storeName);
-              const blobStore = transaction.objectStore('blobStore');
+              const db = await this.getDatabase();
+               const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
+               const store = transaction.objectStore(this.storeName);
+               const blobStore = transaction.objectStore('blobStore');
 
-              for (const image of generatedImages) {
-                // Save the image metadata
-                const imageMetadata = { ...image };
-                delete imageMetadata.blob; // Remove the base64 data from metadata
-                delete imageMetadata.url; // Remove the URL from metadata
-                store.put(imageMetadata);
+               for (const image of generatedImages) {
+                 // Save the image metadata
+                 const imageMetadata = { ...image };
+                 delete imageMetadata.blob; // Remove the base64 data from metadata
+                 delete imageMetadata.url; // Remove the URL from metadata
+                 store.put(imageMetadata);
 
-                // Save the base64 data separately
-                blobStore.put({ UUID: image.UUID, blob: image.blob });
-              }
+                 // Save the base64 data separately
+                 blobStore.put({ UUID: image.UUID, blob: image.blob });
+               }
             } catch (error) {
               console.error('Failed to store image data', error);
             }
@@ -1009,10 +1015,11 @@ export class OptionsComponent implements OnInit {
         if (!this.generationRequest.lossy_images) {
           blob = await this.blobMigrationService.convertWebPToPNG(blob);
 
-          // New url
-          URL.revokeObjectURL(image.url!);
+          // Replace the object URL safely and track the new one
+          this.safeRevoke(image.url);
           const newUrl = URL.createObjectURL(blob);
           image.url = newUrl;
+          this.blobUrls.push(newUrl);
         }
 
         // Set the reference image to the selected image
@@ -1368,7 +1375,7 @@ export class OptionsComponent implements OnInit {
 
   async deleteAllImages() {
     try {
-      const db = await this.openDatabase();
+      const db = await this.getDatabase();
       let transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
 
@@ -1684,29 +1691,31 @@ export class OptionsComponent implements OnInit {
     let intermediateImages: any[] = [...images];
 
     try {
-      const db = await this.openDatabase();
-      const transaction = db.transaction('blobStore', 'readonly');
-      const store = transaction.objectStore('blobStore');
+      const db = await this.getDatabase();
+       const transaction = db.transaction('blobStore', 'readonly');
+       const store = transaction.objectStore('blobStore');
 
-      const requests = uuids.map((uuid, index) => {
-        return new Promise((resolve, reject) => {
-          const request = store.get(uuid);
-          request.onsuccess = async (event) => {
-            const result = request.result;
-            if (result) {
-              let blob = result.blob;
-              intermediateImages[index].url = URL.createObjectURL(blob);
-              this.blobUrls.push(intermediateImages[index].url);
-            }
-            resolve(undefined);
-          };
-          request.onerror = () => {
-            reject(`Failed to load image data for UUID: ${uuid}`);
-          };
-        });
-      });
+       const requests = uuids.map((uuid, index) => {
+         return new Promise((resolve, reject) => {
+           const request = store.get(uuid);
+           request.onsuccess = async (event) => {
+             const result = request.result;
+             if (result) {
+               let blob = result.blob;
 
-      await Promise.all(requests);
+               // Convert to URL
+               intermediateImages[index].url = URL.createObjectURL(blob);
+               this.blobUrls.push(intermediateImages[index].url);
+             }
+             resolve(undefined);
+           };
+           request.onerror = () => {
+             reject(`Failed to load image data for UUID: ${uuid}`);
+           };
+         });
+       });
+
+       await Promise.all(requests);
 
     } catch (error) {
       console.error('Failed to load image data', error);

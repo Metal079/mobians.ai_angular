@@ -9,6 +9,7 @@ import { RouterModule, Routes } from '@angular/router';
 
 import { AppComponent } from './app.component';
 import { ServiceWorkerModule } from '@angular/service-worker';
+import { environment } from 'src/environments/environment';
 
 import { FaqComponent } from './home/faq/faq.component';
 import { TrainComponent } from './train/train.component';
@@ -54,7 +55,7 @@ const routes: Routes = [
         HomeModule,
         RouterModule.forRoot(routes),
         ServiceWorkerModule.register('ngsw-worker.js', {
-            enabled: true,
+            enabled: environment.production,
             registrationStrategy: 'registerWhenStable:30000'
         }),
         // PrimeNG modules
