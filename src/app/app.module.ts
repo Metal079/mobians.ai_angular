@@ -14,6 +14,7 @@ import { FaqComponent } from './home/faq/faq.component';
 import { TrainComponent } from './train/train.component';
 import { NewLoraComponent } from './train/new-lora/new-lora.component';
 import { HomeComponent } from './home/home.component';
+import { AdminComponent } from './admin/admin.component';
 
 // PrimeNG imports
 import { TableModule } from 'primeng/table';
@@ -37,6 +38,7 @@ const routes: Routes = [
   { path: 'faq', component: FaqComponent },
   { path: 'train', component: TrainComponent },
   { path: 'train/new', component: NewLoraComponent },
+  { path: 'admin', component: AdminComponent },
 ];
 
 @NgModule({ declarations: [
@@ -44,6 +46,7 @@ const routes: Routes = [
         TrainComponent,
         HomeComponent,
         NewLoraComponent, // Add this line
+        AdminComponent,
     ],
     bootstrap: [AppComponent], imports: [BrowserModule,
         BrowserAnimationsModule,
