@@ -34,12 +34,24 @@ export class ImageGridComponent implements OnDestroy {
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
+  @Input() etaSeconds?: number;
 
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();
   @Output() inpaint_mask = new EventEmitter<string>();
   @Output() imageExpandedChange = new EventEmitter<boolean>();
 
   private objectUrls: string[] = [];
+
+  // Formats ETA seconds into mm:ss
+  formatEta(seconds?: number): string {
+    if (seconds == null || !isFinite(seconds)) return '';
+    const s = Math.max(0, Math.floor(seconds));
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    const mm = m.toString();
+    const ss = sec < 10 ? '0' + sec : sec.toString();
+    return `${mm}m ${ss}s`;
+  }
 
   constructor(
     public sharedService: SharedService

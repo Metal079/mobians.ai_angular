@@ -13,7 +13,8 @@
       <div class="spinner-border text-primary" role="status"></div>
       <!-- Loading text -->
       <div id="queue-position">
-        {{queuePosition ? 'Queue Position: ' + queuePosition : 'Generating images...'}}
+        {{ queuePosition ? 'Queue Position: ' + queuePosition : 'Generating images...' }}
+        <div *ngIf="etaSeconds != null"> ETA: {{ formatEta(etaSeconds) }}</div>
       </div>      
     </div>
   </div>

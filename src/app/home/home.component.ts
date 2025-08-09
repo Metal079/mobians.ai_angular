@@ -21,6 +21,7 @@ export class HomeComponent {
   inpaintingEnabled: boolean = false;
   queuePosition?: number;
   inpaintMask?: string;
+  etaSeconds?: number;
   showRatingButtons: boolean = false;
   ratingButtonsEligibility: boolean = false;
   headerMessage: Message[] = [{
@@ -69,6 +70,10 @@ export class HomeComponent {
 
   onQueuePositionChange(queuePosition: number) {
     this.queuePosition = queuePosition;
+  }
+
+  onEtaChange(eta: number | undefined) {
+    this.etaSeconds = eta;
   }
 
   onInpaintMaskChange(inpaint_mask: string) {

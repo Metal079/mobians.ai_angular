@@ -13,6 +13,7 @@
       [aspectRatio]="aspectRatio"
       [inpaintingEnabled]="inpaintingEnabled"
       [queuePosition]="queuePosition"
+      [etaSeconds]="etaSeconds"
       (inpaint_mask)="onInpaintMaskChange($event)"
       (imageExpandedChange)="onImageExpandedChange($event)"
     ></app-image-grid>
@@ -23,6 +24,7 @@
     (aspectRatioChange)="onAspectRatioChange($event)"
     (inpaintingChange)="onInpaintingChange($event)"
     (queuePositionChange)="onQueuePositionChange($event)"
+    (etaChange)="onEtaChange($event)"
     [inpaintMask]="inpaintMask"
     (imageModalOpen)="onImageModalOpenChange($event)"
   ></app-options>
