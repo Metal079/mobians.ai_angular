@@ -6,16 +6,22 @@
     <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
       (ngModelChange)="updateSharedPrompt()" class="form-control resizable-textarea" placeholder="Enter Prompt"
       aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
-    <button
-      [class]="referenceImage ? 'btn btn-success d-flex align-items-center' : 'btn btn-primary d-flex align-items-center'"
-      type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!enableGenerationButton">
-      {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
-    </button>
-    <!-- Cancel button shown when a job is pending -->
-    <button class="btn btn-outline-danger d-flex align-items-center ms-2" type="button"
-      *ngIf="hasPendingJob" (click)="cancelPendingJob()">
-      Cancel
-    </button>
+
+    <ng-container *ngIf="!hasPendingJob; else cancelTpl">
+      <button
+        [class]="referenceImage ? 'btn btn-success d-flex align-items-center' : 'btn btn-primary d-flex align-items-center'"
+        type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!enableGenerationButton">
+        {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
+      </button>
+    </ng-container>
+
+    <ng-template #cancelTpl>
+      <!-- Updated to solid red to match style, same sizing/layout classes -->
+      <button class="btn btn-danger d-flex align-items-center" type="button" id="generate-button"
+        (click)="cancelPendingJob()" [disabled]="cancelInProgress">
+        {{ cancelInProgress ? 'Cancelling...' : 'Cancel' }}
+      </button>
+    </ng-template>
   </div>
 
   <!-- buttons that show with reference images expanded -->
@@ -87,7 +93,7 @@
       Image History
     </button>
     <button class="btn btn-primary dropdown-toggle ms-2" type="button" data-bs-toggle="collapse"
-      data-bs-target="#lorasCollapse" aria-expanded="false" aria-controls="lorasCollapse" (click)="toggleLoras()">
+      data-bs-target="#lorasCollapse" aria-expanded="false" aria-controls="#lorasCollapse" (click)="toggleLoras()">
       LoRAs
     </button>
   </div>

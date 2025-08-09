@@ -78,7 +78,8 @@ export class OptionsComponent implements OnInit {
   hasPendingJob: boolean = false;
   // Track active polling subscription and cancel state
   private jobPollSub?: Subscription;
-  private cancelInProgress: boolean = false;
+  // Make cancelInProgress public so it can be referenced in the template
+  cancelInProgress: boolean = false;
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
@@ -1038,10 +1039,18 @@ export class OptionsComponent implements OnInit {
 
             this.loadingChange.emit(false);
             this.enableGenerationButton = true;
+            this.hasPendingJob = false; // ensure UI switches back to Generate
+            this.jobID = "";
+            this.queuePositionChange.emit(0);
+            this.etaChange.emit(undefined);
             this.removePendingJob();
             this.lockService.release();
           } else {
             // failed or not found
+            this.hasPendingJob = false; // ensure UI switches back to Generate
+            this.jobID = "";
+            this.queuePositionChange.emit(0);
+            this.etaChange.emit(undefined);
             this.removePendingJob();
             this.lockService.release();
           }
@@ -1055,11 +1064,19 @@ export class OptionsComponent implements OnInit {
             this.showError(error);  // show the error modal
             this.enableGenerationButton = true;
             this.loadingChange.emit(false);
+            this.hasPendingJob = false; // ensure UI switches back to Generate
+            this.jobID = "";
+            this.queuePositionChange.emit(0);
+            this.etaChange.emit(undefined);
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
           } else if (response.status === 'failed' || response.status === 'error') {
             this.handleFailedJob(response);
+            this.hasPendingJob = false; // ensure UI switches back to Generate
+            this.jobID = "";
+            this.queuePositionChange.emit(0);
+            this.etaChange.emit(undefined);
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
@@ -1079,6 +1096,10 @@ export class OptionsComponent implements OnInit {
           this.showError(error);  // show the error modal
           this.enableGenerationButton = true;
           this.loadingChange.emit(false);
+          this.hasPendingJob = false; // ensure UI switches back to Generate
+          this.jobID = "";
+          this.queuePositionChange.emit(0);
+          this.etaChange.emit(undefined);
           this.removePendingJob();
           this.lockService.release();
         }
@@ -1094,6 +1115,7 @@ export class OptionsComponent implements OnInit {
     this.showError({ error: { detail: `Job ${response.status}: ${response.message || 'Unknown error occurred'}` } });
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);
+    this.hasPendingJob = false; // ensure UI switches back to Generate
   }
 
   enableInpaintCanvas() {
@@ -2011,7 +2033,7 @@ export class OptionsComponent implements OnInit {
       // **Step 3: Sort the Results by Timestamp (Descending)**
       filteredResults.sort((a, b) => {
         const timestampA = a.timestamp ? a.timestamp.getTime() : 0;
-        const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
+               const timestampB = b.timestamp ? b.timestamp.getTime() : 0;
         return timestampB - timestampA;
       });
 
