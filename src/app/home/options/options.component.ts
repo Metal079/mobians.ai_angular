@@ -50,7 +50,7 @@ export class OptionsComponent implements OnInit {
   enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
-  aspectRatio: AspectRatio = { width: 512, height: 512, model: "sonicDiffusionV4", aspectRatio: "square" };
+  aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaFurryXL_V8B", aspectRatio: "square" };
   defaultNegativePrompt: string = "nsfw, 3d, EasyNegativeV2, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
   generationRequest: any = {
     prompt: "",
@@ -67,7 +67,7 @@ export class OptionsComponent implements OnInit {
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
-    model: "sonicDiffusionV4",
+    model: "novaFurryXL_V8B",
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
     loras: [],
@@ -556,17 +556,17 @@ export class OptionsComponent implements OnInit {
 
   changeAspectRatio(aspectRatio: string) {
     if (aspectRatio == 'square') {
-      this.aspectRatio = { width: 512, height: 512, model: "sonicDiffusionV4", aspectRatio: "square" };
+      this.aspectRatio = { width: 512, height: 512, model: "novaFurryXL_V8B", aspectRatio: "square" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 512;
     }
     else if (aspectRatio == 'portrait') {
-      this.aspectRatio = { width: 512, height: 768, model: "sonicDiffusionV4", aspectRatio: "portrait" };
+      this.aspectRatio = { width: 512, height: 768, model: "novaFurryXL_V8B", aspectRatio: "portrait" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 768;
     }
     else if (aspectRatio == 'landscape') {
-      this.aspectRatio = { width: 768, height: 512, model: "sonicDiffusionV4", aspectRatio: "landscape" };
+      this.aspectRatio = { width: 768, height: 512, model: "novaFurryXL_V8B", aspectRatio: "landscape" };
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
@@ -704,12 +704,12 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
-    this.generationRequest.guidance_scale = 7;
-    this.generationRequest.model = "sonicDiffusionV4";
+    this.generationRequest.guidance_scale = 4;
+    this.generationRequest.model = "novaFurryXL_V8B";
     this.loginInfo = null;
     this.showNSFWLoras = false;
     this.sharedService.setUserData(null);
-    this.changeAspectRatio("square");
+    this.changeAspectRatio("portrait");
 
     this.loadSettings();
 
