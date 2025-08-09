@@ -66,4 +66,11 @@ export class StableDiffusionService {
     const body = JSON.stringify(data);
     return this.http.post(url, body, {'headers':headers});
   }
+
+  getJobStatus(jobId: string): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_job_status/`;  // note the trailing slash
+    const headers = { 'content-type': 'application/json' };
+    const body = JSON.stringify({ job_id: jobId });
+    return this.http.post(url, body, {'headers':headers});
+  }
 }

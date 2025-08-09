@@ -3,7 +3,7 @@ import { SimpleChanges } from '@angular/core';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
-import { interval } from 'rxjs';
+import { interval, of } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, skip } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
@@ -19,6 +19,7 @@ import { DialogService } from 'primeng/dynamicdialog';
 import { AddLorasComponent } from '../add-loras/add-loras.component';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { DestroyRef, inject } from '@angular/core';
+import { GenerationLockService } from 'src/app/generation-lock.service';
 
 
 @Component({
@@ -130,6 +131,11 @@ export class OptionsComponent implements OnInit {
   // DB variables
   private db: IDBDatabase | null = null;
 
+  // Persistence keys
+  private readonly pendingJobKey = 'mobians:pending-job';
+  private readonly queueEtaKey = 'mobians:queue-eta';
+  private readonly pendingMaxAgeMs = 24 * 60 * 60 * 1000; // 24h max age for pending jobs
+
   // Sorting
   selectedSortOption: string = 'timestamp';
   sortOrder: 'asc' | 'desc' = 'desc';
@@ -163,6 +169,7 @@ export class OptionsComponent implements OnInit {
     , private memoryUsageService: MemoryUsageService
     , private dialogService: DialogService
     , private blobMigrationService: BlobMigrationService
+    , private lockService: GenerationLockService
   ) {
     // Load in loras info
     this.loadLoras();
@@ -188,6 +195,23 @@ export class OptionsComponent implements OnInit {
         this.showMigration = false;
       }
     );
+
+    // Cross-tab updates to queue position / ETA
+    window.addEventListener('storage', (e) => {
+      if (e.key === this.queueEtaKey && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data.queue_position != null) this.queuePositionChange.emit(data.queue_position);
+          if (data.eta != null) this.etaChange.emit(data.eta);
+        } catch {}
+      }
+      if (e.key === this.pendingJobKey) {
+        // If another tab started or finished a job, update button state
+        const pending = this.getPendingJob();
+        this.enableGenerationButton = !pending;
+        this.loadingChange.emit(!!pending);
+      }
+    });
   }
 
   //#region Create and open the database
@@ -445,6 +469,24 @@ export class OptionsComponent implements OnInit {
       this.supporter = userData.has_required_role;
       this.serverMember = userData.is_member_of_your_guild;
       this.sharedService.setUserData(userData);
+    }
+
+    // Resume any pending job (respect max age)
+    const pending = this.getPendingJob();
+    if (pending) {
+      if (pending.createdAt && (Date.now() - pending.createdAt > this.pendingMaxAgeMs)) {
+        // Too old to resume; restore settings and clear pending
+        this.handleExpiredPendingJob(pending);
+      } else {
+        this.enableGenerationButton = false;
+        this.loadingChange.emit(true);
+        // Rehydrate minimal request context if available
+        if (pending.request) {
+          this.generationRequest = { ...this.generationRequest, ...pending.request };
+          this.sharedService.setGenerationRequest(this.generationRequest);
+        }
+        this.getJob(pending.job_id);
+      }
     }
   }
 
@@ -758,11 +800,24 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.job_type = "upscale";
     }
 
+    // Prevent multi-tab concurrency
+    if (this.lockService.isLockedByOther()) {
+      this.messageService.add({ severity: 'warn', summary: 'Generation running', detail: 'Another tab is generating. Please wait or close other tabs.' });
+      return;
+    }
+    if (!this.lockService.tryAcquire()) {
+      this.messageService.add({ severity: 'warn', summary: 'Please wait', detail: 'A generation is already in progress.' });
+      return;
+    }
+
     // Disable generation button
     this.enableGenerationButton = false;
 
     // Hide canvas if it exists
     this.showInpaintingCanvas = false;
+
+    // Ensure client id is attached for server-side dedupe if supported
+    this.generationRequest.client_id = this.notificationService.userId;
 
     // Save settings to session storage
     this.saveSettings();
@@ -792,7 +847,15 @@ export class OptionsComponent implements OnInit {
     this.stableDiffusionService.submitJob(this.generationRequest)
       .subscribe(
         response => {
-          console.log(response);  // handle the response
+          // Persist pending job so we can resume after refresh
+          this.savePendingJob(response.job_id, {
+            prompt: this.generationRequest.prompt,
+            width: this.generationRequest.width,
+            height: this.generationRequest.height,
+            job_type: this.generationRequest.job_type,
+            model: this.generationRequest.model,
+            client_id: this.generationRequest.client_id
+          });
 
           this.getJob(response.job_id);
         },
@@ -803,6 +866,7 @@ export class OptionsComponent implements OnInit {
           this.loadingChange.emit(false);
           this.enableGenerationButton = true;
           this.generationRequest.mask_image = undefined;
+          this.lockService.release();
         }
       );
 
@@ -826,27 +890,33 @@ export class OptionsComponent implements OnInit {
     subscription = interval(1000)
       .pipe(
         // For each tick of the interval, call the service
-        concatMap(() => this.stableDiffusionService.getJob(getJobInfo).pipe(
-          retryWhen(errors =>
-            errors.pipe(
-              // use the scan operator to track the number of attempts
-              scan((retryCount, err) => {
-                // if retryCount reaches 3 or error status is not 500, throw error
-                if (retryCount >= 3 || err.status !== 500) {
-                  throw err;
-                }
-                console.log("retrying... Attempt #" + (retryCount + 1) + " of 3");
-                return retryCount + 1;
-              }, 0),
-              // delay retrying the request for 1 second1
-              delayWhen(() => timer(1000))
+        concatMap((): any => {
+          if (!navigator.onLine) {
+            // Emit a dummy "pending" shape to keep types consistent
+            return of({ status: 'pending' } as any);
+          }
+          return this.stableDiffusionService.getJob(getJobInfo).pipe(
+            retryWhen((errors: any) =>
+              errors.pipe(
+                // use the scan operator to track the number of attempts
+                scan((retryCount: number, err: any) => {
+                  // if retryCount reaches 5 or error status is not 500, throw error
+                  if (retryCount >= 5 || (err.status && err.status !== 500)) {
+                    throw err;
+                  }
+                  console.log("retrying... Attempt #" + (retryCount + 1) + " of 5");
+                  return retryCount + 1;
+                }, 0),
+                // exponential backoff with cap
+                delayWhen((attempt: number) => timer(Math.min(1000 * Math.pow(2, attempt), 10000)))
+              )
             )
-          )
-        )),
+          );
+        }),
         // Store the response for use in finalize
-        tap(response => lastResponse = response),
+        tap((response: any) => lastResponse = response),
         // Only continue the stream while the job is incomplete
-        takeWhile(response => !(jobComplete = (response.status === 'completed')), true),
+        takeWhile((response: any) => !(jobComplete = (response && response.status === 'completed')), true),
         takeUntilDestroyed(this.destroyRef),
         // Once the stream completes, do any cleanup if necessary
         finalize(async () => {
@@ -871,7 +941,7 @@ export class OptionsComponent implements OnInit {
                 prompt: this.generationRequest.prompt,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
                 url: blobUrl // Generate URL
-              };
+              } as MobiansImage;
             });
             // Track created URLs for later revocation
             generatedImages.forEach((img: MobiansImage) => {
@@ -894,7 +964,7 @@ export class OptionsComponent implements OnInit {
 
             // Add the images to the image history metadata
             this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
-              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false };
+              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false } as MobiansImageMetadata;
             }));
 
             try {
@@ -905,7 +975,7 @@ export class OptionsComponent implements OnInit {
 
                for (const image of generatedImages) {
                  // Save the image metadata
-                 const imageMetadata = { ...image };
+                 const imageMetadata: any = { ...image };
                  delete imageMetadata.blob; // Remove the base64 data from metadata
                  delete imageMetadata.url; // Remove the URL from metadata
                  store.put(imageMetadata);
@@ -919,32 +989,45 @@ export class OptionsComponent implements OnInit {
 
             this.loadingChange.emit(false);
             this.enableGenerationButton = true;
+            this.removePendingJob();
+            this.lockService.release();
+          } else {
+            // failed or not found
+            this.removePendingJob();
+            this.lockService.release();
           }
         })
       )
       .subscribe(
-        response => {
-          if (response.status === undefined) {
+        (response: any) => {
+          if (!response || response.status === undefined) {
             const error = { error: { detail: "Job not found. Please try again later." } };
             console.error(error)
             this.showError(error);  // show the error modal
             this.enableGenerationButton = true;
             this.loadingChange.emit(false);
+            this.removePendingJob();
+            this.lockService.release();
             subscription.unsubscribe();
           } else if (response.status === 'failed' || response.status === 'error') {
             this.handleFailedJob(response);
+            this.removePendingJob();
+            this.lockService.release();
             subscription.unsubscribe();
           } else {
-            console.log("queue position: " + response.queue_position);
+            // Persist queue position and ETA so other tabs / reloads can reflect state
             this.queuePositionChange.emit(response.queue_position ?? 0);
             this.etaChange.emit(response.eta ?? undefined);
+            this.saveQueueEta(response.queue_position, response.eta);
           }
         },
-        error => {
+        (error: any) => {
           console.error(error)
           this.showError(error);  // show the error modal
           this.enableGenerationButton = true;
           this.loadingChange.emit(false);
+          this.removePendingJob();
+          this.lockService.release();
         }
       );
   }
@@ -1945,6 +2028,51 @@ export class OptionsComponent implements OnInit {
     // Now, after sorting and finalizing counts, modify the displayed label
     this.loraTagOptions.forEach(option => {
       option.optionLabel = `${option.optionValue} (${option.count})`;
+    });
+  }
+
+  // Persistence helpers
+  private getPendingJob(): { job_id: string; request?: any; createdAt?: number } | null {
+    const raw = localStorage.getItem(this.pendingJobKey);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  private savePendingJob(job_id: string, request?: any) {
+    try {
+      localStorage.setItem(this.pendingJobKey, JSON.stringify({ job_id, request, createdAt: Date.now() }));
+    } catch {}
+  }
+
+  private removePendingJob() {
+    localStorage.removeItem(this.pendingJobKey);
+    localStorage.removeItem(this.queueEtaKey);
+  }
+
+  private saveQueueEta(queue_position?: number, eta?: number) {
+    try {
+      localStorage.setItem(this.queueEtaKey, JSON.stringify({ queue_position, eta, ts: Date.now() }));
+    } catch {}
+  }
+
+  private handleExpiredPendingJob(pending: { job_id: string; request?: any; createdAt?: number }) {
+    // Restore previous settings if we have them
+    if (pending.request) {
+      this.generationRequest = { ...this.generationRequest, ...pending.request };
+      this.sharedService.setGenerationRequest(this.generationRequest);
+    }
+    // Clear pending and release any lock just in case
+    this.removePendingJob();
+    this.lockService.release();
+    // Re-enable UI
+    this.enableGenerationButton = true;
+    this.loadingChange.emit(false);
+    // Inform the user
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Job expired',
+      detail: 'Your previous job is older than 24 hours and can’t be resumed. Your settings were restored — click Generate to try again.',
+      life: 6000
     });
   }
 }
