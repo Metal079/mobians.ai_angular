@@ -62,7 +62,7 @@ export class OptionsComponent implements OnInit {
     steps: 20,
     width: 512,
     height: 512,
-    guidance_scale: 7,
+    guidance_scale: 4,
     seed: undefined,
     batch_size: 4,
     strength: 0.7,
@@ -547,6 +547,9 @@ export class OptionsComponent implements OnInit {
     // Remove any selected loras that are not available for the selected model
     this.selectedLoras = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
     this.generationRequest.loras = this.selectedLoras;
+
+    // Persist immediately
+    this.saveSettings();
   }
 
   changeAspectRatioSelector(event: any) {
@@ -584,6 +587,9 @@ export class OptionsComponent implements OnInit {
     this.imagesChange.emit(this.images);
 
     this.sharedService.setGenerationRequest(this.generationRequest);
+
+    // Persist immediately
+    // this.saveSettings();
   }
 
   // Update the prompt to the shared service
@@ -639,6 +645,9 @@ export class OptionsComponent implements OnInit {
 
     // Save showNSFWLoras
     localStorage.setItem("showNSFWLoras", this.showNSFWLoras.toString());
+
+    // Save notifications toggle
+    localStorage.setItem("notifications-enabled", this.enableNotifications.toString());
   }
 
   // Load session storage info of changed settings
@@ -669,11 +678,27 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.model = localStorage.getItem("model")!;
     }
     if (localStorage.getItem("lossy-images") != null) {
+      console.log("Loading lossy images setting");
+      console.log("Value from localStorage:", localStorage.getItem("lossy-images"));
       this.generationRequest.lossy_images = localStorage.getItem("lossy-images") == 'true';
+      console.log("Loaded lossy images setting:", this.generationRequest.lossy_images);
     }
     if (localStorage.getItem("showNSFWLoras") != null) {
       this.showNSFWLoras = localStorage.getItem("showNSFWLoras") == 'true';
     }
+    if (localStorage.getItem("notifications-enabled") != null) {
+      this.enableNotifications = localStorage.getItem("notifications-enabled") == 'true';
+      if (this.enableNotifications) {
+        // Restore userId and resubscribe
+        const storedId = localStorage.getItem('notifications-user-id');
+        if (storedId) this.notificationService.userId = storedId;
+        this.enableNotification();
+      }
+    }
+
+    // Apply current LoRA filters after restoring settings
+    this.filterLoras();
+    this.refreshLoraFiltersList();
 
     try {
       // Use the new queryImages function to load the initial set of images
@@ -700,6 +725,9 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("fast-pass-code");
     localStorage.removeItem('discordUserData');
     localStorage.removeItem('showNSFWLoras');
+    localStorage.removeItem('lossy-images');
+    localStorage.removeItem('notifications-enabled');
+    localStorage.removeItem('notifications-user-id');
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
@@ -708,6 +736,8 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.model = "novaFurryXL_V8B";
     this.loginInfo = null;
     this.showNSFWLoras = false;
+    this.generationRequest.lossy_images = false;
+    this.enableNotifications = false;
     this.sharedService.setUserData(null);
     this.changeAspectRatio("portrait");
 
@@ -1157,11 +1187,18 @@ export class OptionsComponent implements OnInit {
   }
 
   enableNotification() {
-    const userId = uuidv4()
-    this.notificationService.userId = userId;
-
     if (this.enableNotifications) {
+      // Reuse existing userId or load from storage; generate if missing
+      let userId = this.notificationService.userId || localStorage.getItem('notifications-user-id');
+      if (!userId) {
+        userId = uuidv4();
+        localStorage.setItem('notifications-user-id', userId);
+      }
+      this.notificationService.userId = userId;
       this.notificationService.subscribeToNotifications();
+    } else {
+      // Optionally handle unsubscribe if your NotificationService supports it
+      // this.notificationService.unsubscribeFromNotifications?.();
     }
   }
 
@@ -1354,25 +1391,31 @@ export class OptionsComponent implements OnInit {
 
   private async fallbackSearch(store: IDBObjectStore, query: string): Promise<MobiansImage[]> {
     const index = store.index('timestamp');
+    const q = (query || '').toLowerCase();
     return new Promise<MobiansImage[]>((resolve, reject) => {
-      const cursorRequest = index.openCursor(null, 'prev');
-      const matchingImages: MobiansImage[] = [];
+      const images: MobiansImage[] = [];
+      const request = index.openCursor(null, 'prev');
 
-      cursorRequest.onsuccess = (event) => {
+      request.onerror = () => reject(new Error('Failed to open cursor'));
+      request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
         if (cursor) {
           const metadata = cursor.value as MobiansImage;
-          matchingImages.push(metadata);  // Add all images, we'll filter later
+          if (
+            q === '' ||
+            metadata.prompt?.toLowerCase().includes(q) ||
+            metadata.promptSummary?.toLowerCase().includes(q)
+          ) {
+            if (!metadata.url) {
+              // Fire and forget; URL will populate when ready
+              this.loadImageData(metadata);
+            }
+            images.push(metadata);
+          }
           cursor.continue();
         } else {
-          console.log('Fallback search found', matchingImages.length, 'images');
-          resolve(matchingImages);
+          resolve(images);
         }
-      };
-
-      cursorRequest.onerror = (event) => {
-        console.error('Error in fallback search:', event);
-        reject(new Error('Failed to open cursor'));
       };
     });
   }
@@ -1590,6 +1633,8 @@ export class OptionsComponent implements OnInit {
 
   onFastPassCodeChange(event: any) {
     this.generationRequest.fast_pass_code = event.target.value.toLowerCase().replace(/\s/g, '');
+    // Persist immediately
+    this.saveSettings();
   }
 
   openAddLorasDialog() {

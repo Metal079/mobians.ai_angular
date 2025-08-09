@@ -4,7 +4,7 @@
 <div class="input-button-container d-flex flex-wrap align-items-center justify-content-start">
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1">
     <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
-      (ngModelChange)="updateSharedPrompt()" class="form-control resizable-textarea" placeholder="Enter Prompt"
+      (ngModelChange)="updateSharedPrompt(); saveSettings()" class="form-control resizable-textarea" placeholder="Enter Prompt"
       aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
 
     <ng-container *ngIf="!hasPendingJob; else cancelTpl">
@@ -72,7 +72,7 @@
       </span>
     </label>
     <input type="range" class="form-range" min="0.2" max="1" value="0.8" step="0.05" id="custom-denoise"
-      [(ngModel)]="generationRequest.strength" />
+      [(ngModel)]="generationRequest.strength" (ngModelChange)="saveSettings()" />
   </div>
 
   <!-- Remove reference image button -->
@@ -134,7 +134,7 @@
         </span>
       </label>
       <textarea class="form-control" id="negative-prompt-input" rows="3"
-        [(ngModel)]="generationRequest.negative_prompt"></textarea>
+        [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings()"></textarea>
     </div>
 
     <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
@@ -184,7 +184,7 @@
       </span>
     </label>
     <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
-      [(ngModel)]="generationRequest.guidance_scale" />
+      [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings()" />
 
     <!-- FastPass Code -->
     <div class="mb-3">
@@ -205,7 +205,7 @@
     <div class="d-flex justify-content-start mb-3">
       <div class="form-check me-3">
         <input class="form-check-input" type="checkbox" [(ngModel)]="enableNotifications"
-          (change)="enableNotification()" id="notification">
+          (ngModelChange)="enableNotification(); saveSettings()" id="notification">
         <label class="form-check-label" for="notification">Send Notification When Image Completes</label>
       </div>
     </div>
@@ -213,7 +213,7 @@
     <!-- Toggle to return webp images isntead of png, (much smaller image sizes!) -->
     <div class="d-flex justify-content-start mb-3">
       <div class="form-check me-3">
-        <input class="form-check-input" type="checkbox" [(ngModel)]="generationRequest.lossy_images" id="returnWebp">
+        <input class="form-check-input" type="checkbox" [(ngModel)]="generationRequest.lossy_images" id="returnWebp" (ngModelChange)="saveSettings()">
         <label class="form-check-label" for="returnWebp">WebP Images (Much smaller image size. Disable to save images as
           png when downloading!)</label>
       </div>
@@ -338,7 +338,7 @@
       </span>
       <span class="d-flex" [style]="{ marginLeft: '5px' }">
         Show NSFW Loras?
-        <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (click)="filterLoras()"></p-inputSwitch>
+        <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="filterLoras(); saveSettings()"></p-inputSwitch>
       </span>
     </p>
 
