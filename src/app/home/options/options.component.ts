@@ -76,6 +76,9 @@ export class OptionsComponent implements OnInit {
   jobID: string = "";
   // Add a simple flag to indicate a pending job
   hasPendingJob: boolean = false;
+  // Track active polling subscription and cancel state
+  private jobPollSub?: Subscription;
+  private cancelInProgress: boolean = false;
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
@@ -885,9 +888,14 @@ export class OptionsComponent implements OnInit {
   cancelPendingJob() {
     const id = this.jobID || this.getPendingJob()?.job_id;
     if (!id) return;
+    this.cancelInProgress = true;
     this.enableGenerationButton = false;
     this.stableDiffusionService.cancelJob(id).subscribe({
       next: () => {
+        // Stop polling if active
+        this.jobPollSub?.unsubscribe();
+        this.jobPollSub = undefined;
+
         this.hasPendingJob = false;
         this.jobID = "";
         this.removePendingJob?.();
@@ -895,10 +903,15 @@ export class OptionsComponent implements OnInit {
         this.loadingChange.emit(false);
         this.queuePositionChange.emit(0);
         this.etaChange.emit(undefined);
+        // Release generation lock on cancel
+        this.lockService.release();
         this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: 'Generation cancelled.' });
+        // Reset cancel flag after handling
+        this.cancelInProgress = false;
       },
       error: (err) => {
         this.enableGenerationButton = true;
+        this.cancelInProgress = false;
         this.messageService.add?.({ severity: 'error', summary: 'Cancel failed', detail: 'Unable to cancel job.' });
         console.error(err);
       }
@@ -907,6 +920,9 @@ export class OptionsComponent implements OnInit {
 
   // check for status of job
   getJob(job_id: string) {
+    // Set current job id for cancel button
+    this.jobID = job_id;
+
     let jobComplete = false;
     let lastResponse: any;
 
@@ -949,6 +965,10 @@ export class OptionsComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
         // Once the stream completes, do any cleanup if necessary
         finalize(async () => {
+          // If this finalize was triggered by a cancel, skip notifications and any error popups
+          if (this.cancelInProgress) {
+            return;
+          }
           if (this.enableNotifications) {
             this.notificationService.playDing();
             this.notificationService.sendPushNotification();
@@ -1051,6 +1071,10 @@ export class OptionsComponent implements OnInit {
           }
         },
         (error: any) => {
+          // Suppress 404/409 if it resulted from a user-initiated cancel
+          if (this.cancelInProgress && (error?.status === 404 || error?.status === 409)) {
+            return;
+          }
           console.error(error)
           this.showError(error);  // show the error modal
           this.enableGenerationButton = true;
@@ -1059,6 +1083,9 @@ export class OptionsComponent implements OnInit {
           this.lockService.release();
         }
       );
+
+    // Track active polling subscription so we can stop it on cancel
+    this.jobPollSub = subscription;
   }
 
   // Add this method to your class
@@ -2012,7 +2039,7 @@ export class OptionsComponent implements OnInit {
         summary: 'Search Failed',
         detail: 'Unable to perform favorite image search.'
       });
-    } finally {
+       } finally {
       this.isSearching = false;
     }
   }
