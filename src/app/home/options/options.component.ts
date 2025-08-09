@@ -74,6 +74,8 @@ export class OptionsComponent implements OnInit {
     lossy_images: false,
   };
   jobID: string = "";
+  // Add a simple flag to indicate a pending job
+  hasPendingJob: boolean = false;
   API_URL: string = "";
   referenceImage?: MobiansImage;
   currentSeed?: number;
@@ -474,6 +476,8 @@ export class OptionsComponent implements OnInit {
     // Resume any pending job (respect max age)
     const pending = this.getPendingJob();
     if (pending) {
+      this.jobID = pending.job_id;
+      this.hasPendingJob = true;
       if (pending.createdAt && (Date.now() - pending.createdAt > this.pendingMaxAgeMs)) {
         // Too old to resume; restore settings and clear pending
         this.handleExpiredPendingJob(pending);
@@ -844,6 +848,7 @@ export class OptionsComponent implements OnInit {
 
     // set loading to true and submit job
     this.loadingChange.emit(true);
+    this.hasPendingJob = true;
     this.stableDiffusionService.submitJob(this.generationRequest)
       .subscribe(
         response => {
@@ -874,6 +879,30 @@ export class OptionsComponent implements OnInit {
     if (defaultSeed) {
       this.generationRequest.seed = undefined;
     }
+  }
+
+  // Action to cancel a pending/running job
+  cancelPendingJob() {
+    const id = this.jobID || this.getPendingJob()?.job_id;
+    if (!id) return;
+    this.enableGenerationButton = false;
+    this.stableDiffusionService.cancelJob(id).subscribe({
+      next: () => {
+        this.hasPendingJob = false;
+        this.jobID = "";
+        this.removePendingJob?.();
+        this.enableGenerationButton = true;
+        this.loadingChange.emit(false);
+        this.queuePositionChange.emit(0);
+        this.etaChange.emit(undefined);
+        this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: 'Generation cancelled.' });
+      },
+      error: (err) => {
+        this.enableGenerationButton = true;
+        this.messageService.add?.({ severity: 'error', summary: 'Cancel failed', detail: 'Unable to cancel job.' });
+        console.error(err);
+      }
+    });
   }
 
   // check for status of job

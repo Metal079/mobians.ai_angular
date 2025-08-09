@@ -73,4 +73,9 @@ export class StableDiffusionService {
     const body = JSON.stringify({ job_id: jobId });
     return this.http.post(url, body, {'headers':headers});
   }
+
+  cancelJob(jobId: string): Observable<any> {
+    const url = `${this.apiBaseUrl}/cancel_job/${encodeURIComponent(jobId)}/`;
+    return this.http.delete(url);
+  }
 }

@@ -11,6 +11,11 @@
       type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!enableGenerationButton">
       {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
     </button>
+    <!-- Cancel button shown when a job is pending -->
+    <button class="btn btn-outline-danger d-flex align-items-center ms-2" type="button"
+      *ngIf="hasPendingJob" (click)="cancelPendingJob()">
+      Cancel
+    </button>
   </div>
 
   <!-- buttons that show with reference images expanded -->
@@ -117,9 +122,6 @@
         <span class="ms-1 text-primary"
           pTooltip="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
           tooltipPosition="top" style="
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 2px 4px;
-            border-radius: 50%;
             cursor: pointer;
           ">
           ?
