@@ -3,48 +3,89 @@
 
   <p-tabView>
     <p-tabPanel header="All LoRAs">
-      <div class="tab-actions mb-2">
+      <div class="tab-actions mb-2 d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control" style="max-width: 280px" placeholder="Search name/version" [ngModel]="loraSearch" (ngModelChange)="onLoraSearchChange($event)" />
+        <p-multiSelect [options]="loraBaseModelOptions" [(ngModel)]="selectedBaseModels" defaultLabel="Base model(s)" (onChange)="filterAllLoras()" [showToggleAll]="false" [display]="'chip'" [style]="{width:'280px'}"></p-multiSelect>
+        <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value"></p-selectButton>
+        <p-selectButton [options]="nsfwOptions" [(ngModel)]="nsfwFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value"></p-selectButton>
+        <span class="flex-grow-1"></span>
         <p-button label="Refresh" icon="pi pi-refresh" (onClick)="loadAllLoras()"></p-button>
       </div>
       <p-table
-        [value]="allLoras"
+        [value]="filteredAllLoras"
         [loading]="loadingLoras"
         [paginator]="true"
         [rows]="10"
         [rowsPerPageOptions]="[10,20,50]"
         [resizableColumns]="true"
-        [responsiveLayout]="'scroll'"
+        [responsiveLayout]="'stack'"
+        [breakpoint]="'768px'"
+        dataKey="name"
+        [expandedRowKeys]="expandedRowKeysLoras"
         [rowTrackBy]="trackById.bind(this)"
         styleClass="p-datatable-sm"
       >
+        <ng-template pTemplate="caption">
+          <div class="table-caption">All LoRAs</div>
+        </ng-template>
+    <ng-template pTemplate="rowexpansion" let-row>
+          <tr>
+      <td colspan="9">
+              <div class="expansion">
+                <img class="preview-img lg" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
+                <div class="expansion-fields">
+                  <div><strong>Name:</strong> {{ row.name }}</div>
+                  <div><strong>Version:</strong> {{ row.version }}</div>
+                  <div><strong>Base Model:</strong> {{ row.base_model }}</div>
+                  <div><strong>Uses:</strong> {{ row.uses }}</div>
+                  <div class="toggles">
+                    <span><strong>Active:</strong> <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch></span>
+                    <span><strong>NSFW:</strong> <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch></span>
+                  </div>
+                  <div class="mt-2">
+                    <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
         <ng-template pTemplate="header">
           <tr>
+            <th style="width: 2rem"></th>
             <th style="width: 64px">Preview</th>
             <th>Name</th>
             <th class="col-hide-sm">Version</th>
             <th class="col-hide-sm">Base Model</th>
             <th class="col-hide-sm">Uses</th>
-            <th>Active</th>
-            <th>NSFW</th>
-            <th style="width: 220px">Actions</th>
+            <th class="col-hide-sm">Active</th>
+            <th class="col-hide-sm">NSFW</th>
+            <th class="col-hide-sm" style="width: 220px">Actions</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-row>
           <tr>
             <td>
-              <img class="preview-img" [src]="row.image_url" [alt]="row.name" />
+              <button type="button" pButton pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain" [icon]="isLoraExpanded(row) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></button>
+            </td>
+            <td>
+              <span class="p-column-title">Preview</span>
+              <img class="preview-img" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
             </td>
             <td>{{ row.name }}</td>
             <td class="col-hide-sm">{{ row.version }}</td>
             <td class="col-hide-sm">{{ row.base_model }}</td>
             <td class="col-hide-sm">{{ row.uses }}</td>
-            <td>
+            <td class="col-hide-sm">
+              <span class="p-column-title">Active</span>
               <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
             </td>
-            <td>
+            <td class="col-hide-sm">
+              <span class="p-column-title">NSFW</span>
               <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
             </td>
-            <td>
+            <td class="col-hide-sm">
+              <span class="p-column-title">Actions</span>
               <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
             </td>
           </tr>
@@ -53,40 +94,81 @@
     </p-tabPanel>
 
     <p-tabPanel header="LoRA Suggestions">
-      <div class="tab-actions mb-2">
+      <div class="tab-actions mb-2 d-flex flex-wrap gap-2 align-items-center">
+        <input type="text" class="form-control" style="max-width: 280px" placeholder="Search name/version" [ngModel]="suggSearch" (ngModelChange)="onSuggSearchChange($event)" />
+        <input type="text" class="form-control" style="max-width: 220px" placeholder="Submitted by" [ngModel]="submittedBySearch" (ngModelChange)="onSubmittedByChange($event)" />
+        <p-multiSelect [options]="suggBaseModelOptions" [(ngModel)]="selectedSuggBaseModels" defaultLabel="Base model(s)" (onChange)="filterSuggestions()" [showToggleAll]="false" [display]="'chip'" [style]="{width:'280px'}"></p-multiSelect>
+        <span class="flex-grow-1"></span>
         <p-button label="Refresh" icon="pi pi-refresh" (onClick)="loadSuggestions()"></p-button>
       </div>
       <p-table
-        [value]="loraSuggestions"
+        [value]="filteredSuggestions"
         [loading]="loadingSuggestions"
         [paginator]="true"
         [rows]="10"
         [rowsPerPageOptions]="[10,20,50]"
         [resizableColumns]="true"
-        [responsiveLayout]="'scroll'"
+        [responsiveLayout]="'stack'"
+        [breakpoint]="'768px'"
+        dataKey="name"
+        [expandedRowKeys]="expandedRowKeysSuggestions"
         [rowTrackBy]="trackById.bind(this)"
         styleClass="p-datatable-sm"
       >
+        <ng-template pTemplate="caption">
+          <div class="table-caption">LoRA Suggestions</div>
+        </ng-template>
+    <ng-template pTemplate="rowexpansion" let-row>
+          <tr>
+      <td colspan="7">
+              <div class="expansion">
+                <img class="preview-img lg" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
+                <div class="expansion-fields">
+                  <div><strong>Name:</strong> {{ row.name }}</div>
+                  <div><strong>Version:</strong> {{ row.version }}</div>
+                  <div><strong>Base Model:</strong> {{ row.base_model }}</div>
+                  <div><strong>Submitted By:</strong> {{ row.submitted_by || row.username || '-' }}</div>
+                  <div class="mt-2 action-buttons">
+                    <p-button label="Approve" icon="pi pi-check" styleClass="p-button-success" (onClick)="approveSuggestion(row)"></p-button>
+                    <p-button label="Reject" icon="pi pi-times" styleClass="p-button-danger" (onClick)="rejectSuggestion(row)"></p-button>
+                    <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
         <ng-template pTemplate="header">
           <tr>
+            <th style="width: 2rem"></th>
             <th style="width: 64px">Preview</th>
             <th>Name</th>
             <th class="col-hide-sm">Version</th>
             <th class="col-hide-sm">Base Model</th>
             <th class="col-hide-sm">Submitted By</th>
-            <th style="width: 280px">Actions</th>
+            <th class="col-hide-sm" style="width: 280px">Actions</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-row>
           <tr>
             <td>
-              <img class="preview-img" [src]="row.image_url || row.preview || row.thumbnail" [alt]="row.name" />
+              <button type="button" pButton pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain" [icon]="isSuggestionExpanded(row) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></button>
+            </td>
+            <td>
+              <span class="p-column-title">Preview</span>
+              <ng-container *ngIf="getPreviewUrl(row) as img; else noImg">
+                <img class="preview-img" [src]="img" [alt]="row.name" />
+              </ng-container>
+              <ng-template #noImg>
+                <p-chip label="{{ row.name }}" icon="pi pi-image" styleClass="p-chip-secondary"></p-chip>
+              </ng-template>
             </td>
             <td>{{ row.name }}</td>
             <td class="col-hide-sm">{{ row.version }}</td>
             <td class="col-hide-sm">{{ row.base_model }}</td>
             <td class="col-hide-sm">{{ row.submitted_by || row.username || '-' }}</td>
-            <td class="action-buttons">
+            <td class="col-hide-sm action-buttons">
+              <span class="p-column-title">Actions</span>
               <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
               <p-button label="Approve" icon="pi pi-check" styleClass="p-button-success" (onClick)="approveSuggestion(row)"></p-button>
               <p-button label="Reject" icon="pi pi-times" styleClass="p-button-danger" (onClick)="rejectSuggestion(row)"></p-button>

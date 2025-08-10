@@ -6,6 +6,11 @@
 	border-radius: 4px;
 }
 
+.preview-img.lg {
+	width: 96px;
+	height: 96px;
+}
+
 .action-buttons :where(button, a) + :where(button, a) {
 	margin-left: .5rem;
 }
@@ -14,6 +19,37 @@
 @media (max-width: 768px) {
 	.col-hide-sm {
 		display: none;
+	}
+
+	:host ::ng-deep .p-datatable .p-datatable-tbody > tr > td {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: .75rem;
+		border: 0;
+		padding: .5rem .75rem;
+	}
+
+	:host ::ng-deep .p-column-title {
+		font-weight: 600;
+		opacity: .8;
+	}
+
+	.expansion {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+	}
+	.expansion-fields {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: .35rem;
+	}
+	.toggles span {
+		display: inline-flex;
+		align-items: center;
+		gap: .5rem;
+		margin-right: 1rem;
 	}
 }
 .admin-wrapper{padding:2rem}.admin-wrapper h1{margin:0 0 0.5rem}.admin-wrapper p{margin:0;color:#666}
