@@ -1,1 +1,19 @@
+/* Admin responsive tweaks */
+.preview-img {
+	width: 48px;
+	height: 48px;
+	object-fit: cover;
+	border-radius: 4px;
+}
+
+.action-buttons :where(button, a) + :where(button, a) {
+	margin-left: .5rem;
+}
+
+/* Hide some columns on small screens */
+@media (max-width: 768px) {
+	.col-hide-sm {
+		display: none;
+	}
+}
 .admin-wrapper{padding:2rem}.admin-wrapper h1{margin:0 0 0.5rem}.admin-wrapper p{margin:0;color:#666}

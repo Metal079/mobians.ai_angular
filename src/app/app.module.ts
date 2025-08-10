@@ -32,6 +32,7 @@ import { InputSwitchModule } from 'primeng/inputswitch';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ChipsModule } from 'primeng/chips';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { TabViewModule } from 'primeng/tabview';
 
 
 const routes: Routes = [
@@ -68,6 +69,7 @@ const routes: Routes = [
         SelectButtonModule,
         ChipsModule,
         MultiSelectModule,
+  TabViewModule,
         FileUploadModule,
         AccordionModule,
         ImageModule,

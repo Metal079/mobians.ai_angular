@@ -39,10 +39,17 @@ export class StableDiffusionService {
     return this.http.post(url, body, {'headers':headers});
   }
 
-  getLoras(): Observable<any> {
-    const url = `${this.apiBaseUrl}/get_loras/`;  // note the trailing slash
+  //#region Lora API calls
+  getLoras(status: string = 'active'): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_loras/?status=${encodeURIComponent(status)}`;  // default to active
     return this.http.get(url);
   }
+
+  getLoraSuggestions(): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_lora_suggestions/`;
+    return this.http.get(url);
+  }
+  //#endregion
 
   //#region CivitAI API calls
   searchByQuery(query: string): Observable<any> {
