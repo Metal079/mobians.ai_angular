@@ -58,6 +58,27 @@
               ],
               "outputHashing": "all"
             },
+            "staging": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.staging.ts"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "2mb",
+                  "maximumError": "3mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "20kb",
+                  "maximumError": "30kb"
+                }
+              ],
+              "outputHashing": "all"
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,
@@ -72,6 +93,9 @@
           "configurations": {
             "production": {
               "buildTarget": "angularapp:build:production"
+            },
+            "staging": {
+              "buildTarget": "angularapp:build:staging"
             },
             "development": {
               "buildTarget": "angularapp:build:development"
