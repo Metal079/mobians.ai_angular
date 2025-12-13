@@ -45,7 +45,7 @@
       pButton 
       type="button" 
       class="p-button-success p-button-sm w-full"
-      [label]="'Claim Daily +15 🎁'"
+      [label]="'Claim Daily +' + nextDailyBonus + ' 🎁'"
       [loading]="claimingBonus"
       (click)="claimDaily()">
     </button>
@@ -54,12 +54,15 @@
       Daily claimed! 
       <span *ngIf="dailyStreak > 1">🔥 {{ dailyStreak }} day streak</span>
     </div>
+    <div *ngIf="isLoggedIn" class="daily-note">
+      Daily bonus starts at 15 and grows by 5/day up to 25 when you keep claiming. Miss a day and it resets.
+    </div>
   </div>
   
   <!-- Sign up prompt for non-logged in users -->
   <div *ngIf="!isLoggedIn" class="signup-prompt">
-    <div class="signup-title">🎁 Sign up for 100 free credits!</div>
-    <div class="signup-subtitle">+ 15 daily bonus credits</div>
+    <div class="signup-title">🎁 Sign up with Discord or Google for 100 free credits!</div>
+    <div class="signup-subtitle">Daily bonus starts at 15 and ramps by +5 per day (up to 25) when you claim every day.</div>
   </div>
   
   <!-- Admin Panel Button (only visible to admins/mods) -->
