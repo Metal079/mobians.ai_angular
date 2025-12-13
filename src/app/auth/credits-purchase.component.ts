@@ -246,8 +246,8 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   getBonus(pkg: CreditPackage): number {
-    // Calculate bonus percentage based on base rate of $5/500 credits
-    const baseRate = 500 / 5; // 100 credits per dollar
+    // Calculate bonus percentage based on base rate of $5/1500 credits (starter pack)
+    const baseRate = 1500 / 5; // 300 credits per dollar
     const actualRate = pkg.credits / pkg.price_usd;
     return Math.round(((actualRate - baseRate) / baseRate) * 100);
   }

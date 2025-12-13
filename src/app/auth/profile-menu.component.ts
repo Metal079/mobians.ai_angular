@@ -24,6 +24,11 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   claimingBonus = false;
   showPurchaseDialog = false;
 
+  // Daily bonus configuration
+  private readonly DAILY_BASE = 15;
+  private readonly DAILY_INCREMENT = 5;
+  private readonly DAILY_CAP = 25;
+
   private subscriptions: Subscription[] = [];
 
   // Responsive panel styles
@@ -75,6 +80,10 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 
+  get nextDailyBonus(): number {
+    return this.calculateDailyBonus(this.dailyStreak);
+  }
+
   async claimDaily() {
     if (this.claimingBonus) return;
     
@@ -82,10 +91,19 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     try {
       const result = await this.auth.claimDailyBonus();
       if (result.success) {
+        const streakAfterClaim = result.streak ?? this.dailyStreak;
+        const claimedAmount = result.newBalance !== undefined
+          ? Math.max(result.newBalance - this.credits, 0)
+          : this.calculateClaimedBonusFromStreak(streakAfterClaim);
+        const balanceText = result.newBalance !== undefined ? ` New balance: ${result.newBalance}` : '';
+
+        this.dailyStreak = streakAfterClaim ?? 0;
+        this.credits = result.newBalance ?? this.credits;
+
         this.messageService.add({
           severity: 'success',
           summary: 'Daily Bonus!',
-          detail: `+15 credits! New balance: ${result.newBalance}`,
+          detail: `+${claimedAmount} credits!${balanceText}`,
           life: 3000
         });
         // Hide the claim button immediately after a successful claim
@@ -137,5 +155,21 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   
   logout() { 
     this.auth.logout(); 
+  }
+
+  private calculateDailyBonus(streak: number | null | undefined): number {
+    const safeStreak = Math.max(streak || 0, 0);
+    return Math.min(
+      this.DAILY_BASE + safeStreak * this.DAILY_INCREMENT,
+      this.DAILY_CAP
+    );
+  }
+
+  private calculateClaimedBonusFromStreak(streak: number | null | undefined): number {
+    if (streak === null || streak === undefined) {
+      return this.calculateDailyBonus(this.dailyStreak);
+    }
+    const previousStreak = Math.max(streak - 1, 0);
+    return this.calculateDailyBonus(previousStreak);
   }
 }
