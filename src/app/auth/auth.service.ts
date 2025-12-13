@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SharedService } from '../shared.service';
 import { StableDiffusionService } from '../stable-diffusion.service';
+import { sessionInvalid$ } from './auth.interceptor';
 
 export type AuthProvider = 'discord' | 'google';
 type AuthMode = 'login' | 'link';
@@ -18,6 +19,10 @@ export interface UserCredits {
 export class AuthService {
   private _credits$ = new BehaviorSubject<UserCredits | null>(null);
   public credits$ = this._credits$.asObservable();
+  
+  // Subject to notify components that session is invalid and login is required
+  private _sessionInvalid$ = new Subject<void>();
+  public sessionInvalid$ = this._sessionInvalid$.asObservable();
 
   constructor(
     private router: Router,
@@ -26,6 +31,82 @@ export class AuthService {
   ) {
     // Initialize credits from stored user data
     this.initializeCreditsFromStorage();
+    
+    // Subscribe to global session invalid events from interceptor
+    sessionInvalid$.subscribe(() => {
+      this.handleSessionInvalid();
+    });
+  }
+
+  /**
+   * Handle session invalidation - clear local state and notify subscribers
+   */
+  private handleSessionInvalid(): void {
+    // Clear the BehaviorSubject state
+    this.shared.setUserData(null);
+    this._credits$.next(null);
+    // Notify subscribers (e.g., to show login modal)
+    this._sessionInvalid$.next();
+  }
+
+  /**
+   * Validate the current session token with the backend.
+   * Returns true if session is valid, false otherwise.
+   * If invalid, clears local auth state.
+   */
+  async validateSession(): Promise<boolean> {
+    // If no token stored, session is invalid
+    const token = this.getToken();
+    if (!token) {
+      return false;
+    }
+    
+    try {
+      const response = await this.api.getCurrentUser().toPromise();
+      if (response?.status === 'success' && response?.user) {
+        // Token is valid - optionally update local user data with fresh info
+        const userData = this.shared.getUserDataValue();
+        if (userData && response.user) {
+          // Update credits and other fields that may have changed
+          this.shared.setUserData({
+            ...userData,
+            credits: response.user.credits ?? userData.credits,
+            is_banned: response.user.is_banned ?? userData.is_banned,
+          });
+          // Update credits observable
+          if (response.user.credits !== undefined) {
+            const current = this._credits$.value;
+            this._credits$.next({
+              credits: response.user.credits,
+              canClaimDailyBonus: current?.canClaimDailyBonus ?? false,
+              dailyBonusStreak: response.user.daily_bonus_streak ?? current?.dailyBonusStreak ?? 0
+            });
+          }
+        }
+        return true;
+      }
+      // Response didn't have expected data
+      this.clearAuthState();
+      return false;
+    } catch (err: any) {
+      // 401 will be handled by interceptor, but also handle here for completeness
+      if (err?.status === 401) {
+        this.clearAuthState();
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Clear all local authentication state
+   */
+  private clearAuthState(): void {
+    try {
+      localStorage.removeItem('userData');
+      localStorage.removeItem('authToken');
+    } catch {}
+    this.shared.setUserData(null);
+    this._credits$.next(null);
   }
 
   private initializeCreditsFromStorage(): void {
