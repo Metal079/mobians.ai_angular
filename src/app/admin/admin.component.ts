@@ -144,10 +144,22 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   // Row actions with real API calls
   toggleActive(row: any): void {
-    const loraKey = row.name || row.id;
+    const loraId = row?.id;
+    const loraKey = loraId ?? row?.name;
+    if (loraId == null) {
+      row.is_active = !row.is_active;
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Unable to update LoRA: missing id.',
+        life: 5000
+      });
+      return;
+    }
+
     this.savingLora[loraKey] = true;
     
-    this.sdService.updateLora(row.name, { is_active: row.is_active }).subscribe({
+    this.sdService.updateLora(loraId, { is_active: row.is_active }).subscribe({
       next: (response) => {
         this.messageService.add({
           severity: 'success',
@@ -173,10 +185,22 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   toggleNSFW(row: any): void {
-    const loraKey = row.name || row.id;
+    const loraId = row?.id;
+    const loraKey = loraId ?? row?.name;
+    if (loraId == null) {
+      row.is_nsfw = !row.is_nsfw;
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Unable to update LoRA: missing id.',
+        life: 5000
+      });
+      return;
+    }
+
     this.savingLora[loraKey] = true;
     
-    this.sdService.updateLora(row.name, { is_nsfw: row.is_nsfw }).subscribe({
+    this.sdService.updateLora(loraId, { is_nsfw: row.is_nsfw }).subscribe({
       next: (response) => {
         this.messageService.add({
           severity: 'success',
@@ -312,17 +336,17 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   isLoraExpanded(row: any): boolean {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     return !!(key && this.expandedRowKeysLoras[key]);
   }
 
   isSuggestionExpanded(row: any): boolean {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     return !!(key && this.expandedRowKeysSuggestions[key]);
   }
 
   isLoraSaving(row: any): boolean {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     return !!this.savingLora[key];
   }
 
@@ -333,20 +357,30 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   // Name editing methods
   startEditName(row: any): void {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     this.editingDisplayName[key] = true;
     this.editDisplayNameValue[key] = row.name || '';
   }
 
   cancelEditName(row: any): void {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     this.editingDisplayName[key] = false;
     delete this.editDisplayNameValue[key];
   }
 
   saveName(row: any): void {
-    const key = row?.name ?? row?.id;
-    const oldName = row.name;
+    const key = row?.id ?? row?.name;
+    const loraId = row?.id;
+    if (loraId == null) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Unable to rename LoRA: missing id.',
+        life: 5000
+      });
+      return;
+    }
+
     const newName = this.editDisplayNameValue[key]?.trim();
     
     if (!newName) {
@@ -361,7 +395,7 @@ export class AdminComponent implements OnInit, OnDestroy {
 
     this.savingLora[key] = true;
     
-    this.sdService.updateLora(oldName, { name: newName }).subscribe({
+    this.sdService.updateLora(loraId, { name: newName }).subscribe({
       next: (response) => {
         row.name = newName;
         this.editingDisplayName[key] = false;
@@ -390,17 +424,17 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   isEditingName(row: any): boolean {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     return !!this.editingDisplayName[key];
   }
 
   getEditNameValue(row: any): string {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     return this.editDisplayNameValue[key] || '';
   }
 
   setEditNameValue(row: any, value: string): void {
-    const key = row?.name ?? row?.id;
+    const key = row?.id ?? row?.name;
     this.editDisplayNameValue[key] = value;
   }
 
