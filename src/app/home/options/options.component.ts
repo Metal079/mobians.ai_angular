@@ -513,6 +513,10 @@ export class OptionsComponent implements OnInit {
         if (pending.request) {
           this.generationRequest = { ...this.generationRequest, ...pending.request };
           this.sharedService.setGenerationRequest(this.generationRequest);
+          // Restore queue type if it was saved
+          if (pending.request.queue_type) {
+            this.queueType = pending.request.queue_type;
+          }
         }
         this.getJob(pending.job_id);
       }
@@ -991,7 +995,8 @@ export class OptionsComponent implements OnInit {
             height: this.generationRequest.height,
             job_type: this.generationRequest.job_type,
             model: this.generationRequest.model,
-            client_id: this.generationRequest.client_id
+            client_id: this.generationRequest.client_id,
+            queue_type: this.queueType
           });
 
           this.getJob(response.job_id);
@@ -1195,7 +1200,7 @@ export class OptionsComponent implements OnInit {
       .subscribe(
         (response: any) => {
           if (!response || response.status === undefined) {
-            const error = { error: { detail: "Job not found. Please try again later." } };
+            const error = { error: { detail: "Job not found. The server may have restarted. Please try again." } };
             console.error(error)
             this.showError(error);  // show the error modal
             this.enableGenerationButton = true;
@@ -1204,6 +1209,7 @@ export class OptionsComponent implements OnInit {
             this.jobID = "";
             this.queuePositionChange.emit(0);
             this.etaChange.emit(undefined);
+            this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
@@ -1213,6 +1219,7 @@ export class OptionsComponent implements OnInit {
             this.jobID = "";
             this.queuePositionChange.emit(0);
             this.etaChange.emit(undefined);
+            this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
@@ -1236,6 +1243,7 @@ export class OptionsComponent implements OnInit {
           this.jobID = "";
           this.queuePositionChange.emit(0);
           this.etaChange.emit(undefined);
+          this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
           this.removePendingJob();
           this.lockService.release();
         }
@@ -1248,6 +1256,19 @@ export class OptionsComponent implements OnInit {
   // Add this method to your class
   private handleFailedJob(response: any) {
     console.error('Job failed or encountered an error:', response);
+    
+    // Check if a refund was issued and show appropriate message
+    if (response.refund) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Credits Refunded',
+        detail: `${response.refund.credits_refunded} credits have been refunded to your account. New balance: ${response.refund.new_balance}`,
+        life: 8000
+      });
+      // Update the user's credit balance
+      this.authService.updateCredits(response.refund.new_balance);
+    }
+    
     this.showError({ error: { detail: `Job ${response.status}: ${response.message || 'Unknown error occurred'}` } });
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);
@@ -2293,6 +2314,8 @@ export class OptionsComponent implements OnInit {
     // Clear pending and release any lock just in case
     this.removePendingJob();
     this.lockService.release();
+    // Reset queue type to free to prevent auth errors
+    this.queueType = 'free';
     // Re-enable UI
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);
