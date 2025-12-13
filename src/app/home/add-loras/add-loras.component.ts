@@ -139,6 +139,7 @@ export class AddLorasComponent {
         'is_nsfw': this.selectedLoRA.nsfw,
         'is_minor': this.selectedLoRA.minor,
         'preview_image': this.selectedLoRA.images[0].url,
+        'base_model': this.selectedLoRA.base_model,
       };
 
       // Add the selected LoRA to the lora queue

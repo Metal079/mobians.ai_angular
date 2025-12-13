@@ -78,9 +78,17 @@
                   </div>
                   <div class="expansion-details">
                     <div class="detail-grid">
-                      <div class="detail-item">
+                      <div class="detail-item full-width">
                         <span class="detail-label">Name</span>
-                        <span class="detail-value">{{ row.name }}</span>
+                        <div class="name-edit" *ngIf="!isEditingName(row)">
+                          <span class="detail-value">{{ row.name }}</span>
+                          <p-button icon="bi bi-pencil" styleClass="p-button-text p-button-sm" pTooltip="Rename LoRA" tooltipPosition="top" (onClick)="startEditName(row)"></p-button>
+                        </div>
+                        <div class="name-edit-form" *ngIf="isEditingName(row)">
+                          <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" placeholder="Enter name..." />
+                          <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
+                          <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
+                        </div>
                       </div>
                       <div class="detail-item">
                         <span class="detail-label">Version</span>
@@ -93,6 +101,12 @@
                       <div class="detail-item">
                         <span class="detail-label">Uses</span>
                         <span class="detail-value">{{ row.uses }}</span>
+                      </div>
+                      <div class="detail-item" *ngIf="row.version_id">
+                        <span class="detail-label">CivitAI</span>
+                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link">
+                          <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
+                        </a>
                       </div>
                     </div>
                     <div class="toggle-section">
@@ -121,6 +135,7 @@
               <th class="col-hide-sm">Version</th>
               <th class="col-hide-sm">Base Model</th>
               <th class="col-hide-sm">Uses</th>
+              <th class="col-hide-sm" style="width: 80px">CivitAI</th>
               <th class="col-hide-sm" style="width: 100px">Active</th>
               <th class="col-hide-sm" style="width: 100px">NSFW</th>
               <th class="col-hide-sm" style="width: 140px">Actions</th>
@@ -136,7 +151,15 @@
                 <img class="preview-img clickable" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
               </td>
               <td>
-                <span class="lora-name">{{ row.name }}</span>
+                <div class="name-cell" *ngIf="!isEditingName(row)">
+                  <span class="lora-name">{{ row.name }}</span>
+                  <button type="button" pButton pRipple class="p-button-text p-button-sm edit-name-btn" icon="bi bi-pencil" pTooltip="Rename" tooltipPosition="top" (click)="startEditName(row)"></button>
+                </div>
+                <div class="name-edit-form" *ngIf="isEditingName(row)">
+                  <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" (keyup.enter)="saveName(row)" (keyup.escape)="cancelEditName(row)" placeholder="Enter name..." />
+                  <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
+                  <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
+                </div>
               </td>
               <td class="col-hide-sm">
                 <span class="version-text">{{ row.version }}</span>
@@ -146,6 +169,12 @@
               </td>
               <td class="col-hide-sm">
                 <span class="uses-badge">{{ row.uses }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top">
+                  <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+                <span *ngIf="!row.version_id" class="no-link">-</span>
               </td>
               <td class="col-hide-sm">
                 <span class="p-column-title">Active</span>
@@ -212,7 +241,7 @@
         >
           <ng-template pTemplate="rowexpansion" let-row>
             <tr>
-              <td colspan="7">
+              <td colspan="8">
                 <div class="expansion-card">
                   <div class="expansion-image">
                     <ng-container *ngIf="getPreviewUrl(row) as img; else noImgExpansion">
@@ -237,11 +266,17 @@
                       </div>
                       <div class="detail-item">
                         <span class="detail-label">Base Model</span>
-                        <span class="detail-value model-badge">{{ row.base_model }}</span>
+                        <span class="detail-value model-badge">{{ row.base_model || 'Unknown' }}</span>
                       </div>
                       <div class="detail-item">
                         <span class="detail-label">Submitted By</span>
                         <span class="detail-value">{{ row.submitted_by || row.username || '-' }}</span>
+                      </div>
+                      <div class="detail-item" *ngIf="row.version_id">
+                        <span class="detail-label">CivitAI</span>
+                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link">
+                          <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
+                        </a>
                       </div>
                     </div>
                     <div class="expansion-actions suggestion-actions">
@@ -267,6 +302,7 @@
               <th>Name</th>
               <th class="col-hide-sm">Version</th>
               <th class="col-hide-sm">Base Model</th>
+              <th class="col-hide-sm" style="width: 80px">CivitAI</th>
               <th class="col-hide-sm">Submitted By</th>
               <th class="col-hide-sm" style="width: 260px">Actions</th>
             </tr>
@@ -294,7 +330,13 @@
                 <span class="version-text">{{ row.version }}</span>
               </td>
               <td class="col-hide-sm">
-                <span class="model-badge">{{ row.base_model }}</span>
+                <span class="model-badge">{{ row.base_model || 'Unknown' }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top">
+                  <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+                <span *ngIf="!row.version_id" class="no-link">-</span>
               </td>
               <td class="col-hide-sm">
                 <span class="submitter-text">{{ row.submitted_by || row.username || '-' }}</span>
@@ -317,7 +359,7 @@
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="7">
+              <td colspan="8">
                 <div class="empty-state success">
                   <i class="bi bi-check-circle"></i>
                   <p>No pending suggestions</p>

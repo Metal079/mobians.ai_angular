@@ -59,6 +59,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   savingLora: { [key: string]: boolean } = {};
   processingSuggestion: { [key: string]: boolean } = {};
 
+  // Inline editing state
+  editingDisplayName: { [key: string]: boolean } = {};
+  editDisplayNameValue: { [key: string]: string } = {};
+
   // Downloader status
   downloaderStatus: DownloaderStatus | null = null;
   downloadHistory: DownloadHistoryItem[] = [];
@@ -325,6 +329,86 @@ export class AdminComponent implements OnInit, OnDestroy {
   isSuggestionProcessing(row: any): boolean {
     const key = row?.id ?? row?.name;
     return !!this.processingSuggestion[key];
+  }
+
+  // Name editing methods
+  startEditName(row: any): void {
+    const key = row?.name ?? row?.id;
+    this.editingDisplayName[key] = true;
+    this.editDisplayNameValue[key] = row.name || '';
+  }
+
+  cancelEditName(row: any): void {
+    const key = row?.name ?? row?.id;
+    this.editingDisplayName[key] = false;
+    delete this.editDisplayNameValue[key];
+  }
+
+  saveName(row: any): void {
+    const key = row?.name ?? row?.id;
+    const oldName = row.name;
+    const newName = this.editDisplayNameValue[key]?.trim();
+    
+    if (!newName) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Invalid Name',
+        detail: 'Name cannot be empty',
+        life: 3000
+      });
+      return;
+    }
+
+    this.savingLora[key] = true;
+    
+    this.sdService.updateLora(oldName, { name: newName }).subscribe({
+      next: (response) => {
+        row.name = newName;
+        this.editingDisplayName[key] = false;
+        delete this.editDisplayNameValue[key];
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Updated',
+          detail: `Name changed to "${newName}"`,
+          life: 3000
+        });
+        // Reload to get fresh data since the key changed
+        this.loadAllLoras();
+      },
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err?.error?.detail || 'Failed to update name',
+          life: 5000
+        });
+      },
+      complete: () => {
+        this.savingLora[key] = false;
+      }
+    });
+  }
+
+  isEditingName(row: any): boolean {
+    const key = row?.name ?? row?.id;
+    return !!this.editingDisplayName[key];
+  }
+
+  getEditNameValue(row: any): string {
+    const key = row?.name ?? row?.id;
+    return this.editDisplayNameValue[key] || '';
+  }
+
+  setEditNameValue(row: any, value: string): void {
+    const key = row?.name ?? row?.id;
+    this.editDisplayNameValue[key] = value;
+  }
+
+  // Get CivitAI link from version_id
+  getCivitAILink(row: any): string | null {
+    const versionId = row?.version_id;
+    if (!versionId) return null;
+    return `https://civitai.com/models/${versionId}`;
   }
 
   // ---------------- Filters (All LoRAs) ----------------
