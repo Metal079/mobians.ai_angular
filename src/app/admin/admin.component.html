@@ -1,186 +1,466 @@
-<div class="admin-wrapper p-3">
-  <h2 class="mb-3">Admin</h2>
-
-  <p-tabView>
-    <p-tabPanel header="All LoRAs">
-      <div class="tab-actions mb-2 d-flex flex-wrap gap-2 align-items-center">
-        <input type="text" class="form-control" style="max-width: 280px" placeholder="Search name/version" [ngModel]="loraSearch" (ngModelChange)="onLoraSearchChange($event)" />
-        <p-multiSelect [options]="loraBaseModelOptions" [(ngModel)]="selectedBaseModels" defaultLabel="Base model(s)" (onChange)="filterAllLoras()" [showToggleAll]="false" [display]="'chip'" [style]="{width:'280px'}"></p-multiSelect>
-        <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value"></p-selectButton>
-        <p-selectButton [options]="nsfwOptions" [(ngModel)]="nsfwFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value"></p-selectButton>
-        <span class="flex-grow-1"></span>
-        <p-button label="Refresh" icon="pi pi-refresh" (onClick)="loadAllLoras()"></p-button>
+<div class="admin-wrapper">
+  <div class="admin-header">
+    <div class="header-content">
+      <div class="header-left">
+        <a routerLink="/" class="home-btn" pTooltip="Back to Home" tooltipPosition="bottom">
+          <i class="bi bi-house-door"></i>
+        </a>
+        <div class="header-text">
+          <h1>Admin Panel</h1>
+          <p>Manage LoRAs and review suggestions</p>
+        </div>
       </div>
-      <p-table
-        [value]="filteredAllLoras"
-        [loading]="loadingLoras"
-        [paginator]="true"
-        [rows]="10"
-        [rowsPerPageOptions]="[10,20,50]"
-        [resizableColumns]="true"
-        [responsiveLayout]="'stack'"
-        [breakpoint]="'768px'"
-        dataKey="name"
-        [expandedRowKeys]="expandedRowKeysLoras"
-        [rowTrackBy]="trackById.bind(this)"
-        styleClass="p-datatable-sm"
-      >
-        <ng-template pTemplate="caption">
-          <div class="table-caption">All LoRAs</div>
+      <div class="header-right">
+        <div class="stats-cards">
+          <div class="stat-card">
+            <i class="bi bi-box-seam"></i>
+            <div class="stat-info">
+              <span class="stat-value">{{ allLoras.length }}</span>
+              <span class="stat-label">Total LoRAs</span>
+            </div>
+          </div>
+          <div class="stat-card pending">
+            <i class="bi bi-inboxes"></i>
+            <div class="stat-info">
+              <span class="stat-value">{{ loraSuggestions.length }}</span>
+              <span class="stat-label">Pending</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p-confirmDialog></p-confirmDialog>
+
+  <div class="admin-content">
+    <p-tabView styleClass="admin-tabs">
+      <p-tabPanel>
+        <ng-template pTemplate="header">
+          <div class="tab-header">
+            <i class="bi bi-card-list"></i>
+            <span>All LoRAs</span>
+            <span class="tab-badge">{{ filteredAllLoras.length }}</span>
+          </div>
         </ng-template>
-    <ng-template pTemplate="rowexpansion" let-row>
-          <tr>
-      <td colspan="9">
-              <div class="expansion">
-                <img class="preview-img lg" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
-                <div class="expansion-fields">
-                  <div><strong>Name:</strong> {{ row.name }}</div>
-                  <div><strong>Version:</strong> {{ row.version }}</div>
-                  <div><strong>Base Model:</strong> {{ row.base_model }}</div>
-                  <div><strong>Uses:</strong> {{ row.uses }}</div>
-                  <div class="toggles">
-                    <span><strong>Active:</strong> <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch></span>
-                    <span><strong>NSFW:</strong> <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch></span>
+        <div class="tab-actions">
+          <div class="search-filters">
+            <span class="p-input-icon-left search-input">
+              <i class="bi bi-search"></i>
+              <input type="text" pInputText placeholder="Search name or version..." [ngModel]="loraSearch" (ngModelChange)="onLoraSearchChange($event)" />
+            </span>
+            <p-multiSelect [options]="loraBaseModelOptions" [(ngModel)]="selectedBaseModels" placeholder="Base model(s)" (onChange)="filterAllLoras()" [showToggleAll]="false" [display]="'chip'" styleClass="filter-multiselect"></p-multiSelect>
+            <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
+            <p-selectButton [options]="nsfwOptions" [(ngModel)]="nsfwFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
+          </div>
+          <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" (onClick)="loadAllLoras()"></p-button>
+        </div>
+        <p-table
+          [value]="filteredAllLoras"
+          [loading]="loadingLoras"
+          [paginator]="true"
+          [rows]="10"
+          [rowsPerPageOptions]="[10,20,50]"
+          [resizableColumns]="true"
+          [responsiveLayout]="'stack'"
+          [breakpoint]="'768px'"
+          dataKey="name"
+          [expandedRowKeys]="expandedRowKeysLoras"
+          [rowTrackBy]="trackById.bind(this)"
+          styleClass="admin-table"
+        >
+          <ng-template pTemplate="rowexpansion" let-row>
+            <tr>
+              <td colspan="9">
+                <div class="expansion-card">
+                  <div class="expansion-image">
+                    <img class="preview-img-lg clickable" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
                   </div>
-                  <div class="mt-2">
-                    <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
+                  <div class="expansion-details">
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <span class="detail-label">Name</span>
+                        <span class="detail-value">{{ row.name }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Version</span>
+                        <span class="detail-value">{{ row.version }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Base Model</span>
+                        <span class="detail-value model-badge">{{ row.base_model }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Uses</span>
+                        <span class="detail-value">{{ row.uses }}</span>
+                      </div>
+                    </div>
+                    <div class="toggle-section">
+                      <div class="toggle-item">
+                        <span class="toggle-label">Active</span>
+                        <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
+                      </div>
+                      <div class="toggle-item">
+                        <span class="toggle-label">NSFW</span>
+                        <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
+                      </div>
+                    </div>
+                    <div class="expansion-actions">
+                      <p-button label="View Details" icon="bi bi-info-circle" styleClass="p-button-outlined p-button-sm" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </td>
-          </tr>
-        </ng-template>
-        <ng-template pTemplate="header">
-          <tr>
-            <th style="width: 2rem"></th>
-            <th style="width: 64px">Preview</th>
-            <th>Name</th>
-            <th class="col-hide-sm">Version</th>
-            <th class="col-hide-sm">Base Model</th>
-            <th class="col-hide-sm">Uses</th>
-            <th class="col-hide-sm">Active</th>
-            <th class="col-hide-sm">NSFW</th>
-            <th class="col-hide-sm" style="width: 220px">Actions</th>
-          </tr>
-        </ng-template>
-        <ng-template pTemplate="body" let-row>
-          <tr>
-            <td>
-              <button type="button" pButton pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain" [icon]="isLoraExpanded(row) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></button>
-            </td>
-            <td>
-              <span class="p-column-title">Preview</span>
-              <img class="preview-img" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
-            </td>
-            <td>{{ row.name }}</td>
-            <td class="col-hide-sm">{{ row.version }}</td>
-            <td class="col-hide-sm">{{ row.base_model }}</td>
-            <td class="col-hide-sm">{{ row.uses }}</td>
-            <td class="col-hide-sm">
-              <span class="p-column-title">Active</span>
-              <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
-            </td>
-            <td class="col-hide-sm">
-              <span class="p-column-title">NSFW</span>
-              <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
-            </td>
-            <td class="col-hide-sm">
-              <span class="p-column-title">Actions</span>
-              <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
-    </p-tabPanel>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 3rem"></th>
+              <th style="width: 72px">Preview</th>
+              <th>Name</th>
+              <th class="col-hide-sm">Version</th>
+              <th class="col-hide-sm">Base Model</th>
+              <th class="col-hide-sm">Uses</th>
+              <th class="col-hide-sm" style="width: 100px">Active</th>
+              <th class="col-hide-sm" style="width: 100px">NSFW</th>
+              <th class="col-hide-sm" style="width: 140px">Actions</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-row>
+            <tr>
+              <td>
+                <button type="button" pButton pRipple pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain expand-btn" [icon]="isLoraExpanded(row) ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></button>
+              </td>
+              <td>
+                <span class="p-column-title">Preview</span>
+                <img class="preview-img clickable" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
+              </td>
+              <td>
+                <span class="lora-name">{{ row.name }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="version-text">{{ row.version }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="model-badge">{{ row.base_model }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="uses-badge">{{ row.uses }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="p-column-title">Active</span>
+                <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
+              </td>
+              <td class="col-hide-sm">
+                <span class="p-column-title">NSFW</span>
+                <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
+              </td>
+              <td class="col-hide-sm">
+                <span class="p-column-title">Actions</span>
+                <p-button icon="bi bi-info-circle" styleClass="p-button-text p-button-rounded" pTooltip="View Details" tooltipPosition="top" (onClick)="openDetailsDialog('LoRA Details', row)"></p-button>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="9">
+                <div class="empty-state">
+                  <i class="bi bi-inbox"></i>
+                  <p>No LoRAs found matching your criteria</p>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-tabPanel>
 
-    <p-tabPanel header="LoRA Suggestions">
-      <div class="tab-actions mb-2 d-flex flex-wrap gap-2 align-items-center">
-        <input type="text" class="form-control" style="max-width: 280px" placeholder="Search name/version" [ngModel]="suggSearch" (ngModelChange)="onSuggSearchChange($event)" />
-        <input type="text" class="form-control" style="max-width: 220px" placeholder="Submitted by" [ngModel]="submittedBySearch" (ngModelChange)="onSubmittedByChange($event)" />
-        <p-multiSelect [options]="suggBaseModelOptions" [(ngModel)]="selectedSuggBaseModels" defaultLabel="Base model(s)" (onChange)="filterSuggestions()" [showToggleAll]="false" [display]="'chip'" [style]="{width:'280px'}"></p-multiSelect>
-        <span class="flex-grow-1"></span>
-        <p-button label="Refresh" icon="pi pi-refresh" (onClick)="loadSuggestions()"></p-button>
-      </div>
-      <p-table
-        [value]="filteredSuggestions"
-        [loading]="loadingSuggestions"
-        [paginator]="true"
-        [rows]="10"
-        [rowsPerPageOptions]="[10,20,50]"
-        [resizableColumns]="true"
-        [responsiveLayout]="'stack'"
-        [breakpoint]="'768px'"
-        dataKey="name"
-        [expandedRowKeys]="expandedRowKeysSuggestions"
-        [rowTrackBy]="trackById.bind(this)"
-        styleClass="p-datatable-sm"
-      >
-        <ng-template pTemplate="caption">
-          <div class="table-caption">LoRA Suggestions</div>
+      <p-tabPanel>
+        <ng-template pTemplate="header">
+          <div class="tab-header">
+            <i class="bi bi-lightbulb"></i>
+            <span>LoRA Suggestions</span>
+            <span class="tab-badge pending">{{ filteredSuggestions.length }}</span>
+          </div>
         </ng-template>
-    <ng-template pTemplate="rowexpansion" let-row>
-          <tr>
-      <td colspan="7">
-              <div class="expansion">
-                <img class="preview-img lg" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" />
-                <div class="expansion-fields">
-                  <div><strong>Name:</strong> {{ row.name }}</div>
-                  <div><strong>Version:</strong> {{ row.version }}</div>
-                  <div><strong>Base Model:</strong> {{ row.base_model }}</div>
-                  <div><strong>Submitted By:</strong> {{ row.submitted_by || row.username || '-' }}</div>
-                  <div class="mt-2 action-buttons">
-                    <p-button label="Approve" icon="pi pi-check" styleClass="p-button-success" (onClick)="approveSuggestion(row)"></p-button>
-                    <p-button label="Reject" icon="pi pi-times" styleClass="p-button-danger" (onClick)="rejectSuggestion(row)"></p-button>
-                    <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
+        <div class="tab-actions">
+          <div class="search-filters">
+            <span class="p-input-icon-left search-input">
+              <i class="bi bi-search"></i>
+              <input type="text" pInputText placeholder="Search name or version..." [ngModel]="suggSearch" (ngModelChange)="onSuggSearchChange($event)" />
+            </span>
+            <span class="p-input-icon-left search-input">
+              <i class="bi bi-person"></i>
+              <input type="text" pInputText placeholder="Submitted by..." [ngModel]="submittedBySearch" (ngModelChange)="onSubmittedByChange($event)" />
+            </span>
+            <p-multiSelect [options]="suggBaseModelOptions" [(ngModel)]="selectedSuggBaseModels" placeholder="Base model(s)" (onChange)="filterSuggestions()" [showToggleAll]="false" [display]="'chip'" styleClass="filter-multiselect"></p-multiSelect>
+          </div>
+          <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" (onClick)="loadSuggestions()"></p-button>
+        </div>
+        <p-table
+          [value]="filteredSuggestions"
+          [loading]="loadingSuggestions"
+          [paginator]="true"
+          [rows]="10"
+          [rowsPerPageOptions]="[10,20,50]"
+          [resizableColumns]="true"
+          [responsiveLayout]="'stack'"
+          [breakpoint]="'768px'"
+          dataKey="name"
+          [expandedRowKeys]="expandedRowKeysSuggestions"
+          [rowTrackBy]="trackById.bind(this)"
+          styleClass="admin-table"
+        >
+          <ng-template pTemplate="rowexpansion" let-row>
+            <tr>
+              <td colspan="7">
+                <div class="expansion-card">
+                  <div class="expansion-image">
+                    <ng-container *ngIf="getPreviewUrl(row) as img; else noImgExpansion">
+                      <img class="preview-img-lg clickable" [src]="img" [alt]="row.name" (click)="openImagePreview(img, row.name)" />
+                    </ng-container>
+                    <ng-template #noImgExpansion>
+                      <div class="no-image-placeholder">
+                        <i class="bi bi-image"></i>
+                        <span>No preview</span>
+                      </div>
+                    </ng-template>
+                  </div>
+                  <div class="expansion-details">
+                    <div class="detail-grid">
+                      <div class="detail-item">
+                        <span class="detail-label">Name</span>
+                        <span class="detail-value">{{ row.name }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Version</span>
+                        <span class="detail-value">{{ row.version }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Base Model</span>
+                        <span class="detail-value model-badge">{{ row.base_model }}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Submitted By</span>
+                        <span class="detail-value">{{ row.submitted_by || row.username || '-' }}</span>
+                      </div>
+                    </div>
+                    <div class="expansion-actions suggestion-actions">
+                      <p-button label="Approve" icon="bi bi-check-lg" styleClass="p-button-success" 
+                                [loading]="isSuggestionProcessing(row)"
+                                [disabled]="isSuggestionProcessing(row)"
+                                (onClick)="approveSuggestion(row)"></p-button>
+                      <p-button label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger p-button-outlined" 
+                                [loading]="isSuggestionProcessing(row)"
+                                [disabled]="isSuggestionProcessing(row)"
+                                (onClick)="rejectSuggestion(row)"></p-button>
+                      <p-button label="View Details" icon="bi bi-info-circle" styleClass="p-button-outlined p-button-sm" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </td>
-          </tr>
-        </ng-template>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 3rem"></th>
+              <th style="width: 72px">Preview</th>
+              <th>Name</th>
+              <th class="col-hide-sm">Version</th>
+              <th class="col-hide-sm">Base Model</th>
+              <th class="col-hide-sm">Submitted By</th>
+              <th class="col-hide-sm" style="width: 260px">Actions</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-row>
+            <tr>
+              <td>
+                <button type="button" pButton pRipple pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain expand-btn" [icon]="isSuggestionExpanded(row) ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></button>
+              </td>
+              <td>
+                <span class="p-column-title">Preview</span>
+                <ng-container *ngIf="getPreviewUrl(row) as img; else noImg">
+                  <img class="preview-img clickable" [src]="img" [alt]="row.name" (click)="openImagePreview(img, row.name)" />
+                </ng-container>
+                <ng-template #noImg>
+                  <div class="no-image-small">
+                    <i class="bi bi-image"></i>
+                  </div>
+                </ng-template>
+              </td>
+              <td>
+                <span class="lora-name">{{ row.name }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="version-text">{{ row.version }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="model-badge">{{ row.base_model }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="submitter-text">{{ row.submitted_by || row.username || '-' }}</span>
+              </td>
+              <td class="col-hide-sm">
+                <span class="p-column-title">Actions</span>
+                <div class="action-buttons">
+                  <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-rounded p-button-sm" pTooltip="Approve" tooltipPosition="top"
+                            [loading]="isSuggestionProcessing(row)" 
+                            [disabled]="isSuggestionProcessing(row)"
+                            (onClick)="approveSuggestion(row)"></p-button>
+                  <p-button icon="bi bi-x-lg" styleClass="p-button-danger p-button-rounded p-button-outlined p-button-sm" pTooltip="Reject" tooltipPosition="top"
+                            [loading]="isSuggestionProcessing(row)"
+                            [disabled]="isSuggestionProcessing(row)"
+                            (onClick)="rejectSuggestion(row)"></p-button>
+                  <p-button icon="bi bi-info-circle" styleClass="p-button-text p-button-rounded p-button-sm" pTooltip="View Details" tooltipPosition="top" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state success">
+                  <i class="bi bi-check-circle"></i>
+                  <p>No pending suggestions</p>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-tabPanel>
+
+      <!-- Downloader Status Tab -->
+      <p-tabPanel>
         <ng-template pTemplate="header">
-          <tr>
-            <th style="width: 2rem"></th>
-            <th style="width: 64px">Preview</th>
-            <th>Name</th>
-            <th class="col-hide-sm">Version</th>
-            <th class="col-hide-sm">Base Model</th>
-            <th class="col-hide-sm">Submitted By</th>
-            <th class="col-hide-sm" style="width: 280px">Actions</th>
-          </tr>
+          <div class="tab-header">
+            <i class="bi bi-cloud-download"></i>
+            <span>Downloader</span>
+            <span class="tab-badge" [ngClass]="{'success': downloaderStatus?.status === 'idle', 'warning': downloaderStatus?.status === 'downloading', 'danger': downloaderStatus?.status === 'error' || downloaderStatus?.status === 'offline'}">
+              {{ downloaderStatus?.status || 'unknown' }}
+            </span>
+          </div>
         </ng-template>
-        <ng-template pTemplate="body" let-row>
-          <tr>
-            <td>
-              <button type="button" pButton pRowToggler [pRowToggler]="row" class="p-button-text p-button-rounded p-button-plain" [icon]="isSuggestionExpanded(row) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></button>
-            </td>
-            <td>
-              <span class="p-column-title">Preview</span>
-              <ng-container *ngIf="getPreviewUrl(row) as img; else noImg">
-                <img class="preview-img" [src]="img" [alt]="row.name" />
-              </ng-container>
-              <ng-template #noImg>
-                <p-chip label="{{ row.name }}" icon="pi pi-image" styleClass="p-chip-secondary"></p-chip>
+
+        <div class="downloader-section">
+          <!-- Status Card -->
+          <div class="downloader-status-card">
+            <div class="status-header">
+              <h3><i class="bi bi-activity"></i> Service Status</h3>
+              <div class="status-actions">
+                <p-button 
+                  label="Trigger Download" 
+                  icon="bi bi-play-fill" 
+                  styleClass="p-button-success"
+                  [loading]="triggeringDownload"
+                  [disabled]="triggeringDownload || downloaderStatus?.status === 'downloading'"
+                  (onClick)="triggerDownload()">
+                </p-button>
+                <p-button 
+                  label="Refresh" 
+                  icon="bi bi-arrow-repeat" 
+                  styleClass="p-button-outlined"
+                  [loading]="loadingDownloaderStatus"
+                  (onClick)="loadDownloaderStatus(); loadDownloadHistory()">
+                </p-button>
+              </div>
+            </div>
+
+            <div class="status-grid" *ngIf="downloaderStatus">
+              <div class="status-item">
+                <span class="status-label">Status</span>
+                <span class="status-value">
+                  <i [ngClass]="getStatusIcon(downloaderStatus.status)"></i>
+                  <p-tag [value]="downloaderStatus.status" [severity]="getStatusSeverity(downloaderStatus.status)"></p-tag>
+                </span>
+              </div>
+              <div class="status-item" *ngIf="downloaderStatus.current_lora">
+                <span class="status-label">Currently Downloading</span>
+                <span class="status-value current-lora">{{ downloaderStatus.current_lora }}</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Approved (Pending)</span>
+                <span class="status-value">{{ downloaderStatus.approved_count || 0 }}</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Last Updated</span>
+                <span class="status-value">{{ formatDate(downloaderStatus.updated_at) }}</span>
+              </div>
+              <div class="status-item error-item" *ngIf="downloaderStatus.last_processed?.status === 'failed'">
+                <span class="status-label">Last Error</span>
+                <span class="status-value error-text">
+                  <strong>{{ downloaderStatus.last_processed?.name }}</strong>: {{ downloaderStatus.last_processed?.error_message }}
+                </span>
+              </div>
+            </div>
+
+            <div class="status-offline" *ngIf="!downloaderStatus || downloaderStatus.status === 'offline'">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <p>Downloader service is not running or not reachable.</p>
+              <small>Make sure <code>lora_downloader_service.py</code> is running on the server.</small>
+            </div>
+          </div>
+
+          <!-- Download History -->
+          <div class="download-history-card">
+            <div class="history-header">
+              <h3><i class="bi bi-clock-history"></i> Download History</h3>
+            </div>
+
+            <p-table 
+              [value]="downloadHistory" 
+              [paginator]="true" 
+              [rows]="10"
+              styleClass="admin-table history-table">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th style="width: 50px">Status</th>
+                  <th>LoRA Name</th>
+                  <th>Version</th>
+                  <th>Downloaded At</th>
+                  <th>Error</th>
+                </tr>
               </ng-template>
-            </td>
-            <td>{{ row.name }}</td>
-            <td class="col-hide-sm">{{ row.version }}</td>
-            <td class="col-hide-sm">{{ row.base_model }}</td>
-            <td class="col-hide-sm">{{ row.submitted_by || row.username || '-' }}</td>
-            <td class="col-hide-sm action-buttons">
-              <span class="p-column-title">Actions</span>
-              <p-button label="Details" icon="pi pi-info-circle" styleClass="p-button-text" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
-              <p-button label="Approve" icon="pi pi-check" styleClass="p-button-success" (onClick)="approveSuggestion(row)"></p-button>
-              <p-button label="Reject" icon="pi pi-times" styleClass="p-button-danger" (onClick)="rejectSuggestion(row)"></p-button>
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
-    </p-tabPanel>
-  </p-tabView>
+              <ng-template pTemplate="body" let-item>
+                <tr>
+                  <td>
+                    <i [ngClass]="getHistoryStatusIcon(item.status)" [pTooltip]="item.status" tooltipPosition="right"></i>
+                  </td>
+                  <td>{{ item.lora_name }}</td>
+                  <td>{{ item.version }}</td>
+                  <td>{{ formatDate(item.downloaded_at) }}</td>
+                  <td class="error-cell">
+                    <span *ngIf="item.error_message" [pTooltip]="item.error_message" tooltipPosition="left" class="error-snippet">
+                      {{ item.error_message | slice:0:50 }}{{ item.error_message?.length > 50 ? '...' : '' }}
+                    </span>
+                    <span *ngIf="!item.error_message">-</span>
+                  </td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage">
+                <tr>
+                  <td colspan="5">
+                    <div class="empty-state">
+                      <i class="bi bi-inbox"></i>
+                      <p>No download history yet</p>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </div>
+        </div>
+      </p-tabPanel>
+    </p-tabView>
+  </div>
 
   <!-- Details Dialog -->
-  <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [style]="{width: '90vw', maxWidth: '700px'}" [header]="detailsDialogTitle">
-    <pre style="white-space: pre-wrap">{{ detailsJson }}</pre>
+  <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [style]="{width: '90vw', maxWidth: '700px'}" [header]="detailsDialogTitle" styleClass="details-dialog">
+    <pre class="details-json">{{ detailsJson }}</pre>
+  </p-dialog>
+
+  <!-- Image Preview Dialog -->
+  <p-dialog [(visible)]="imagePreviewVisible" [modal]="true" [dismissableMask]="true" [showHeader]="true" [header]="imagePreviewTitle" [style]="{width: 'auto', maxWidth: '95vw'}" styleClass="image-preview-dialog">
+    <div class="image-preview-container">
+      <img [src]="imagePreviewUrl" [alt]="imagePreviewTitle" class="preview-full-image" />
+    </div>
   </p-dialog>
 </div>

@@ -1,0 +1,91 @@
+<!-- Minimized state: just a small pill -->
+<div *ngIf="isMinimized" class="minimized-pill" 
+     (click)="toggleMinimize()" 
+     (touchend)="toggleMinimize(); $event.preventDefault()">
+  <span class="pi pi-user"></span>
+  <span *ngIf="isLoggedIn" class="credits-badge">{{ credits }}</span>
+  <span *ngIf="canClaimDailyBonus" class="bonus-dot"></span>
+  <span class="pi pi-chevron-up" style="font-size:.75rem; margin-left:.25rem;"></span>
+</div>
+
+<!-- Expanded state: full panel -->
+<div *ngIf="!isMinimized" class="account-panel p-card" [ngStyle]="panelStyles">
+  <!-- Header with user info and minimize button -->
+  <div class="profile-header">
+    <span class="pi pi-user" aria-hidden="true"></span>
+    <span class="user-name">{{ userName || 'Account' }}</span>
+    <button type="button" class="minimize-btn" 
+            (click)="toggleMinimize()" 
+            (touchend)="toggleMinimize(); $event.preventDefault()"
+            title="Minimize">
+      <span class="pi pi-minus"></span>
+    </button>
+  </div>
+  
+  <!-- Credits Section (only when logged in) -->
+  <div *ngIf="isLoggedIn" class="credits-section">
+    <div class="credits-row">
+      <span class="credits-label">Credits</span>
+      <span class="credits-value">{{ credits }}</span>
+    </div>
+    
+    <!-- Buy Credits Button -->
+    <button 
+      pButton 
+      type="button" 
+      class="p-button-outlined p-button-sm w-full buy-credits-btn"
+      label="Buy Credits 💳"
+      icon="pi pi-shopping-cart"
+      (click)="openPurchaseDialog()">
+    </button>
+    
+    <!-- Daily Bonus -->
+    <button 
+      *ngIf="canClaimDailyBonus" 
+      pButton 
+      type="button" 
+      class="p-button-success p-button-sm w-full"
+      [label]="'Claim Daily +15 🎁'"
+      [loading]="claimingBonus"
+      (click)="claimDaily()">
+    </button>
+    <div *ngIf="!canClaimDailyBonus && isLoggedIn" class="daily-claimed">
+      <span class="pi pi-check-circle"></span>
+      Daily claimed! 
+      <span *ngIf="dailyStreak > 1">🔥 {{ dailyStreak }} day streak</span>
+    </div>
+  </div>
+  
+  <!-- Sign up prompt for non-logged in users -->
+  <div *ngIf="!isLoggedIn" class="signup-prompt">
+    <div class="signup-title">🎁 Sign up for 100 free credits!</div>
+    <div class="signup-subtitle">+ 15 daily bonus credits</div>
+  </div>
+  
+  <!-- Admin Panel Button (only visible to admins/mods) -->
+  <button *ngIf="isLoggedIn && isAdmin" pButton type="button" 
+          class="p-button-warning p-button-sm admin-btn" 
+          label="Admin Panel" 
+          icon="pi pi-cog" 
+          routerLink="/admin">
+  </button>
+  
+  <!-- Actions -->
+  <div class="actions">
+    <button *ngIf="!isLoggedIn" pButton type="button" class="p-button-sm w-full" label="Login" icon="pi pi-sign-in" (click)="login()"></button>
+    <!-- Only show Link Google if logged in via Google (not Discord) and don't have Google linked yet -->
+    <button *ngIf="isLoggedIn && !hasGoogle && !hasDiscord" pButton type="button" class="p-button-outlined p-button-sm" label="Link Google" icon="pi pi-google" (click)="link('google')"></button>
+    <!-- Only show Link Discord if logged in via Discord (not Google) and don't have Discord linked yet -->
+    <button *ngIf="isLoggedIn && !hasDiscord && !hasGoogle" pButton type="button" class="p-button-outlined p-button-sm" label="Link Discord" icon="pi pi-discord" (click)="link('discord')"></button>
+    <button *ngIf="isLoggedIn" pButton type="button" class="p-button-text p-button-sm" label="Logout" icon="pi pi-sign-out" (click)="logout()"></button>
+    <span *ngIf="isLoggedIn && (hasGoogle || hasDiscord)" class="linked-accounts">
+      Linked: {{ hasGoogle ? 'Google' : '' }}{{ hasGoogle && hasDiscord ? ', ' : '' }}{{ hasDiscord ? 'Discord' : '' }}
+    </span>
+  </div>
+</div>
+
+<!-- Credits Purchase Dialog -->
+<app-credits-purchase 
+  [(visible)]="showPurchaseDialog"
+  (purchaseComplete)="onPurchaseComplete($event)">
+</app-credits-purchase>

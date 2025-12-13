@@ -1,5 +1,49 @@
 <p-toast></p-toast>
 
+<!-- Queue Type Selector -->
+<div class="queue-selector-container d-flex align-items-center justify-content-center mb-2 flex-wrap gap-2">
+  <div class="queue-toggle btn-group" role="group" aria-label="Queue type selection">
+    <button 
+      type="button" 
+      class="btn queue-btn"
+      [class.btn-outline-secondary]="queueType !== 'free'"
+      [class.btn-secondary]="queueType === 'free'"
+      [class.active]="queueType === 'free'"
+      (click)="onQueueTypeChange('free')">
+      <i class="pi pi-clock me-1"></i>
+      Free Queue
+    </button>
+    <button 
+      type="button" 
+      class="btn queue-btn"
+      [class.btn-outline-warning]="queueType !== 'priority'"
+      [class.btn-warning]="queueType === 'priority'"
+      [class.active]="queueType === 'priority'"
+      [disabled]="!canUsePriorityQueue()"
+      (click)="onQueueTypeChange('priority')">
+      <i class="pi pi-bolt me-1"></i>
+      Priority
+      <span class="badge bg-dark ms-1">{{creditCost}} ⚡</span>
+    </button>
+  </div>
+  
+  <!-- Credits display for logged in users -->
+  <div *ngIf="isLoggedIn" class="credits-badge d-flex align-items-center">
+    <span class="badge bg-primary">
+      <i class="pi pi-wallet me-1"></i>
+      {{userCredits}} credits
+    </span>
+  </div>
+  
+  <!-- Login prompt for non-logged in users -->
+  <div *ngIf="!isLoggedIn" class="login-prompt">
+    <small class="text-muted">
+      <i class="pi pi-info-circle me-1"></i>
+      Sign in for priority queue & free credits!
+    </small>
+  </div>
+</div>
+
 <!-- Prompt input box and advanced options button -->
 <div class="input-button-container d-flex flex-wrap align-items-center justify-content-start">
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1">
@@ -107,11 +151,9 @@
     <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
       [(ngModel)]="this.generationRequest.model" (change)="changeModel($event)">
       <option value="sonicDiffusionV4">SonicDiffusionV4</option>
-      <option value="fluffySonic">fluffySonic</option>
-      <option value="sonicDiffusionXL">sonicDiffusionXL</option>
       <option value="autismMix">autismMix</option>
-      <option value="fluffySonicXL">fluffySonicXL</option>
       <option value="novaFurryXL_V8B">novaFurryXL_V8B</option>
+      <option value="novaMobianXL_v10">novaMobianXL_v10</option>
     </select>
 
     <label for="floatingSelect">Image aspect-ratio</label>
@@ -338,7 +380,7 @@
       </span>
       <span class="d-flex" [style]="{ marginLeft: '5px' }">
         Show NSFW Loras?
-        <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="filterLoras(); saveSettings()"></p-inputSwitch>
+        <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="filterLoras()"></p-inputSwitch>
       </span>
     </p>
 

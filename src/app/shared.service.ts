@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class SharedService {
 
   private _prompt: BehaviorSubject<string> = new BehaviorSubject<string>("");
@@ -14,7 +14,17 @@ export class SharedService {
   private _instructions: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(true);
 
 
-  constructor() { }
+  constructor() {
+    // Rehydrate user session from localStorage on app start
+    try {
+      const saved = localStorage.getItem('userData');
+      if (saved) {
+        this._userData.next(JSON.parse(saved));
+      }
+    } catch {
+      // ignore JSON or storage errors
+    }
+  }
 
   setPrompt(value: string) {
     this._prompt.next(value);
@@ -81,6 +91,16 @@ export class SharedService {
 
   setUserData(value: any) {
     this._userData.next(value);
+    // Persist or clear session in localStorage
+    try {
+      if (value) {
+        localStorage.setItem('userData', JSON.stringify(value));
+      } else {
+        localStorage.removeItem('userData');
+      }
+    } catch {
+      // ignore storage errors
+    }
   }
 
   getUserData(): Observable<any> {

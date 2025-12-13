@@ -1,0 +1,68 @@
+<p-dialog 
+  [(visible)]="visible" 
+  [modal]="true" 
+  [closable]="!processing" 
+  [dismissableMask]="!processing" 
+  [draggable]="false" 
+  [resizable]="false" 
+  [style]="{width: '95vw', maxWidth: '500px'}" 
+  (onHide)="close()" 
+  header="Buy Credits">
+  
+  <div class="purchase-content">
+    <!-- Loading state -->
+    <div *ngIf="loading" class="loading-state">
+      <i class="pi pi-spin pi-spinner" style="font-size: 2rem;"></i>
+      <p>Loading packages...</p>
+    </div>
+    
+    <!-- Package selection -->
+    <div *ngIf="!loading" class="packages-grid">
+      <div 
+        *ngFor="let pkg of packages" 
+        class="package-card"
+        [class.selected]="selectedPackage?.id === pkg.id"
+        [class.popular]="pkg.id === 'popular'"
+        [class.best-value]="pkg.id === 'best_value'"
+        (click)="selectPackage(pkg)">
+        
+        <div *ngIf="pkg.id === 'popular'" class="badge popular-badge">Better Value</div>
+        <div *ngIf="pkg.id === 'best_value'" class="badge value-badge">Best Value</div>
+        
+        <div class="package-name">{{ pkg.name }}</div>
+        <div class="package-credits">{{ pkg.credits | number }} credits</div>
+        <div class="package-price">${{ pkg.price_usd | number:'1.0-0' }}</div>
+        
+        <div *ngIf="getBonus(pkg) > 0" class="package-bonus">
+          +{{ getBonus(pkg) }}% bonus!
+        </div>
+      </div>
+    </div>
+    
+    <!-- PayPal buttons container -->
+    <div *ngIf="selectedPackage && !loading" class="paypal-section">
+      <div class="selected-summary">
+        <span>Selected:</span>
+        <strong>{{ selectedPackage.name }}</strong>
+        <span class="price">${{ selectedPackage.price_usd | number:'1.2-2' }}</span>
+      </div>
+      
+      <div *ngIf="processing" class="processing-overlay">
+        <i class="pi pi-spin pi-spinner" style="font-size: 1.5rem;"></i>
+        <span>Processing payment...</span>
+      </div>
+      
+      <div #paypalContainer class="paypal-buttons" [class.hidden]="processing"></div>
+      
+      <p *ngIf="!paypalReady && selectedPackage" class="loading-paypal">
+        <i class="pi pi-spin pi-spinner"></i> Loading payment options...
+      </p>
+    </div>
+    
+    <!-- Info footer -->
+    <div class="info-footer">
+      <p><i class="pi pi-info-circle"></i> Payments are processed securely by PayPal. You can pay with PayPal balance or credit/debit card.</p>
+      <p><i class="pi pi-lock"></i> All purchases are final. Credits do not expire.</p>
+    </div>
+  </div>
+</p-dialog>
