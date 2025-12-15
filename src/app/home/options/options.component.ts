@@ -20,6 +20,7 @@ import { AddLorasComponent } from '../add-loras/add-loras.component';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
+import { AuthService } from 'src/app/auth/auth.service';
 
 
 @Component({
@@ -36,10 +37,8 @@ export class OptionsComponent implements OnInit {
 
   models_types: { [model: string]: string; } = {
     "sonicDiffusionV4": "SD 1.5",
-    "fluffySonic": "SD 1.5",
-    "sonicDiffusionXL": "Pony",
     "autismMix": "Pony",
-    "fluffySonicXL": "Pony",
+    "novaMobianXL_v10": "Illustrious",
     "novaFurryXL_V8B": "Illustrious"
   }
   enableGenerationButton: boolean = true;
@@ -50,7 +49,7 @@ export class OptionsComponent implements OnInit {
   enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
-  aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaFurryXL_V8B", aspectRatio: "square" };
+  aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaMobianXL_v10", aspectRatio: "square" };
   defaultNegativePrompt: string = "nsfw, 3d, EasyNegativeV2, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
   generationRequest: any = {
     prompt: "",
@@ -67,7 +66,7 @@ export class OptionsComponent implements OnInit {
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
-    model: "novaFurryXL_V8B",
+    model: "novaMobianXL_v10",
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
     loras: [],
@@ -153,6 +152,26 @@ export class OptionsComponent implements OnInit {
   debouncedSearch: () => void;
   isSearching: boolean = false;
 
+  // Queue type and credits
+  queueType: 'free' | 'priority' = 'free';
+  creditCost: number = 0;
+  userCredits: number = 0;
+  isLoggedIn: boolean = false;
+  
+  // Credit costs by model type
+  private readonly creditCosts: { [key: string]: number } = {
+    'SD 1.5': 5,
+    'Pony': 10,
+    'Illustrious': 10
+  };
+
+  // Additional cost per LoRA by model type
+  private readonly loraCreditCosts: { [key: string]: number } = {
+    'SD 1.5': 1,
+    'Pony': 2,
+    'Illustrious': 2
+  };
+
   @Input() inpaintMask?: string;
 
   @Output() imagesChange = new EventEmitter<any>();
@@ -176,6 +195,7 @@ export class OptionsComponent implements OnInit {
     , private dialogService: DialogService
     , private blobMigrationService: BlobMigrationService
     , private lockService: GenerationLockService
+    , private authService: AuthService
   ) {
     // Load in loras info
     this.loadLoras();
@@ -425,6 +445,19 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.prompt = value;
     });
 
+    // Subscribe to credits changes
+    this.authService.credits$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(creditsData => {
+      if (creditsData) {
+        this.userCredits = creditsData.credits;
+        this.isLoggedIn = true;
+      } else {
+        this.userCredits = 0;
+        this.isLoggedIn = this.authService.isLoggedIn();
+      }
+      // Update credit cost display
+      this.updateCreditCost();
+    });
+
     try {
       await this.getDatabase();
       console.log('Database and object stores created/updated successfully');
@@ -457,25 +490,20 @@ export class OptionsComponent implements OnInit {
       }
     });
 
-    // Discord userdata check
+    // Discord userdata check (in-memory only)
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
         // If we dont have discordUserID, we need them to login again
         if (userData.discord_user_id) {
           this.loginInfo = userData;
           console.log('premium member!');
-          this.onDiscordLoginSuccess(userData);
+      // set local flags if needed; avoid persisting to localStorage
+      this.supporter = userData.has_required_role;
+      this.serverMember = userData.is_member_of_your_guild;
         }
       }
     });
-
-    const storedUserData = localStorage.getItem('discordUserData');
-    if (storedUserData) {
-      const userData = JSON.parse(storedUserData);
-      this.supporter = userData.has_required_role;
-      this.serverMember = userData.is_member_of_your_guild;
-      this.sharedService.setUserData(userData);
-    }
+    // Removed localStorage restore; session should be provided by backend if needed
 
     // Resume any pending job (respect max age)
     const pending = this.getPendingJob();
@@ -492,6 +520,10 @@ export class OptionsComponent implements OnInit {
         if (pending.request) {
           this.generationRequest = { ...this.generationRequest, ...pending.request };
           this.sharedService.setGenerationRequest(this.generationRequest);
+          // Restore queue type if it was saved
+          if (pending.request.queue_type) {
+            this.queueType = pending.request.queue_type;
+          }
         }
         this.getJob(pending.job_id);
       }
@@ -534,7 +566,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.model = selectElement.value;
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_V8B") {
+    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_V8B" || selectElement.value == "novaMobianXL_v10") {
       this.generationRequest.guidance_scale = 4;
     }
     else {
@@ -548,8 +580,57 @@ export class OptionsComponent implements OnInit {
     this.selectedLoras = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
     this.generationRequest.loras = this.selectedLoras;
 
+    // Update credit cost for new model
+    this.updateCreditCost();
+
     // Persist immediately
     this.saveSettings();
+  }
+
+  // Queue type and credit cost methods
+  updateCreditCost() {
+    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const baseCost = this.creditCosts[modelType] ?? this.creditCosts['SD 1.5'] ?? 0;
+    const loraCount = this.selectedLoras?.length ?? 0;
+    const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
+    this.creditCost = baseCost + (loraCount * perLoraCost);
+  }
+
+  onQueueTypeChange(type: 'free' | 'priority') {
+    this.queueType = type;
+    
+    // If switching to priority without enough credits, show warning
+    if (type === 'priority' && !this.authService.isLoggedIn()) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Login Required',
+        detail: 'Sign in to use the priority queue and earn free credits!',
+        life: 4000
+      });
+      this.queueType = 'free';
+      return;
+    }
+    
+    if (type === 'priority' && this.userCredits < this.creditCost) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Insufficient Credits',
+        detail: `You need ${this.creditCost} credits. You have ${this.userCredits}.`,
+        life: 4000
+      });
+      this.queueType = 'free';
+    }
+  }
+
+  canUsePriorityQueue(): boolean {
+    return this.authService.isLoggedIn() && this.userCredits >= this.creditCost;
+  }
+
+  getQueueTypeLabel(): string {
+    if (this.queueType === 'priority') {
+      return `Priority (${this.creditCost} credits)`;
+    }
+    return 'Free Queue';
   }
 
   changeAspectRatioSelector(event: any) {
@@ -723,7 +804,6 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("cfg");
     localStorage.removeItem("aspect-ratio");
     localStorage.removeItem("fast-pass-code");
-    localStorage.removeItem('discordUserData');
     localStorage.removeItem('showNSFWLoras');
     localStorage.removeItem('lossy-images');
     localStorage.removeItem('notifications-enabled');
@@ -733,12 +813,10 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 4;
-    this.generationRequest.model = "novaFurryXL_V8B";
-    this.loginInfo = null;
+    this.generationRequest.model = "novaMobianXL_v10";
     this.showNSFWLoras = false;
     this.generationRequest.lossy_images = false;
     this.enableNotifications = false;
-    this.sharedService.setUserData(null);
     this.changeAspectRatio("portrait");
 
     this.loadSettings();
@@ -838,6 +916,26 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.job_type = "upscale";
     }
 
+    // Validate priority queue requirements
+    if (this.queueType === 'priority') {
+      if (!this.authService.isLoggedIn()) {
+        this.messageService.add({ 
+          severity: 'warn', 
+          summary: 'Login Required', 
+          detail: 'Please log in to use the priority queue.' 
+        });
+        return;
+      }
+      if (this.userCredits < this.creditCost) {
+        this.messageService.add({ 
+          severity: 'warn', 
+          summary: 'Insufficient Credits', 
+          detail: `You need ${this.creditCost} credits but only have ${this.userCredits}.` 
+        });
+        return;
+      }
+    }
+
     // Prevent multi-tab concurrency
     if (this.lockService.isLockedByOther()) {
       this.messageService.add({ severity: 'warn', summary: 'Generation running', detail: 'Another tab is generating. Please wait or close other tabs.' });
@@ -856,6 +954,9 @@ export class OptionsComponent implements OnInit {
 
     // Ensure client id is attached for server-side dedupe if supported
     this.generationRequest.client_id = this.notificationService.userId;
+    
+    // Set queue type for the request
+    this.generationRequest.queue_type = this.queueType;
 
     // Save settings to session storage
     this.saveSettings();
@@ -886,6 +987,17 @@ export class OptionsComponent implements OnInit {
     this.stableDiffusionService.submitJob(this.generationRequest)
       .subscribe(
         response => {
+          // Update credits if priority queue was used
+          if (response.credits_remaining !== undefined) {
+            this.authService.updateCredits(response.credits_remaining);
+            this.messageService.add({
+              severity: 'info',
+              summary: 'Credits Used',
+              detail: `${response.credits_used} credits used. Remaining: ${response.credits_remaining}`,
+              life: 3000
+            });
+          }
+
           // Persist pending job so we can resume after refresh
           this.savePendingJob(response.job_id, {
             prompt: this.generationRequest.prompt,
@@ -893,7 +1005,8 @@ export class OptionsComponent implements OnInit {
             height: this.generationRequest.height,
             job_type: this.generationRequest.job_type,
             model: this.generationRequest.model,
-            client_id: this.generationRequest.client_id
+            client_id: this.generationRequest.client_id,
+            queue_type: this.queueType
           });
 
           this.getJob(response.job_id);
@@ -922,7 +1035,7 @@ export class OptionsComponent implements OnInit {
     this.cancelInProgress = true;
     this.enableGenerationButton = false;
     this.stableDiffusionService.cancelJob(id).subscribe({
-      next: () => {
+      next: (response: any) => {
         // Stop polling if active
         this.jobPollSub?.unsubscribe();
         this.jobPollSub = undefined;
@@ -936,7 +1049,15 @@ export class OptionsComponent implements OnInit {
         this.etaChange.emit(undefined);
         // Release generation lock on cancel
         this.lockService.release();
-        this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: 'Generation cancelled.' });
+        
+        // If credits were refunded, update the user's credit balance
+        if (response?.credits_refunded && response.credits_refunded > 0) {
+          this.userCredits += response.credits_refunded;
+          this.authService.updateCredits(this.userCredits);
+          this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: `Generation cancelled. ${response.credits_refunded} credits refunded.` });
+        } else {
+          this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: 'Generation cancelled.' });
+        }
         // Reset cancel flag after handling
         this.cancelInProgress = false;
       },
@@ -1089,7 +1210,7 @@ export class OptionsComponent implements OnInit {
       .subscribe(
         (response: any) => {
           if (!response || response.status === undefined) {
-            const error = { error: { detail: "Job not found. Please try again later." } };
+            const error = { error: { detail: "Job not found. The server may have restarted. Please try again." } };
             console.error(error)
             this.showError(error);  // show the error modal
             this.enableGenerationButton = true;
@@ -1098,6 +1219,7 @@ export class OptionsComponent implements OnInit {
             this.jobID = "";
             this.queuePositionChange.emit(0);
             this.etaChange.emit(undefined);
+            this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
@@ -1107,6 +1229,7 @@ export class OptionsComponent implements OnInit {
             this.jobID = "";
             this.queuePositionChange.emit(0);
             this.etaChange.emit(undefined);
+            this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
@@ -1130,6 +1253,7 @@ export class OptionsComponent implements OnInit {
           this.jobID = "";
           this.queuePositionChange.emit(0);
           this.etaChange.emit(undefined);
+          this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
           this.removePendingJob();
           this.lockService.release();
         }
@@ -1142,6 +1266,19 @@ export class OptionsComponent implements OnInit {
   // Add this method to your class
   private handleFailedJob(response: any) {
     console.error('Job failed or encountered an error:', response);
+    
+    // Check if a refund was issued and show appropriate message
+    if (response.refund) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Credits Refunded',
+        detail: `${response.refund.credits_refunded} credits have been refunded to your account. New balance: ${response.refund.new_balance}`,
+        life: 8000
+      });
+      // Update the user's credit balance
+      this.authService.updateCredits(response.refund.new_balance);
+    }
+    
     this.showError({ error: { detail: `Job ${response.status}: ${response.message || 'Unknown error occurred'}` } });
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);
@@ -1626,9 +1763,9 @@ export class OptionsComponent implements OnInit {
      }
   }
 
-  // Example function called after successful Discord login
+  // Example function after successful Discord login (no localStorage persistence)
   onDiscordLoginSuccess(userData: any) {
-    localStorage.setItem('discordUserData', JSON.stringify(userData));
+    // no-op or update any UI flags
   }
 
   onFastPassCodeChange(event: any) {
@@ -1745,6 +1882,8 @@ export class OptionsComponent implements OnInit {
         this.sharedService.setPrompt(this.generationRequest.prompt);
       }
     }
+
+    this.updateCreditCost();
   }
 
   // Function to update the strength of a LoRA
@@ -1771,6 +1910,8 @@ export class OptionsComponent implements OnInit {
       });
       this.sharedService.setPrompt(this.generationRequest.prompt);
     }
+
+    this.updateCreditCost();
   }
 
   // Method to open the modal with the full-sized image
@@ -2187,6 +2328,8 @@ export class OptionsComponent implements OnInit {
     // Clear pending and release any lock just in case
     this.removePendingJob();
     this.lockService.release();
+    // Reset queue type to free to prevent auth errors
+    this.queueType = 'free';
     // Re-enable UI
     this.enableGenerationButton = true;
     this.loadingChange.emit(false);

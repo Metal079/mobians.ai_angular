@@ -1,0 +1,5 @@
+.login-content { padding: .5rem 0; }
+.muted { color: var(--text-color-secondary); margin-bottom: .5rem; }
+.btns { display: grid; gap: .5rem; }
+button.google :global(.p-button-icon) { color: #EA4335; }
+button.discord :global(.p-button-icon) { color: #5865F2; }

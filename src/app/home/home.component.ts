@@ -47,9 +47,9 @@ export class HomeComponent {
     });
   }
 
-  // Example function called after successful Discord login
+  // Example function after successful Discord login (no persistence)
   onDiscordLoginSuccess(userData: any) {
-    localStorage.setItem('discordUserData', JSON.stringify(userData));
+    // No localStorage persistence
   }
 
   onImagesChange(images: string[]) {

@@ -1,0 +1,12 @@
+<p-dialog [(visible)]="visible" [modal]="true" [closable]="true" [dismissableMask]="true" [draggable]="false" [resizable]="false" [style]="{width: '90vw', maxWidth: '420px'}" (onHide)="close()" header="Sign in">
+  <div class="login-content">
+    <p class="muted">Sign in to unlock features like fastpass, saved history, and credits.</p>
+    <div class="btns">
+  <button *ngIf="auth.hasAuth0()" pButton type="button" label="Continue with Auth0" icon="pi pi-shield" class="p-button-text p-button-lg w-full" (click)="loginAuth0()"></button>
+      <button *ngIf="auth.hasGoogle()" pButton type="button" label="Continue with Google" icon="pi pi-google" class="p-button-text p-button-lg w-full google" (click)="loginGoogle()"></button>
+      <button *ngIf="auth.hasDiscord()" pButton type="button" label="Continue with Discord" icon="pi pi-discord" class="p-button-text p-button-lg w-full discord" (click)="loginDiscord()"></button>
+      <small *ngIf="!auth.hasGoogle() && !auth.hasDiscord()" class="p-text-secondary">OAuth is not configured. Set client IDs in environment and .env for backend.</small>
+    </div>
+    <button pButton type="button" label="Maybe later" class="p-button-text w-full mt-3" (click)="close()"></button>
+  </div>
+</p-dialog>
