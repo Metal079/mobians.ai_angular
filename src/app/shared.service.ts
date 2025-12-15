@@ -19,10 +19,29 @@ export class SharedService {
     try {
       const saved = localStorage.getItem('userData');
       if (saved) {
-        this._userData.next(JSON.parse(saved));
+        const userData = JSON.parse(saved);
+        
+        // Check if userData has a valid token - if not, clear invalid session
+        // This handles users who got userData saved without a token due to backend errors
+        if (!userData?.token) {
+          // Invalid session - user appears logged in but has no token
+          // Clear it so they can log in fresh
+          console.warn('Invalid session detected (no token) - clearing stale auth data');
+          localStorage.removeItem('userData');
+          localStorage.removeItem('authToken');
+          this._userData.next(null);
+        } else {
+          this._userData.next(userData);
+          // Ensure authToken is synchronized for the HTTP interceptor
+          localStorage.setItem('authToken', userData.token);
+        }
       }
     } catch {
-      // ignore JSON or storage errors
+      // JSON parse error - clear corrupted data
+      try {
+        localStorage.removeItem('userData');
+        localStorage.removeItem('authToken');
+      } catch {}
     }
   }
 
@@ -95,8 +114,13 @@ export class SharedService {
     try {
       if (value) {
         localStorage.setItem('userData', JSON.stringify(value));
+        // Sync authToken for the HTTP interceptor
+        if (value.token) {
+          localStorage.setItem('authToken', value.token);
+        }
       } else {
         localStorage.removeItem('userData');
+        localStorage.removeItem('authToken');
       }
     } catch {
       // ignore storage errors
