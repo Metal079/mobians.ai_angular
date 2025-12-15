@@ -25,9 +25,9 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   showPurchaseDialog = false;
 
   // Daily bonus configuration
-  private readonly DAILY_BASE = 15;
-  private readonly DAILY_INCREMENT = 5;
-  private readonly DAILY_CAP = 25;
+  private readonly DAILY_BASE = 30;
+  private readonly DAILY_INCREMENT = 10;
+  private readonly DAILY_CAP = 50;
 
   private subscriptions: Subscription[] = [];
 

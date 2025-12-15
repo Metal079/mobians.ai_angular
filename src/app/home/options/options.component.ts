@@ -160,9 +160,16 @@ export class OptionsComponent implements OnInit {
   
   // Credit costs by model type
   private readonly creditCosts: { [key: string]: number } = {
-    'SD 1.5': 2,
-    'Pony': 5,
-    'Illustrious': 5
+    'SD 1.5': 5,
+    'Pony': 10,
+    'Illustrious': 10
+  };
+
+  // Additional cost per LoRA by model type
+  private readonly loraCreditCosts: { [key: string]: number } = {
+    'SD 1.5': 1,
+    'Pony': 2,
+    'Illustrious': 2
   };
 
   @Input() inpaintMask?: string;
@@ -583,7 +590,10 @@ export class OptionsComponent implements OnInit {
   // Queue type and credit cost methods
   updateCreditCost() {
     const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
-    this.creditCost = this.creditCosts[modelType] || 2;
+    const baseCost = this.creditCosts[modelType] ?? this.creditCosts['SD 1.5'] ?? 0;
+    const loraCount = this.selectedLoras?.length ?? 0;
+    const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
+    this.creditCost = baseCost + (loraCount * perLoraCost);
   }
 
   onQueueTypeChange(type: 'free' | 'priority') {
@@ -1872,6 +1882,8 @@ export class OptionsComponent implements OnInit {
         this.sharedService.setPrompt(this.generationRequest.prompt);
       }
     }
+
+    this.updateCreditCost();
   }
 
   // Function to update the strength of a LoRA
@@ -1898,6 +1910,8 @@ export class OptionsComponent implements OnInit {
       });
       this.sharedService.setPrompt(this.generationRequest.prompt);
     }
+
+    this.updateCreditCost();
   }
 
   // Method to open the modal with the full-sized image
