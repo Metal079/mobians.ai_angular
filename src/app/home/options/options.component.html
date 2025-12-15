@@ -84,11 +84,15 @@
     </span>
 
     <!-- Upscale button -->
-    <span
-      *ngIf="serverMember && this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix'">
+    <span class="d-inline-flex align-items-center"
+      *ngIf="this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix'">
       <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob(true)"></p-button>
+      <span class="badge ms-1"
+        [ngClass]="!isLoggedIn ? 'bg-secondary' : (userCredits < upscaleCreditCost ? 'bg-danger' : 'bg-dark')">
+        {{upscaleCreditCost}} ⚡
+      </span>
       <span class="ms-1 text-primary"
-        pTooltip="Upscale the image by 1.5x. This will make the image look better and generate finer details. Due to longer generation times, this feature is currently only available to discord server members."
+        [pTooltip]="getUpscaleTooltip()"
         tooltipPosition="top" style="
         background-color: rgba(255, 255, 255, 0.8);
         padding: 2px 4px;

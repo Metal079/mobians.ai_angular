@@ -155,6 +155,7 @@ export class OptionsComponent implements OnInit {
   // Queue type and credits
   queueType: 'free' | 'priority' = 'free';
   creditCost: number = 0;
+  upscaleCreditCost: number = 0;
   userCredits: number = 0;
   isLoggedIn: boolean = false;
   
@@ -594,6 +595,19 @@ export class OptionsComponent implements OnInit {
     const loraCount = this.selectedLoras?.length ?? 0;
     const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
     this.creditCost = baseCost + (loraCount * perLoraCost);
+    this.upscaleCreditCost = baseCost * 3;
+  }
+
+  getUpscaleTooltip(): string {
+    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const cost = this.upscaleCreditCost;
+    if (!this.authService.isLoggedIn()) {
+      return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}). Login required.`;
+    }
+    if (this.userCredits < cost) {
+      return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}). You have ${this.userCredits} credits.`;
+    }
+    return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}).`;
   }
 
   onQueueTypeChange(type: 'free' | 'priority') {
@@ -780,6 +794,7 @@ export class OptionsComponent implements OnInit {
     // Apply current LoRA filters after restoring settings
     this.filterLoras();
     this.refreshLoraFiltersList();
+    this.updateCreditCost();
 
     try {
       // Use the new queryImages function to load the initial set of images
@@ -912,25 +927,28 @@ export class OptionsComponent implements OnInit {
 
   // Send job to django api and retrieve job id.
   async submitJob(upscale: boolean = false) {
-    if (upscale) {
-      this.generationRequest.job_type = "upscale";
-    }
+    const isUpscaleJob = upscale === true;
+    const queueTypeForRequest: 'free' | 'priority' = isUpscaleJob ? 'priority' : this.queueType;
+    const creditCostForRequest = isUpscaleJob ? this.upscaleCreditCost : this.creditCost;
+    const jobTypeForRequest = isUpscaleJob ? 'upscale' : this.generationRequest.job_type;
 
     // Validate priority queue requirements
-    if (this.queueType === 'priority') {
+    if (queueTypeForRequest === 'priority') {
       if (!this.authService.isLoggedIn()) {
         this.messageService.add({ 
           severity: 'warn', 
           summary: 'Login Required', 
-          detail: 'Please log in to use the priority queue.' 
+          detail: isUpscaleJob
+            ? `Please log in to upscale images. Upscaling costs ${creditCostForRequest} credits due to longer generation times.`
+            : 'Please log in to use the priority queue.' 
         });
         return;
       }
-      if (this.userCredits < this.creditCost) {
+      if (this.userCredits < creditCostForRequest) {
         this.messageService.add({ 
           severity: 'warn', 
           summary: 'Insufficient Credits', 
-          detail: `You need ${this.creditCost} credits but only have ${this.userCredits}.` 
+          detail: `You need ${creditCostForRequest} credits but only have ${this.userCredits}.` 
         });
         return;
       }
@@ -955,9 +973,6 @@ export class OptionsComponent implements OnInit {
     // Ensure client id is attached for server-side dedupe if supported
     this.generationRequest.client_id = this.notificationService.userId;
     
-    // Set queue type for the request
-    this.generationRequest.queue_type = this.queueType;
-
     // Save settings to session storage
     this.saveSettings();
     this.inpaintingChange.emit(this.showInpaintingCanvas);
@@ -979,12 +994,18 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob!);
     }
 
+    const requestToSend = {
+      ...this.generationRequest,
+      job_type: jobTypeForRequest,
+      queue_type: queueTypeForRequest,
+    };
+
     this.sharedService.setGenerationRequest(this.generationRequest);
 
     // set loading to true and submit job
     this.loadingChange.emit(true);
     this.hasPendingJob = true;
-    this.stableDiffusionService.submitJob(this.generationRequest)
+    this.stableDiffusionService.submitJob(requestToSend)
       .subscribe(
         response => {
           // Update credits if priority queue was used
@@ -1000,13 +1021,13 @@ export class OptionsComponent implements OnInit {
 
           // Persist pending job so we can resume after refresh
           this.savePendingJob(response.job_id, {
-            prompt: this.generationRequest.prompt,
-            width: this.generationRequest.width,
-            height: this.generationRequest.height,
-            job_type: this.generationRequest.job_type,
-            model: this.generationRequest.model,
-            client_id: this.generationRequest.client_id,
-            queue_type: this.queueType
+            prompt: requestToSend.prompt,
+            width: requestToSend.width,
+            height: requestToSend.height,
+            job_type: requestToSend.job_type,
+            model: requestToSend.model,
+            client_id: requestToSend.client_id,
+            queue_type: requestToSend.queue_type
           });
 
           this.getJob(response.job_id);
