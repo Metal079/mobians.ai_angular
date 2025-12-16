@@ -567,7 +567,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.model = selectElement.value;
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_V8B" || selectElement.value == "novaMobianXL_v10") {
+    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_ilV140" || selectElement.value == "novaMobianXL_v10") {
       this.generationRequest.guidance_scale = 4;
     }
     else {
@@ -654,17 +654,17 @@ export class OptionsComponent implements OnInit {
 
   changeAspectRatio(aspectRatio: string) {
     if (aspectRatio == 'square') {
-      this.aspectRatio = { width: 512, height: 512, model: "novaFurryXL_V8B", aspectRatio: "square" };
+      this.aspectRatio = { width: 512, height: 512, model: "novaFurryXL_ilV140", aspectRatio: "square" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 512;
     }
     else if (aspectRatio == 'portrait') {
-      this.aspectRatio = { width: 512, height: 768, model: "novaFurryXL_V8B", aspectRatio: "portrait" };
+      this.aspectRatio = { width: 512, height: 768, model: "novaFurryXL_ilV140", aspectRatio: "portrait" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 768;
     }
     else if (aspectRatio == 'landscape') {
-      this.aspectRatio = { width: 768, height: 512, model: "novaFurryXL_V8B", aspectRatio: "landscape" };
+      this.aspectRatio = { width: 768, height: 512, model: "novaFurryXL_ilV140", aspectRatio: "landscape" };
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
