@@ -39,7 +39,7 @@ export class OptionsComponent implements OnInit {
     "sonicDiffusionV4": "SD 1.5",
     "autismMix": "Pony",
     "novaMobianXL_v10": "Illustrious",
-    "novaFurryXL_V8B": "Illustrious"
+    "novaFurryXL_ilV140": "Illustrious"
   }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
