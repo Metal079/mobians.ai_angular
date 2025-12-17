@@ -13,6 +13,9 @@ export interface UserCredits {
   credits: number;
   canClaimDailyBonus: boolean;
   dailyBonusStreak: number;
+  lastDailyBonus?: string | null;
+  nextDailyBonus?: number;
+  nextDailyBonusStreak?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -79,7 +82,10 @@ export class AuthService {
             this._credits$.next({
               credits: response.user.credits,
               canClaimDailyBonus: current?.canClaimDailyBonus ?? false,
-              dailyBonusStreak: response.user.daily_bonus_streak ?? current?.dailyBonusStreak ?? 0
+              dailyBonusStreak: response.user.daily_bonus_streak ?? current?.dailyBonusStreak ?? 0,
+              lastDailyBonus: response.user.last_daily_bonus ?? current?.lastDailyBonus ?? null,
+              nextDailyBonus: current?.nextDailyBonus,
+              nextDailyBonusStreak: current?.nextDailyBonusStreak
             });
           }
         }
@@ -117,7 +123,8 @@ export class AuthService {
       this._credits$.next({
         credits: userData.credits,
         canClaimDailyBonus: false,
-        dailyBonusStreak: userData.daily_bonus_streak || 0
+        dailyBonusStreak: userData.daily_bonus_streak || 0,
+        lastDailyBonus: userData.last_daily_bonus ?? null
       });
     }
   }
@@ -170,7 +177,10 @@ export class AuthService {
         const creditsData: UserCredits = {
           credits: response.credits,
           canClaimDailyBonus: response.can_claim_daily_bonus,
-          dailyBonusStreak: response.daily_bonus_streak
+          dailyBonusStreak: response.daily_bonus_streak,
+          lastDailyBonus: response.last_daily_bonus,
+          nextDailyBonus: response.next_daily_bonus,
+          nextDailyBonusStreak: response.next_daily_bonus_streak
         };
         this._credits$.next(creditsData);
         
@@ -180,7 +190,7 @@ export class AuthService {
           this.shared.setUserData({
             ...userData,
             credits: response.credits,
-            last_daily_bonus: response.can_claim_daily_bonus ? null : new Date().toISOString().split('T')[0],
+            last_daily_bonus: response.last_daily_bonus ?? userData.last_daily_bonus ?? null,
             daily_bonus_streak: response.daily_bonus_streak
           });
         }
@@ -192,7 +202,7 @@ export class AuthService {
     return null;
   }
 
-  async claimDailyBonus(): Promise<{ success: boolean; message: string; newBalance?: number; streak?: number }> {
+  async claimDailyBonus(): Promise<{ success: boolean; message: string; newBalance?: number; streak?: number; creditsAwarded?: number }> {
     if (!this.isLoggedIn()) {
       return { success: false, message: 'Not logged in' };
     }
@@ -222,7 +232,8 @@ export class AuthService {
           success: true,
           message: response.message,
           newBalance: response.new_balance,
-          streak: response.streak
+          streak: response.streak,
+          creditsAwarded: response.credits_awarded
         };
       }
       return { success: false, message: 'Failed to claim daily bonus' };

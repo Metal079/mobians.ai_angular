@@ -21,6 +21,7 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   credits = 0;
   canClaimDailyBonus = false;
   dailyStreak = 0;
+  nextDailyBonusFromServer: number | null = null;
   claimingBonus = false;
   showPurchaseDialog = false;
 
@@ -62,10 +63,12 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
         this.credits = creditsData.credits;
         this.canClaimDailyBonus = creditsData.canClaimDailyBonus;
         this.dailyStreak = creditsData.dailyBonusStreak;
+        this.nextDailyBonusFromServer = creditsData.nextDailyBonus ?? null;
       } else {
         this.credits = 0;
         this.canClaimDailyBonus = false;
         this.dailyStreak = 0;
+        this.nextDailyBonusFromServer = null;
       }
     });
     this.subscriptions.push(creditsSub);
@@ -81,20 +84,23 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   }
 
   get nextDailyBonus(): number {
-    return this.calculateDailyBonus(this.dailyStreak);
+    return this.nextDailyBonusFromServer ?? this.calculateDailyBonus(this.dailyStreak);
   }
 
   async claimDaily() {
     if (this.claimingBonus) return;
     
+    const creditsBefore = this.credits;
     this.claimingBonus = true;
     try {
       const result = await this.auth.claimDailyBonus();
       if (result.success) {
         const streakAfterClaim = result.streak ?? this.dailyStreak;
-        const claimedAmount = result.newBalance !== undefined
-          ? Math.max(result.newBalance - this.credits, 0)
-          : this.calculateClaimedBonusFromStreak(streakAfterClaim);
+        const claimedAmount = result.creditsAwarded !== undefined
+          ? result.creditsAwarded
+          : result.newBalance !== undefined
+            ? Math.max(result.newBalance - creditsBefore, 0)
+            : this.calculateClaimedBonusFromStreak(streakAfterClaim);
         const balanceText = result.newBalance !== undefined ? ` New balance: ${result.newBalance}` : '';
 
         this.dailyStreak = streakAfterClaim ?? 0;
