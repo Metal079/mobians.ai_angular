@@ -105,6 +105,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.swUpdate.isEnabled) {
       this.updateCheckHandler = () => {
         if (typeof navigator !== 'undefined' && navigator && 'onLine' in navigator && !navigator.onLine) return;
+        console.log(`Checking for updates @ ${new Date().toISOString()}`);
         this.swUpdate
           .checkForUpdate()
           .then(found => {

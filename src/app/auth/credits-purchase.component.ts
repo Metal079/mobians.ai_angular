@@ -109,7 +109,6 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
     }
 
     const clientId = (environment as any).paypalClientId;
-    console.log('PayPal Client ID:', clientId); // Debug log
     if (!clientId || clientId.startsWith('YOUR_PAYPAL')) {
       this.messageService.add({
         severity: 'warn',
