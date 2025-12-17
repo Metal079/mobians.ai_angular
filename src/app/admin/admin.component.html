@@ -104,7 +104,7 @@
                       </div>
                       <div class="detail-item" *ngIf="row.version_id">
                         <span class="detail-label">CivitAI</span>
-                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link">
+                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
                           <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
                         </a>
                       </div>
@@ -171,7 +171,7 @@
                 <span class="uses-badge">{{ row.uses }}</span>
               </td>
               <td class="col-hide-sm">
-                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top">
+                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
                   <i class="bi bi-box-arrow-up-right"></i>
                 </a>
                 <span *ngIf="!row.version_id" class="no-link">-</span>
@@ -274,7 +274,7 @@
                       </div>
                       <div class="detail-item" *ngIf="row.version_id">
                         <span class="detail-label">CivitAI</span>
-                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link">
+                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
                           <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
                         </a>
                       </div>
@@ -333,7 +333,7 @@
                 <span class="model-badge">{{ row.base_model || 'Unknown' }}</span>
               </td>
               <td class="col-hide-sm">
-                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top">
+                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
                   <i class="bi bi-box-arrow-up-right"></i>
                 </a>
                 <span *ngIf="!row.version_id" class="no-link">-</span>

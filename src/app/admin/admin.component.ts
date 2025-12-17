@@ -438,11 +438,51 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.editDisplayNameValue[key] = value;
   }
 
-  // Get CivitAI link from version_id
   getCivitAILink(row: any): string | null {
-    const versionId = row?.version_id;
-    if (!versionId) return null;
-    return `https://civitai.com/models/${versionId}`;
+    const versionId = row?.version_id ?? row?.model_version_id ?? row?.modelVersionId;
+    const modelId = row?.model_id ?? row?.model_page_id ?? row?.modelId ?? row?.modelPageId;
+
+    if (modelId && versionId) return `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
+    if (modelId) return `https://civitai.com/models/${modelId}`;
+    if (versionId) return `https://civitai.com/api/v1/model-versions/${versionId}`;
+    return null;
+  }
+
+  onCivitAiClick(event: Event, row: any): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const versionId = row?.version_id ?? row?.model_version_id ?? row?.modelVersionId;
+    if (!versionId) return;
+
+    this.sdService.resolveCivitAiLink(versionId).subscribe({
+      next: (res: any) => {
+        const url = res?.url;
+        if (!url) {
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'CivitAI',
+            detail: 'Unable to resolve CivitAI link for this version.',
+            life: 4000
+          });
+          return;
+        }
+
+        row.civitai_url = url;
+        window.open(url, '_blank', 'noopener,noreferrer');
+      },
+      error: (err) => {
+        const fallbackUrl = this.getCivitAILink(row);
+        if (fallbackUrl) window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'CivitAI',
+          detail: err?.error?.detail || 'Failed to resolve CivitAI link.',
+          life: 5000
+        });
+      }
+    });
   }
 
   // ---------------- Filters (All LoRAs) ----------------

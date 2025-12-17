@@ -115,6 +115,11 @@ export class StableDiffusionService {
     return this.http.post(url, {});
   }
 
+  resolveCivitAiLink(versionId: number): Observable<any> {
+    const url = `${this.apiBaseUrl}/admin/civitai-link/${encodeURIComponent(versionId)}`;
+    return this.http.get(url);
+  }
+
   // Downloader status endpoints
   getDownloaderStatus(): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/downloader-status`;
