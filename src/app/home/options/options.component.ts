@@ -228,6 +228,7 @@ export class OptionsComponent implements OnInit {
   @Output() aspectRatioChange = new EventEmitter<AspectRatio>();
   @Output() inpaintingChange = new EventEmitter<boolean>();
   @Output() queuePositionChange = new EventEmitter<number>();
+  @Output() queueStatusMessageChange = new EventEmitter<string | undefined>();
   @Output() imageModalOpen = new EventEmitter<boolean>();
   @Output() etaChange = new EventEmitter<number | undefined>();
 
@@ -1127,6 +1128,7 @@ export class OptionsComponent implements OnInit {
         this.enableGenerationButton = true;
         this.loadingChange.emit(false);
         this.queuePositionChange.emit(0);
+        this.queueStatusMessageChange.emit(undefined);
         this.etaChange.emit(undefined);
         // Release generation lock on cancel
         this.lockService.release();
@@ -1145,6 +1147,7 @@ export class OptionsComponent implements OnInit {
       error: (err) => {
         this.enableGenerationButton = true;
         this.cancelInProgress = false;
+        this.queueStatusMessageChange.emit(undefined);
         this.messageService.add?.({ severity: 'error', summary: 'Cancel failed', detail: 'Unable to cancel job.' });
         console.error(err);
       }
@@ -1159,9 +1162,18 @@ export class OptionsComponent implements OnInit {
     let jobComplete = false;
     let lastResponse: any;
 
+    // Clear any previous reconnect banner for a new poll session
+    this.queueStatusMessageChange.emit(undefined);
+
     const getJobInfo = {
       "job_id": job_id,
     }
+
+    const reconnectAttempts = 3;
+    const reconnectTriesPerAttempt = 4;
+    const reconnectDelayMs = 5000;
+    const maxReconnectTries = reconnectAttempts * reconnectTriesPerAttempt;
+    let lastReconnectAttemptShown: number | null = null;
 
     // Create an interval which fires every 1 second
     let subscription: Subscription; // Declare a variable to hold the subscription
@@ -1177,18 +1189,40 @@ export class OptionsComponent implements OnInit {
             retryWhen((errors: any) =>
               errors.pipe(
                 // use the scan operator to track the number of attempts
-                scan((retryCount: number, err: any) => {
-                  // if retryCount reaches 5 or error status is not 500, throw error
-                  if (retryCount >= 5 || (err.status && err.status !== 500)) {
+                scan((failuresSoFar: number, err: any) => {
+                  const nextFailureCount = failuresSoFar + 1;
+                  const status = err?.status;
+                  const retryableStatusCodes = [0, 500, 502, 503, 504];
+                  const isRetryable = status == null || retryableStatusCodes.includes(status);
+
+                  if (!isRetryable || nextFailureCount >= maxReconnectTries) {
+                    this.queueStatusMessageChange.emit(undefined);
                     throw err;
                   }
-                  console.log("retrying... Attempt #" + (retryCount + 1) + " of 5");
-                  return retryCount + 1;
+
+                  const attempt = Math.min(
+                    reconnectAttempts,
+                    Math.floor((nextFailureCount - 1) / reconnectTriesPerAttempt) + 1
+                  );
+
+                  if (lastReconnectAttemptShown !== attempt) {
+                    lastReconnectAttemptShown = attempt;
+                    this.queueStatusMessageChange.emit(
+                      `Lost connection to server, attempting to reconnect, attempt ${attempt} of ${reconnectAttempts}`
+                    );
+                  }
+
+                  return nextFailureCount;
                 }, 0),
-                // exponential backoff with cap
-                delayWhen((attempt: number) => timer(Math.min(1000 * Math.pow(2, attempt), 10000)))
+                delayWhen(() => timer(reconnectDelayMs))
               )
-            )
+            ),
+            tap(() => {
+              if (lastReconnectAttemptShown !== null) {
+                lastReconnectAttemptShown = null;
+                this.queueStatusMessageChange.emit(undefined);
+              }
+            })
           );
         }),
         // Store the response for use in finalize
@@ -1299,6 +1333,7 @@ export class OptionsComponent implements OnInit {
             this.hasPendingJob = false; // ensure UI switches back to Generate
             this.jobID = "";
             this.queuePositionChange.emit(0);
+            this.queueStatusMessageChange.emit(undefined);
             this.etaChange.emit(undefined);
             this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
@@ -1309,6 +1344,7 @@ export class OptionsComponent implements OnInit {
             this.hasPendingJob = false; // ensure UI switches back to Generate
             this.jobID = "";
             this.queuePositionChange.emit(0);
+            this.queueStatusMessageChange.emit(undefined);
             this.etaChange.emit(undefined);
             this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
             this.removePendingJob();
@@ -1333,6 +1369,7 @@ export class OptionsComponent implements OnInit {
           this.hasPendingJob = false; // ensure UI switches back to Generate
           this.jobID = "";
           this.queuePositionChange.emit(0);
+          this.queueStatusMessageChange.emit(undefined);
           this.etaChange.emit(undefined);
           this.queueType = 'free'; // Reset to free queue to prevent auth errors on retry
           this.removePendingJob();

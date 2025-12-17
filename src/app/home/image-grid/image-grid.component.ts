@@ -34,6 +34,7 @@ export class ImageGridComponent implements OnDestroy {
   @Input() showLoading: boolean = false;
   @Input() aspectRatio!: AspectRatio;
   @Input() queuePosition?: number;
+  @Input() queueStatusMessage?: string;
   @Input() etaSeconds?: number;
 
   @Output() showGenerateWithReferenceImage = new EventEmitter<boolean>();

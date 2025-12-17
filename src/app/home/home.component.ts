@@ -20,6 +20,7 @@ export class HomeComponent {
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
   inpaintingEnabled: boolean = false;
   queuePosition?: number;
+  queueStatusMessage?: string;
   inpaintMask?: string;
   etaSeconds?: number;
   showRatingButtons: boolean = false;
@@ -70,6 +71,10 @@ export class HomeComponent {
 
   onQueuePositionChange(queuePosition: number) {
     this.queuePosition = queuePosition;
+  }
+
+  onQueueStatusMessageChange(message: string | undefined) {
+    this.queueStatusMessage = message;
   }
 
   onEtaChange(eta: number | undefined) {
