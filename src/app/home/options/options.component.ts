@@ -41,6 +41,54 @@ export class OptionsComponent implements OnInit {
     "novaMobianXL_v10": "Illustrious",
     "novaFurryXL_ilV140": "Illustrious"
   }
+
+  private readonly defaultModelId: string = "novaMobianXL_v10";
+
+  private getAvailableModelIds(): string[] {
+    return Object.keys(this.models_types || {});
+  }
+
+  private getDefaultModelId(): string {
+    const available = this.getAvailableModelIds();
+    if (available.includes(this.defaultModelId)) return this.defaultModelId;
+    return available[0] || this.defaultModelId;
+  }
+
+  private normalizeModelId(model: unknown): string {
+    const raw = (typeof model === 'string' ? model : '').trim();
+    if (!raw) return this.getDefaultModelId();
+
+    const available = this.getAvailableModelIds();
+    if (available.includes(raw)) return raw;
+
+    // Case-insensitive fallback (helps if casing changed).
+    const lowerMap = new Map(available.map(m => [m.toLowerCase(), m] as const));
+    const mapped = lowerMap.get(raw.toLowerCase());
+    return mapped || this.getDefaultModelId();
+  }
+
+  private applyModelDefaultsIfChanged(prevModel: string | undefined, nextModel: string): void {
+    if (prevModel === nextModel) return;
+
+    // Keep existing behavior: default CFG depends on model family.
+    if (nextModel == "autismMix" || nextModel == "novaFurryXL_ilV140" || nextModel == "novaMobianXL_v10") {
+      this.generationRequest.guidance_scale = 4;
+    } else {
+      this.generationRequest.guidance_scale = 7;
+    }
+  }
+
+  private ensureValidModelSelected(persist: boolean = true): void {
+    const previous = this.generationRequest?.model;
+    const normalized = this.normalizeModelId(previous);
+    this.generationRequest.model = normalized;
+    this.applyModelDefaultsIfChanged(previous, normalized);
+
+    // Keep aspect ratio config in sync with the selected model.
+    if (this.aspectRatio) this.aspectRatio.model = normalized;
+
+    if (persist) localStorage.setItem('model', normalized);
+  }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
@@ -472,6 +520,10 @@ export class OptionsComponent implements OnInit {
       // Handle the error appropriately
     }
 
+    // If model names change between deployments, users may have an invalid saved model.
+    // Coerce to a valid model so generation requests never send an empty/unknown model.
+    this.ensureValidModelSelected(true);
+
     this.sharedService.setGenerationRequest(this.generationRequest);
     this.updateSharedPrompt();
 
@@ -526,6 +578,11 @@ export class OptionsComponent implements OnInit {
             this.queueType = pending.request.queue_type;
           }
         }
+
+        // Pending job restore can also carry stale/invalid model values.
+        this.ensureValidModelSelected(true);
+        this.sharedService.setGenerationRequest(this.generationRequest);
+
         this.getJob(pending.job_id);
       }
     }
@@ -772,6 +829,9 @@ export class OptionsComponent implements OnInit {
     if (localStorage.getItem("model") != null) {
       this.generationRequest.model = localStorage.getItem("model")!;
     }
+
+    // Ensure model is valid before downstream logic uses it.
+    this.ensureValidModelSelected(false);
     if (localStorage.getItem("lossy-images") != null) {
       console.log("Loading lossy images setting");
       console.log("Value from localStorage:", localStorage.getItem("lossy-images"));
