@@ -1914,9 +1914,21 @@ export class OptionsComponent implements OnInit {
     }
 
     // Open the dialog with the dynamic width
-    this.dialogService.open(AddLorasComponent, {
+    const dialogRef = this.dialogService.open(AddLorasComponent, {
       header: 'Request Loras To Be Added!',
-      width: dialogWidth
+      width: dialogWidth,
+      data: {
+        showNSFWLoras: this.showNSFWLoras,
+      },
+    });
+
+    dialogRef.onClose.subscribe((result: any) => {
+      const next = result?.showNSFWLoras;
+      if (typeof next === 'boolean' && next !== this.showNSFWLoras) {
+        this.showNSFWLoras = next;
+        localStorage.setItem('showNSFWLoras', this.showNSFWLoras.toString());
+        this.filterLoras();
+      }
     });
   }
 

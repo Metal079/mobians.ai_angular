@@ -22,6 +22,7 @@
       pInputText 
       [(ngModel)]="searchField" 
       placeholder="Search LoRA by Name" 
+      (keyup.enter)="search()"
     />
     
     <input 
@@ -30,6 +31,7 @@
       pInputText 
       [(ngModel)]="searchField" 
       placeholder="Enter LoRA Model ID" 
+      (keyup.enter)="search()"
     />
 
     <input 
@@ -38,7 +40,15 @@
       pInputText 
       [(ngModel)]="searchField" 
       placeholder="Enter LoRA Creator's CivitAI Username"
+      (keyup.enter)="search()"
     />
+  </div>
+
+  <div class="p-field d-flex justify-content-end align-items-center" style="margin-top: 8px;">
+    <span class="d-flex align-items-center">
+      Show NSFW results?
+      <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="onShowNsfwChanged()"></p-inputSwitch>
+    </span>
   </div>
   <div>
     <button 

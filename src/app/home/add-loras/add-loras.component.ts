@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { DynamicDialogRef } from 'primeng/dynamicdialog';
 import { DynamicDialogConfig } from 'primeng/dynamicdialog';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
@@ -17,6 +17,8 @@ export class AddLorasComponent {
   loraFile: File | null = null;
   searchField: string = ''; // New field for search field
 
+  showNSFWLoras: boolean = false;
+
   searchResults: any[] = []; // Will hold the API search results
   selectedLoRA: any = null;  // Holds the selected LoRA from the table
   showImageDialog: boolean = false; // Track the state of the image dialog
@@ -31,6 +33,21 @@ export class AddLorasComponent {
     , private messageService: MessageService
     , private sharedService: SharedService
   ) { }
+
+  ngOnInit(): void {
+    const fromParent = this.config?.data?.showNSFWLoras;
+    if (typeof fromParent === 'boolean') {
+      this.showNSFWLoras = fromParent;
+      return;
+    }
+
+    const stored = localStorage.getItem('showNSFWLoras');
+    if (stored != null) this.showNSFWLoras = stored === 'true';
+  }
+
+  onShowNsfwChanged(): void {
+    localStorage.setItem('showNSFWLoras', this.showNSFWLoras.toString());
+  }
 
   selectOption(option: string) {
     this.selectedSearchOption = option;
@@ -47,6 +64,8 @@ export class AddLorasComponent {
   }
 
   search() {
+    if (this.isLoading || !this.searchField) return;
+
     if (this.selectedSearchOption === 'username') {
       this.searchByUsername();
     } else if (this.selectedSearchOption === 'lora_name') {
@@ -58,7 +77,7 @@ export class AddLorasComponent {
 
   searchByUsername() {
     this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByUser(this.searchField).subscribe({
+    this.stableDiffusionService.searchByUser(this.searchField, this.showNSFWLoras).subscribe({
       next: (response: any) => {
         console.log('civitAi user search done');
         this.searchResults = response;
@@ -80,7 +99,7 @@ export class AddLorasComponent {
 
   searchByLoRAName() {
     this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByQuery(this.searchField).subscribe({
+    this.stableDiffusionService.searchByQuery(this.searchField, this.showNSFWLoras).subscribe({
       next: (response: any) => {
         console.log('civitAi query search done');
         this.searchResults = response;
@@ -103,7 +122,7 @@ export class AddLorasComponent {
   // New method to search by Model ID
   searchByModelId() {
     this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByID(this.searchField).subscribe({
+    this.stableDiffusionService.searchByID(this.searchField, this.showNSFWLoras).subscribe({
       next: (response: any) => {
         this.searchResults = response;
 
@@ -159,7 +178,7 @@ export class AddLorasComponent {
         }
       });
     }
-    this.ref.close();
+    this.ref.close({ showNSFWLoras: this.showNSFWLoras });
   }
 
   selectLora(lora: any) {
@@ -174,7 +193,7 @@ export class AddLorasComponent {
 
 
   close() {
-    this.ref.close();
+    this.ref.close({ showNSFWLoras: this.showNSFWLoras });
   }
 
   showError(error: any) {

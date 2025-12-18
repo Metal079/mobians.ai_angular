@@ -138,18 +138,18 @@ export class StableDiffusionService {
   //#endregion
 
   //#region CivitAI API calls
-  searchByQuery(query: string): Observable<any> {
-    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_query/${query}`;  // note the trailing slash
+  searchByQuery(query: string, showNsfw: boolean = false): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_query/${encodeURIComponent(query)}?show_nsfw=${showNsfw}`;
     return this.http.get(url);
   }
 
-  searchByID(id: string): Observable<any> {
-    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_id/${id}`;  // note the trailing slash
+  searchByID(id: string, showNsfw: boolean = false): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_id/${encodeURIComponent(id)}?show_nsfw=${showNsfw}`;
     return this.http.get(url);
   }
 
-  searchByUser(username: string): Observable<any> {
-    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_user/${username}`;  // note the trailing slash
+  searchByUser(username: string, showNsfw: boolean = false): Observable<any> {
+    const url = `${this.apiBaseUrl}/search_civitAi_loras_by_user/${encodeURIComponent(username)}?show_nsfw=${showNsfw}`;
     return this.http.get(url);
   }
 
