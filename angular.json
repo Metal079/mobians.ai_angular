@@ -23,7 +23,8 @@
               "src/favicon.ico",
               "src/assets",
               "src/manifest.webmanifest",
-              "src/notification-sw.js"
+              "src/notification-sw.js",
+              "src/staticwebapp.config.json"
             ],
             "styles": [
               "src/styles.css",
@@ -122,7 +123,8 @@
               "src/assets",
               "src/manifest.webmanifest",
               "src/manifest.webmanifest",
-              "src/notification-sw.js"
+              "src/notification-sw.js",
+              "src/staticwebapp.config.json"
             ],
             "styles": [
               "src/styles.css",

@@ -1,0 +1,25 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/assets/*",
+      "/*.ico",
+      "/*.css",
+      "/*.js",
+      "/*.json",
+      "/*.map",
+      "/*.txt",
+      "/*.webmanifest"
+    ]
+  },
+  "routes": [
+    {
+      "route": "/auth/callback",
+      "rewrite": "/index.html"
+    }
+  ],
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  }
+}
