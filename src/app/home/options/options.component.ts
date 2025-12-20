@@ -204,8 +204,11 @@ export class OptionsComponent implements OnInit {
   queueType: 'free' | 'priority' = 'free';
   creditCost: number = 0;
   upscaleCreditCost: number = 0;
+  hiresCreditCost: number = 0;
+  hiresEnabled: boolean = false;
   userCredits: number = 0;
   isLoggedIn: boolean = false;
+  private queueTypeBeforeHires: 'free' | 'priority' = 'free';
   
   // Credit costs by model type
   private readonly creditCosts: { [key: string]: number } = {
@@ -504,6 +507,10 @@ export class OptionsComponent implements OnInit {
         this.userCredits = 0;
         this.isLoggedIn = this.authService.isLoggedIn();
       }
+      if (!this.isLoggedIn && this.hiresEnabled) {
+        this.hiresEnabled = false;
+        localStorage.removeItem("hires-enabled");
+      }
       // Update credit cost display
       this.updateCreditCost();
     });
@@ -540,7 +547,10 @@ export class OptionsComponent implements OnInit {
       } else {
         this.generationRequest.job_type = "txt2img";
         this.generationRequest.image = undefined;
+        this.generationRequest.mask_image = undefined;
         this.referenceImage = undefined;
+        // If the user re-enters txt2img, validate auth/credit constraints.
+        this.enforceHiresConstraints();
       }
     });
 
@@ -607,14 +617,14 @@ export class OptionsComponent implements OnInit {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes['inpaintMask'] && changes['inpaintMask'].currentValue != undefined) {
+    if (changes['inpaintMask']) {
       this.inpaintMask = changes['inpaintMask'].currentValue;
-      if (changes['inpaintMask'].currentValue == undefined) {
+      if (this.inpaintMask == undefined) {
         this.generationRequest.mask_image = undefined;
-        this.generationRequest.job_type = "img2img";
+        this.generationRequest.job_type = this.referenceImage ? "img2img" : "txt2img";
       }
       else {
-        this.generationRequest.mask_image = this.inpaintMask!;
+        this.generationRequest.mask_image = this.inpaintMask;
         this.generationRequest.job_type = "inpainting";
       }
     }
@@ -654,22 +664,120 @@ export class OptionsComponent implements OnInit {
     const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
     this.creditCost = baseCost + (loraCount * perLoraCost);
     this.upscaleCreditCost = baseCost * 3;
+    this.hiresCreditCost = baseCost * 4;
+    this.enforceHiresConstraints();
   }
 
   getUpscaleTooltip(): string {
     const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
     const cost = this.upscaleCreditCost;
     if (!this.authService.isLoggedIn()) {
-      return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}). Login required.`;
+      return `Upscale the image by 1.5×. Costs ${cost} credits (3× ${modelType}). Login required.`;
     }
     if (this.userCredits < cost) {
-      return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}). You have ${this.userCredits} credits.`;
+      return `Upscale the image by 1.5×. Costs ${cost} credits (3× ${modelType}). You have ${this.userCredits} credits.`;
     }
-    return `Upscale the image by 1.5x. Costs ${cost} credits (3× ${modelType}).`;
+    return `Upscale the image by 1.5×. Costs ${cost} credits (3× ${modelType}).`;
+  }
+
+  getHiresTooltip(): string {
+    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const cost = this.hiresCreditCost;
+    if (!this.authService.isLoggedIn()) {
+      return `Generate + Upscale in one step. Costs ${cost} credits (4× ${modelType}). Login required.`;
+    }
+    if (this.userCredits < cost) {
+      return `Generate + Upscale in one step. Costs ${cost} credits (4× ${modelType}). You have ${this.userCredits} credits.`;
+    }
+    return `Generate + Upscale in one step for the highest quality generations. Costs ${cost} credits (Select priority queue to use).`;
+  }
+
+  get hiresEligible(): boolean {
+    return this.hiresEnabled && this.isHiresAvailable();
+  }
+
+  private isHiresAvailable(): boolean {
+    return (
+      !this.referenceImage &&
+      this.generationRequest?.job_type === 'txt2img' &&
+      this.generationRequest?.model !== 'sonicDiffusionXL' &&
+      this.generationRequest?.model !== 'autismMix'
+    );
+  }
+
+  private restoreQueueTypeAfterHires() {
+    // If the user isn't logged in, they can't be in priority anyway.
+    if (!this.authService.isLoggedIn()) {
+      this.queueType = 'free';
+      return;
+    }
+
+    // Restore what they had before enabling Hi-Res, but fall back safely.
+    const restored = this.queueTypeBeforeHires || 'free';
+    if (restored === 'priority' && this.userCredits < this.creditCost) {
+      this.queueType = 'free';
+      return;
+    }
+    this.queueType = restored;
+  }
+
+  private enforceHiresConstraints() {
+    if (!this.hiresEnabled) return;
+    const wasEnabled = this.hiresEnabled;
+
+    if (!this.authService.isLoggedIn()) {
+      this.hiresEnabled = false;
+      this.restoreQueueTypeAfterHires();
+      if (wasEnabled) localStorage.removeItem("hires-enabled");
+    }
+  }
+
+  onHiresToggleChange(enabled: boolean) {
+    if (enabled) {
+      if (!this.isHiresAvailable()) {
+        this.hiresEnabled = false;
+        this.saveSettings();
+        return;
+      }
+
+      if (!this.authService.isLoggedIn()) {
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Login Required',
+          detail: `Please log in to use Hi-Res. Hi-Res costs ${this.hiresCreditCost} credits.`
+        });
+        this.hiresEnabled = false;
+        this.saveSettings();
+        return;
+      }
+
+      if (this.userCredits < this.hiresCreditCost) {
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Insufficient Credits',
+          detail: `You need ${this.hiresCreditCost} credits but only have ${this.userCredits}.`
+        });
+        this.hiresEnabled = false;
+        this.saveSettings();
+        return;
+      }
+
+      this.queueTypeBeforeHires = this.queueType;
+      this.queueType = 'priority';
+      this.saveSettings();
+      return;
+    }
+
+    // Disabled
+    this.restoreQueueTypeAfterHires();
+    this.saveSettings();
   }
 
   onQueueTypeChange(type: 'free' | 'priority') {
     this.queueType = type;
+    if (this.hiresEnabled) {
+      this.queueTypeBeforeHires = type;
+    }
     
     // If switching to priority without enough credits, show warning
     if (type === 'priority' && !this.authService.isLoggedIn()) {
@@ -683,11 +791,12 @@ export class OptionsComponent implements OnInit {
       return;
     }
     
-    if (type === 'priority' && this.userCredits < this.creditCost) {
+    const requiredCredits = this.hiresEligible ? this.hiresCreditCost : this.creditCost;
+    if (type === 'priority' && this.userCredits < requiredCredits) {
       this.messageService.add({
         severity: 'warn',
         summary: 'Insufficient Credits',
-        detail: `You need ${this.creditCost} credits. You have ${this.userCredits}.`,
+        detail: `You need ${requiredCredits} credits. You have ${this.userCredits}.`,
         life: 4000
       });
       this.queueType = 'free';
@@ -695,12 +804,14 @@ export class OptionsComponent implements OnInit {
   }
 
   canUsePriorityQueue(): boolean {
-    return this.authService.isLoggedIn() && this.userCredits >= this.creditCost;
+    const requiredCredits = this.hiresEligible ? this.hiresCreditCost : this.creditCost;
+    return this.authService.isLoggedIn() && this.userCredits >= requiredCredits;
   }
 
   getQueueTypeLabel(): string {
     if (this.queueType === 'priority') {
-      return `Priority (${this.creditCost} credits)`;
+      const cost = this.hiresEligible ? this.hiresCreditCost : this.creditCost;
+      return `Priority (${cost} credits)`;
     }
     return 'Free Queue';
   }
@@ -801,6 +912,13 @@ export class OptionsComponent implements OnInit {
 
     // Save notifications toggle
     localStorage.setItem("notifications-enabled", this.enableNotifications.toString());
+
+    // Save hi-res toggle (only when logged in)
+    if (this.hiresEnabled && this.authService.isLoggedIn()) {
+      localStorage.setItem("hires-enabled", "true");
+    } else {
+      localStorage.removeItem("hires-enabled");
+    }
   }
 
   // Load session storage info of changed settings
@@ -851,6 +969,9 @@ export class OptionsComponent implements OnInit {
         this.enableNotification();
       }
     }
+    if (localStorage.getItem("hires-enabled") != null) {
+      this.hiresEnabled = localStorage.getItem("hires-enabled") == 'true';
+    }
 
     // Apply current LoRA filters after restoring settings
     this.filterLoras();
@@ -884,6 +1005,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem('lossy-images');
     localStorage.removeItem('notifications-enabled');
     localStorage.removeItem('notifications-user-id');
+    localStorage.removeItem('hires-enabled');
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
@@ -893,6 +1015,7 @@ export class OptionsComponent implements OnInit {
     this.showNSFWLoras = false;
     this.generationRequest.lossy_images = false;
     this.enableNotifications = false;
+    this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
 
     this.loadSettings();
@@ -987,11 +1110,21 @@ export class OptionsComponent implements OnInit {
   }
 
   // Send job to django api and retrieve job id.
-  async submitJob(upscale: boolean = false) {
-    const isUpscaleJob = upscale === true;
-    const queueTypeForRequest: 'free' | 'priority' = isUpscaleJob ? 'priority' : this.queueType;
-    const creditCostForRequest = isUpscaleJob ? this.upscaleCreditCost : this.creditCost;
-    const jobTypeForRequest = isUpscaleJob ? 'upscale' : this.generationRequest.job_type;
+  async submitJob(mode: 'generate' | 'upscale' | 'hires' = 'generate') {
+    const effectiveMode: 'generate' | 'upscale' | 'hires' = (
+      mode === 'generate'
+      && this.hiresEligible
+      && this.queueType === 'priority'
+      && this.authService.isLoggedIn()
+        ? 'hires'
+        : mode
+    );
+
+    const isUpscaleJob = effectiveMode === 'upscale';
+    const isHiresJob = effectiveMode === 'hires';
+    const queueTypeForRequest: 'free' | 'priority' = (isUpscaleJob || isHiresJob) ? 'priority' : this.queueType;
+    const creditCostForRequest = isUpscaleJob ? this.upscaleCreditCost : (isHiresJob ? this.hiresCreditCost : this.creditCost);
+    const jobTypeForRequest = isUpscaleJob ? 'upscale' : (isHiresJob ? 'txt2img_upscale' : this.generationRequest.job_type);
 
     // Validate priority queue requirements
     if (queueTypeForRequest === 'priority') {
@@ -1001,7 +1134,9 @@ export class OptionsComponent implements OnInit {
           summary: 'Login Required', 
           detail: isUpscaleJob
             ? `Please log in to upscale images. Upscaling costs ${creditCostForRequest} credits due to longer generation times.`
-            : 'Please log in to use the priority queue.' 
+            : (isHiresJob
+              ? `Please log in to use Hi-Res. Hi-Res costs ${creditCostForRequest} credits.`
+              : 'Please log in to use the priority queue.')
         });
         return;
       }
@@ -1429,6 +1564,8 @@ export class OptionsComponent implements OnInit {
   removeReferenceImage() {
     this.referenceImage = undefined;
     this.generationRequest.image = undefined;
+    this.generationRequest.mask_image = undefined;
+    this.generationRequest.job_type = "txt2img";
     this.sharedService.setReferenceImage(null);
     this.sharedService.setGenerationRequest(this.generationRequest);
 
