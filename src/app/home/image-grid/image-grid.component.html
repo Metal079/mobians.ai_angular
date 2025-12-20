@@ -22,15 +22,35 @@
   <!-- Images -->
   <div class="image-wrapper" *ngIf="images.length > 0 && !showLoading && !showReferenceImage" id="wrapper1">
     <img [src]="images[0].url" class="small-image" alt="Image1 goes here" (click)="inpaintingEnabled || expandImage(0, $event)" id="image0">
+    <div class="image-actions">
+      <button type="button" class="image-action-btn" (click)="downloadImage(images[0], $event)" aria-label="Download image 1">
+        <i class="bi bi-download"></i>
+      </button>
+    </div>
   </div>
   <div class="image-wrapper" *ngIf="images.length > 1 && !showLoading && !showReferenceImage" id="wrapper2">
     <img [src]="images[1].url" class="small-image" alt="Image2 goes here" (click)="inpaintingEnabled || expandImage(1, $event)" id="image1">
+    <div class="image-actions">
+      <button type="button" class="image-action-btn" (click)="downloadImage(images[1], $event)" aria-label="Download image 2">
+        <i class="bi bi-download"></i>
+      </button>
+    </div>
   </div>
   <div class="image-wrapper" *ngIf="images.length > 2 && !showLoading && !showReferenceImage" id="wrapper3">
     <img [src]="images[2].url" class="small-image" alt="Image3 goes here" (click)="inpaintingEnabled || expandImage(2, $event)" id="image2">
+    <div class="image-actions">
+      <button type="button" class="image-action-btn" (click)="downloadImage(images[2], $event)" aria-label="Download image 3">
+        <i class="bi bi-download"></i>
+      </button>
+    </div>
   </div>
   <div class="image-wrapper" *ngIf="images.length > 3 && !showLoading && !showReferenceImage" id="wrapper4">
     <img [src]="images[3].url" class="small-image" alt="Image4 goes here" (click)="inpaintingEnabled || expandImage(3, $event)" id="image3">
+    <div class="image-actions">
+      <button type="button" class="image-action-btn" (click)="downloadImage(images[3], $event)" aria-label="Download image 4">
+        <i class="bi bi-download"></i>
+      </button>
+    </div>
   </div>
   <div class="reference-image" *ngIf="this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage" id="wrapper5">
     <img [src]="this.sharedService.getReferenceImageValue()!.url ?? this.sharedService.getReferenceImageValue()!.thumbnailUrl" alt="Reference Image goes here" (click)="inpaintingEnabled || expandImage(4, $event)" id="referenceImage">

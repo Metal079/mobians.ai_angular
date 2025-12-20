@@ -320,10 +320,13 @@
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                  (click)="toggleFavorite(image)" aria-label="Toggle Favorite"></i>
+                  (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
+              </div>
+              <div class="bottom-left-icon">
+                <i class="bi bi-download" (click)="$event.stopPropagation(); downloadImage(image, $event)" aria-label="Download Image"></i>
               </div>
               <div class="top-right-icon">
-                <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
+                <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)" aria-label="Delete Image"></i>
               </div>
             </div>
             <div class="history-details">
@@ -360,10 +363,13 @@
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                  (click)="toggleFavorite(image)" aria-label="Toggle Favorite"></i>
+                  (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
+              </div>
+              <div class="bottom-left-icon">
+                <i class="bi bi-download" (click)="$event.stopPropagation(); downloadImage(image, $event)" aria-label="Download Image"></i>
               </div>
               <div class="top-right-icon">
-                <i class="bi bi-trash" (click)="deleteImage(image)" aria-label="Delete Image"></i>
+                <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)" aria-label="Delete Image"></i>
               </div>
             </div>
             <div class="history-details">

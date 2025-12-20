@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
+import { BlobMigrationService } from 'src/app/blob-migration.service';
 
 
 @Component({
@@ -57,6 +58,7 @@ export class ImageGridComponent implements OnDestroy {
   constructor(
     public sharedService: SharedService
     , private inpaintingMaskService: InpaintingMaskService
+    , private blobMigrationService: BlobMigrationService
   ) {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
@@ -377,6 +379,58 @@ export class ImageGridComponent implements OnDestroy {
         }
       }
     }
+  }
+
+  async downloadImage(image: MobiansImage, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    const blob = await this.getDownloadBlob(image);
+    if (!blob) return;
+
+    const filename = this.buildDownloadFilename(image, blob.type);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => {
+      try { URL.revokeObjectURL(url); } catch { /* no-op */ }
+    }, 0);
+  }
+
+  private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {
+    let blob = image.blob;
+
+    if (!blob && image.url) {
+      try {
+        const response = await fetch(image.url);
+        blob = await response.blob();
+      } catch (error) {
+        console.error('Failed to fetch image blob for download', error);
+        return null;
+      }
+    }
+
+    if (!blob) return null;
+
+    const lossyEnabled = this.sharedService.getGenerationRequestValue()?.lossy_images;
+    if (!lossyEnabled && blob.type === 'image/webp') {
+      blob = await this.blobMigrationService.convertWebPToPNG(blob);
+    }
+
+    return blob;
+  }
+
+  private buildDownloadFilename(image: MobiansImage, mimeType?: string): string {
+    const ext = mimeType === 'image/webp' ? 'webp' : 'png';
+    const id = image.UUID || `${Date.now()}`;
+    return `mobians-${id}.${ext}`;
   }
 
   expandImage(imageIndex: number, event: Event) {

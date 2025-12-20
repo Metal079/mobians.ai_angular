@@ -1632,6 +1632,63 @@ export class OptionsComponent implements OnInit {
       });
   }
 
+  async downloadImage(image: MobiansImage, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    const blob = await this.getDownloadBlob(image);
+    if (!blob) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Download unavailable',
+        detail: 'Could not load this image for download.',
+        life: 4000
+      });
+      return;
+    }
+
+    const filename = this.buildDownloadFilename(image, blob.type);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => this.safeRevoke(url), 0);
+  }
+
+  private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {
+    let blob = image.blob;
+
+    if (!blob && image.url) {
+      try {
+        const response = await fetch(image.url);
+        blob = await response.blob();
+      } catch (error) {
+        console.error('Failed to fetch image blob for download', error);
+        return null;
+      }
+    }
+
+    if (!blob) return null;
+
+    if (!this.generationRequest.lossy_images && blob.type === 'image/webp') {
+      blob = await this.blobMigrationService.convertWebPToPNG(blob);
+    }
+
+    return blob;
+  }
+
+  private buildDownloadFilename(image: MobiansImage, mimeType?: string): string {
+    const ext = mimeType === 'image/webp' ? 'webp' : 'png';
+    const id = image.UUID || `${Date.now()}`;
+    return `mobians-${id}.${ext}`;
+  }
+
   toggleOptions() {
     const historyCollapse = document.getElementById('historyCollapse');
     if (historyCollapse) {
