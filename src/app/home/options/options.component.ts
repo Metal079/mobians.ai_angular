@@ -118,7 +118,7 @@ export class OptionsComponent implements OnInit {
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
     loras: [],
-    lossy_images: false,
+    lossy_images: true,
   };
   jobID: string = "";
   // Add a simple flag to indicate a pending job
@@ -956,6 +956,9 @@ export class OptionsComponent implements OnInit {
       console.log("Value from localStorage:", localStorage.getItem("lossy-images"));
       this.generationRequest.lossy_images = localStorage.getItem("lossy-images") == 'true';
       console.log("Loaded lossy images setting:", this.generationRequest.lossy_images);
+    } else {
+      // Default for new users: WebP images enabled
+      this.generationRequest.lossy_images = true;
     }
     if (localStorage.getItem("showNSFWLoras") != null) {
       this.showNSFWLoras = localStorage.getItem("showNSFWLoras") == 'true';
@@ -1013,7 +1016,8 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.guidance_scale = 4;
     this.generationRequest.model = "novaMobianXL_v10";
     this.showNSFWLoras = false;
-    this.generationRequest.lossy_images = false;
+    // Default after reset: WebP images enabled
+    this.generationRequest.lossy_images = true;
     this.enableNotifications = false;
     this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
