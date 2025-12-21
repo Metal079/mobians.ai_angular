@@ -1030,9 +1030,6 @@ export class OptionsComponent implements OnInit {
 
   // Load the next page of images
   async loadImagePage(pageNumber: number) {
-    // Delete all blob URLs to prevent memory leaks
-    this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
-
     const images = this.imageHistoryMetadata.slice((pageNumber - 1) * this.imagesPerPage, pageNumber * this.imagesPerPage);
     const uuids = images.map(image => image.UUID);
 
@@ -1108,9 +1105,11 @@ export class OptionsComponent implements OnInit {
   }
 
   private safeRevoke(url?: string) {
-    if (url) {
-      try { URL.revokeObjectURL(url); } catch { /* no-op */ }
+    if (!url) {
+      return;
     }
+    try { URL.revokeObjectURL(url); } catch { /* no-op */ }
+    this.blobUrls = this.blobUrls.filter((tracked) => tracked !== url);
   }
 
   // Send job to django api and retrieve job id.
@@ -1606,34 +1605,28 @@ export class OptionsComponent implements OnInit {
     // Implement the logic to open the image details modal or view
     console.log('Opening image details for:', image);
 
-    // Get blob info from url
-    fetch(image.url!)
-      .then(response => response.blob())
-      .then(async blob => {
+    const blob = await this.getDownloadBlob(image);
+    if (!blob) {
+      console.error('Failed to load image data for reference image');
+      return;
+    }
 
-        // Convert to png if generationRequest.lossy_images is false
-        if (!this.generationRequest.lossy_images) {
-          blob = await this.blobMigrationService.convertWebPToPNG(blob);
+    this.safeRevoke(image.url);
+    const newUrl = URL.createObjectURL(blob);
+    image.url = newUrl;
+    this.blobUrls.push(newUrl);
 
-          // Replace the object URL safely and track the new one
-          this.safeRevoke(image.url);
-          const newUrl = URL.createObjectURL(blob);
-          image.url = newUrl;
-          this.blobUrls.push(newUrl);
-        }
+    // Set the reference image to the selected image
+    image.blob = blob;
+    this.referenceImage = image;
+    this.generationRequest.image = image.blob;
+    this.sharedService.setReferenceImage(image);
 
-        // Set the reference image to the selected image
-        image.blob = blob;
-        this.referenceImage = image;
-        this.generationRequest.image = image.blob;
-        this.sharedService.setReferenceImage(image);
-
-        // update prompt
-        if (image.prompt) {
-          this.generationRequest.prompt = image.prompt;
-          this.sharedService.setPrompt(image.prompt!);
-        }
-      });
+    // update prompt
+    if (image.prompt) {
+      this.generationRequest.prompt = image.prompt;
+      this.sharedService.setPrompt(image.prompt!);
+    }
   }
 
   async downloadImage(image: MobiansImage, event?: Event) {
@@ -1665,6 +1658,22 @@ export class OptionsComponent implements OnInit {
     setTimeout(() => this.safeRevoke(url), 0);
   }
 
+  private async getBlobFromStore(uuid: string): Promise<Blob | undefined> {
+    try {
+      const db = await this.getDatabase();
+      return await new Promise<Blob | undefined>((resolve) => {
+        const transaction = db.transaction(this.blobStoreName, 'readonly');
+        const store = transaction.objectStore(this.blobStoreName);
+        const request = store.get(uuid);
+        request.onsuccess = () => resolve(request.result?.blob ?? undefined);
+        request.onerror = () => resolve(undefined);
+      });
+    } catch (error) {
+      console.error('Failed to load image blob from IndexedDB', error);
+      return undefined;
+    }
+  }
+
   private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {
     let blob = image.blob;
 
@@ -1674,8 +1683,11 @@ export class OptionsComponent implements OnInit {
         blob = await response.blob();
       } catch (error) {
         console.error('Failed to fetch image blob for download', error);
-        return null;
       }
+    }
+
+    if (!blob && image.UUID) {
+      blob = await this.getBlobFromStore(image.UUID);
     }
 
     if (!blob) return null;
@@ -2005,8 +2017,8 @@ export class OptionsComponent implements OnInit {
         continue;
       }
 
-      URL.revokeObjectURL(image.url!);
-      image.url = ''; // Clear the URL
+      this.safeRevoke(image.url);
+      image.url = undefined;
     }
     return images;
   }
