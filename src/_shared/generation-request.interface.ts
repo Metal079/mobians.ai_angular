@@ -16,5 +16,6 @@ export interface GenerationRequest {
     job_type: string;
     model: string;
     fast_pass_code?: string;
+    loras?: any[];
   }
   

@@ -605,6 +605,11 @@ export class OptionsComponent implements OnInit {
           if (pending.request.queue_type) {
             this.queueType = pending.request.queue_type;
           }
+          if (Array.isArray(pending.request.loras)) {
+            this.selectedLoras = this.resolveHistoryLoras(pending.request.loras);
+            this.generationRequest.loras = this.selectedLoras;
+            this.updateCreditCost();
+          }
         }
 
         // Pending job restore can also carry stale/invalid model values.
@@ -1143,6 +1148,57 @@ export class OptionsComponent implements OnInit {
     this.blobUrls = this.blobUrls.filter((tracked) => tracked !== url);
   }
 
+  private snapshotLoras(loras?: any[]): any[] {
+    if (!Array.isArray(loras) || loras.length === 0) {
+      return [];
+    }
+    return loras.map((lora) => ({
+      ...lora,
+      strength: typeof lora?.strength === 'number' ? lora.strength : 1.0,
+    }));
+  }
+
+  private getHistoryLorasSnapshot(): any[] {
+    const pending = this.getPendingJob();
+    if (Array.isArray(pending?.request?.loras)) {
+      return this.snapshotLoras(pending.request.loras);
+    }
+    if (Array.isArray(this.generationRequest?.loras)) {
+      return this.snapshotLoras(this.generationRequest.loras);
+    }
+    return this.snapshotLoras(this.selectedLoras);
+  }
+
+  private resolveHistoryLoras(historyLoras?: any[]): any[] {
+    if (!Array.isArray(historyLoras) || historyLoras.length === 0) {
+      return [];
+    }
+    const availableLoras = Array.isArray(this.loras) ? this.loras : [];
+    const byVersionId = new Map(
+      availableLoras
+        .filter((lora) => lora?.version_id != null)
+        .map((lora) => [String(lora.version_id), lora])
+    );
+    const byNameVersion = new Map(
+      availableLoras.map((lora) => [`${lora?.name ?? ''}::${lora?.version ?? ''}`, lora])
+    );
+
+    const resolved = historyLoras.map((historyLora) => {
+      const versionKey = historyLora?.version_id != null ? String(historyLora.version_id) : null;
+      const nameVersionKey = `${historyLora?.name ?? ''}::${historyLora?.version ?? ''}`;
+      const match = (versionKey && byVersionId.get(versionKey)) || byNameVersion.get(nameVersionKey);
+      const strength = typeof historyLora?.strength === 'number' ? historyLora.strength : 1.0;
+
+      if (match) {
+        match.strength = strength;
+        return match;
+      }
+      return { ...historyLora, strength };
+    });
+
+    return resolved.slice(0, this.maxLoras);
+  }
+
   // Send job to django api and retrieve job id.
   async submitJob(mode: 'generate' | 'upscale' | 'hires' = 'generate') {
     const effectiveMode: 'generate' | 'upscale' | 'hires' = (
@@ -1281,7 +1337,8 @@ export class OptionsComponent implements OnInit {
             job_type: requestToSend.job_type,
             model: requestToSend.model,
             client_id: requestToSend.client_id,
-            queue_type: requestToSend.queue_type
+            queue_type: requestToSend.queue_type,
+            loras: this.snapshotLoras(requestToSend.loras)
           });
 
           this.getJob(response.job_id);
@@ -1435,6 +1492,7 @@ export class OptionsComponent implements OnInit {
           }
           if (jobComplete && lastResponse) {
             console.log(lastResponse);
+            const historyLoras = this.getHistoryLorasSnapshot();
             const generatedImages = lastResponse.result.map((base64String: string) => {
               const blob = this.blobMigrationService.base64ToBlob(base64String)
               const blobUrl = URL.createObjectURL(blob);
@@ -1448,6 +1506,7 @@ export class OptionsComponent implements OnInit {
                 rated: false,
                 timestamp: new Date(),
                 prompt: this.generationRequest.prompt,
+                loras: historyLoras,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
                 url: blobUrl // Generate URL
               } as MobiansImage;
@@ -1473,7 +1532,7 @@ export class OptionsComponent implements OnInit {
 
             // Add the images to the image history metadata
             this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
-              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false } as MobiansImageMetadata;
+              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, loras: image.loras, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false } as MobiansImageMetadata;
             }));
 
             try {
@@ -1689,6 +1748,12 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.prompt = image.prompt;
       this.sharedService.setPrompt(image.prompt!);
     }
+
+    if (image.loras !== undefined) {
+      this.selectedLoras = this.resolveHistoryLoras(image.loras);
+      this.generationRequest.loras = this.selectedLoras;
+      this.updateCreditCost();
+    }
   }
 
   async downloadImage(image: MobiansImage, event?: Event) {
@@ -1855,6 +1920,7 @@ export class OptionsComponent implements OnInit {
                 aspectRatio: item.aspectRatio,
                 width: item.width,
                 height: item.height,
+                loras: item.loras,
                 favorite: item.favorite
               }));
               console.log('Full-text search results:', projectedResults);
@@ -2550,6 +2616,7 @@ export class OptionsComponent implements OnInit {
           aspectRatio: item.aspectRatio,
           width: item.width,
           height: item.height,
+          loras: item.loras,
           favorite: item.favorite
         }));
       };
@@ -2595,6 +2662,7 @@ export class OptionsComponent implements OnInit {
                     aspectRatio: image.aspectRatio,
                     width: image.width,
                     height: image.height,
+                    loras: image.loras,
                     favorite: image.favorite
                   });
                 }
@@ -2631,6 +2699,7 @@ export class OptionsComponent implements OnInit {
                   aspectRatio: image.aspectRatio,
                   width: image.width,
                   height: image.height,
+                  loras: image.loras,
                   favorite: image.favorite
                 });
               }
@@ -2762,6 +2831,11 @@ export class OptionsComponent implements OnInit {
     if (pending.request) {
       this.generationRequest = { ...this.generationRequest, ...pending.request };
       this.sharedService.setGenerationRequest(this.generationRequest);
+      if (Array.isArray(pending.request.loras)) {
+        this.selectedLoras = this.resolveHistoryLoras(pending.request.loras);
+        this.generationRequest.loras = this.selectedLoras;
+        this.updateCreditCost();
+      }
     }
     // Clear pending and release any lock just in case
     this.removePendingJob();

@@ -9,10 +9,11 @@ export interface MobiansImage {
     timestamp?: Date;
     prompt?: string;
     promptSummary?: string;
+    loras?: any[];
     thumbnailUrl?: string; // Add this line
     blob?: Blob;
     favorite?: boolean;
   }
   
 // Used just for the image history
-export type MobiansImageMetadata = Pick<MobiansImage, 'UUID' | 'prompt' | 'timestamp' | 'aspectRatio' | 'width' | 'height' | 'favorite'>;
+export type MobiansImageMetadata = Pick<MobiansImage, 'UUID' | 'prompt' | 'promptSummary' | 'timestamp' | 'aspectRatio' | 'width' | 'height' | 'favorite' | 'loras'>;
