@@ -192,6 +192,8 @@ export class OptionsComponent implements OnInit {
   // to show full sized lora image
   displayModal: boolean = false;
   selectedImageUrl: string | null = null;
+  showLoraLoadPrompt: boolean = false;
+  pendingLoraLoadImage: MobiansImage | null = null;
 
   // DB variables
   private db: IDBDatabase | null = null;
@@ -1749,11 +1751,31 @@ export class OptionsComponent implements OnInit {
       this.sharedService.setPrompt(image.prompt!);
     }
 
-    if (image.loras !== undefined) {
-      this.selectedLoras = this.resolveHistoryLoras(image.loras);
-      this.generationRequest.loras = this.selectedLoras;
-      this.updateCreditCost();
+    const hasHistoryLoras = Array.isArray(image.loras) && image.loras.length > 0;
+    if (hasHistoryLoras) {
+      this.pendingLoraLoadImage = image;
+      this.showLoraLoadPrompt = true;
     }
+  }
+
+  confirmLoadHistoryLoras() {
+    const image = this.pendingLoraLoadImage;
+    this.clearLoraLoadPrompt();
+    if (!image) {
+      return;
+    }
+    this.selectedLoras = this.resolveHistoryLoras(image.loras);
+    this.generationRequest.loras = this.selectedLoras;
+    this.updateCreditCost();
+  }
+
+  declineLoadHistoryLoras() {
+    this.clearLoraLoadPrompt();
+  }
+
+  private clearLoraLoadPrompt() {
+    this.showLoraLoadPrompt = false;
+    this.pendingLoraLoadImage = null;
   }
 
   async downloadImage(image: MobiansImage, event?: Event) {

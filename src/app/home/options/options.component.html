@@ -413,6 +413,21 @@
   </div>
 </div>
 
+<!-- Load LoRAs Prompt -->
+<p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"
+  [style]="{width: 'min(90vw, 420px)'}" (onHide)="declineLoadHistoryLoras()">
+  <ng-template pTemplate="header">
+    <h5>Load LoRAs?</h5>
+  </ng-template>
+  <ng-template pTemplate="content">
+    <p>This image used LoRAs. Load them into your current selection?</p>
+  </ng-template>
+  <ng-template pTemplate="footer">
+    <button class="btn btn-secondary" type="button" (click)="declineLoadHistoryLoras()">No</button>
+    <button class="btn btn-primary ms-2" type="button" (click)="confirmLoadHistoryLoras()">Yes</button>
+  </ng-template>
+</p-dialog>
+
 <!-- Loras Content Panel -->
 <div class="collapse w-100" id="lorasCollapse">
   <div class="card card-body" id="lorasDropdown">
