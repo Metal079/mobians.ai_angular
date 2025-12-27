@@ -1,8 +1,95 @@
 /* You can add global styles to this file, and also import other style files */
 @import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css');
 
+:root {
+  --theme-page-bg: #2fa5e9;
+  --theme-surface-bg: #3880ec;
+  --theme-surface-alt-bg: #2fa5e9;
+  --theme-surface-text: #0b1220;
+  --theme-border: deepskyblue;
+  --theme-border-strong: #3880ec;
+  --theme-image-bg: #2b90e2;
+  --theme-primary: #2f6fd6;
+  --theme-primary-hover: #285db3;
+  --theme-primary-active: #234f97;
+  --theme-primary-text: #ffffff;
+  --theme-primary-border: #2a63c2;
+  --theme-primary-outline: #2f6fd6;
+  --theme-primary-outline-hover: rgba(47, 111, 214, 0.18);
+}
+
+body.theme-navy {
+  --theme-page-bg: #0b1d3a;
+  --theme-surface-bg: #112a4d;
+  --theme-surface-alt-bg: #0d2344;
+  --theme-surface-text: #e6eef8;
+  --theme-border: #1c3a60;
+  --theme-border-strong: #274b78;
+  --theme-image-bg: #0f2a4d;
+  --theme-primary: #2a5ea5;
+  --theme-primary-hover: #244f8a;
+  --theme-primary-active: #1e4070;
+  --theme-primary-text: #f3f7ff;
+  --theme-primary-border: #25538f;
+  --theme-primary-outline: #3c78c9;
+  --theme-primary-outline-hover: rgba(60, 120, 201, 0.2);
+}
+
 body {
-  background-color: #2fa5e9;
+  background-color: var(--theme-page-bg);
+  color: var(--theme-surface-text);
+}
+
+body.theme-navy .btn-primary,
+body.theme-navy .btn-primary:focus {
+  background-color: var(--theme-primary);
+  border-color: var(--theme-primary-border);
+  color: var(--theme-primary-text);
+}
+
+body.theme-navy .btn-primary:hover {
+  background-color: var(--theme-primary-hover);
+  border-color: var(--theme-primary-hover);
+}
+
+body.theme-navy .btn-primary:active,
+body.theme-navy .btn-primary.active {
+  background-color: var(--theme-primary-active);
+  border-color: var(--theme-primary-active);
+}
+
+body.theme-navy .btn-outline-primary {
+  color: var(--theme-primary-outline);
+  border-color: var(--theme-primary-outline);
+}
+
+body.theme-navy .btn-outline-primary:hover,
+body.theme-navy .btn-outline-primary:active,
+body.theme-navy .btn-outline-primary.active {
+  background-color: var(--theme-primary-outline-hover);
+  color: var(--theme-primary-text);
+  border-color: var(--theme-primary-outline);
+}
+
+body.theme-navy .btn-outline-primary:focus {
+  box-shadow: 0 0 0 0.2rem rgba(60, 120, 201, 0.35);
+}
+
+body.theme-navy .p-button.p-button-primary,
+body.theme-navy .p-button.p-button-primary:focus {
+  background-color: var(--theme-primary);
+  border-color: var(--theme-primary-border);
+  color: var(--theme-primary-text);
+}
+
+body.theme-navy .p-button.p-button-primary:hover {
+  background-color: var(--theme-primary-hover);
+  border-color: var(--theme-primary-hover);
+}
+
+body.theme-navy .p-button.p-button-primary:active {
+  background-color: var(--theme-primary-active);
+  border-color: var(--theme-primary-active);
 }
 
 ::selection {
@@ -42,37 +129,37 @@ body {
 
 /* Image History Panel Tabs */
 .p-tabview .p-tabview-nav {
-  background-color: #3880ec;
+  background-color: var(--theme-surface-bg);
   margin-bottom: 0;
   padding-left: 0;
-  border: 1px solid deepskyblue;
+  border: 1px solid var(--theme-border);
   border-width: 0 0 2px 0;
   display: flex;
 }
 
 .p-tabview .p-tabview-nav li a {
-  background-color: #2fa5e9;
+  background-color: var(--theme-surface-alt-bg);
   color: #fff; /* Optional: Change text color for better contrast */
 }
 
 .p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  border: solid deepskyblue;
+  border: solid var(--theme-border);
   border-width: 0 0 2px 0;
 }
 
 .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
-  border: solid #3880ec;
+  border: solid var(--theme-border-strong);
   border-width: 0 0 2px 0;
-  background: #3880ec;
+  background: var(--theme-surface-bg);
 }
 
 .p-tabview .p-tabview-panels {
-  background-color: #3880ec;
-  color:#000;
+  background-color: var(--theme-surface-bg);
+  color: var(--theme-surface-text);
 }
 
 .p-tabview .p-tabview-panel {
-  background-color: #3880ec;
+  background-color: var(--theme-surface-bg);
 }
 
 

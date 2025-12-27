@@ -46,6 +46,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.applyStoredTheme();
     // Validate session token on app startup
     this.validateSessionOnStartup();
     
@@ -86,6 +87,20 @@ export class AppComponent implements OnInit, OnDestroy {
       window.removeEventListener('keydown', this.userActivityHandler, true);
       window.removeEventListener('touchstart', this.userActivityHandler, true);
       window.removeEventListener('wheel', this.userActivityHandler, true);
+    }
+  }
+
+  private normalizeTheme(theme: string | null | undefined): 'sonic' | 'navy' {
+    return theme === 'navy' ? 'navy' : 'sonic';
+  }
+
+  private applyStoredTheme(): void {
+    try {
+      const storedTheme = localStorage.getItem('panel-theme');
+      const theme = this.normalizeTheme(storedTheme);
+      document.body.classList.toggle('theme-navy', theme === 'navy');
+    } catch {
+      // Ignore theme load failures (e.g. storage unavailable).
     }
   }
 

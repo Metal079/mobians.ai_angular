@@ -168,6 +168,13 @@
       <option value="portrait">Portrait</option>
     </select>
 
+    <label for="themeSelect">Site Theme</label>
+    <select class="form-select" id="themeSelect" aria-label="Panel theme select"
+      [(ngModel)]="panelTheme" (ngModelChange)="saveSettings()">
+      <option value="sonic">Sonic Blue</option>
+      <option value="navy">Navy</option>
+    </select>
+
     <!-- Negative Prompt -->
     <div class="mb-3">
       <label for="negative-prompt-input" class="form-label">Negative Prompt

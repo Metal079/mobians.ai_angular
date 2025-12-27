@@ -89,6 +89,15 @@ export class OptionsComponent implements OnInit {
 
     if (persist) localStorage.setItem('model', normalized);
   }
+
+  private normalizePanelTheme(theme: string | null | undefined): 'sonic' | 'navy' {
+    return theme === 'navy' ? 'navy' : 'sonic';
+  }
+
+  private applyThemeToBody(theme: 'sonic' | 'navy'): void {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('theme-navy', theme === 'navy');
+  }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
@@ -168,6 +177,7 @@ export class OptionsComponent implements OnInit {
   showHistory: boolean = false;
   showLoras: boolean = false;
   availableLoras: string[] = ['Loras1', 'Loras2', 'Loras3']; // Example Loras names
+  panelTheme: 'sonic' | 'navy' = 'sonic';
 
   // loras info
   showNSFWLoras: boolean = false;
@@ -914,6 +924,11 @@ export class OptionsComponent implements OnInit {
     // Save model
     localStorage.setItem("model", this.generationRequest.model);
 
+    // Save site theme
+    this.panelTheme = this.normalizePanelTheme(this.panelTheme);
+    localStorage.setItem("panel-theme", this.panelTheme);
+    this.applyThemeToBody(this.panelTheme);
+
     // Save showNSFWLoras
     localStorage.setItem("showNSFWLoras", this.showNSFWLoras.toString());
 
@@ -955,6 +970,12 @@ export class OptionsComponent implements OnInit {
     if (localStorage.getItem("model") != null) {
       this.generationRequest.model = localStorage.getItem("model")!;
     }
+    if (localStorage.getItem("panel-theme") != null) {
+      this.panelTheme = this.normalizePanelTheme(localStorage.getItem("panel-theme"));
+    } else {
+      this.panelTheme = 'sonic';
+    }
+    this.applyThemeToBody(this.panelTheme);
 
     // Ensure model is valid before downstream logic uses it.
     this.ensureValidModelSelected(false);
@@ -1011,6 +1032,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("cfg");
     localStorage.removeItem("aspect-ratio");
     localStorage.removeItem("fast-pass-code");
+    localStorage.removeItem("panel-theme");
     localStorage.removeItem('showNSFWLoras');
     localStorage.removeItem('lossy-images');
     localStorage.removeItem('notifications-enabled');
@@ -1022,6 +1044,8 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 4;
     this.generationRequest.model = "novaMobianXL_v10";
+    this.panelTheme = 'sonic';
+    this.applyThemeToBody(this.panelTheme);
     this.showNSFWLoras = false;
     // Default after reset: WebP images enabled
     this.generationRequest.lossy_images = true;

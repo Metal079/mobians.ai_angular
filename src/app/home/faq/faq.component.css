@@ -1,10 +1,10 @@
 .card {
-  background-color: #3880ec;
+  background-color: var(--theme-surface-bg);
   border: 0;
 }
 
 .card-body {
-  background-color: #2fa5e9;
+  background-color: var(--theme-surface-alt-bg);
 }
 
 @media (max-width: 480px) {
@@ -39,7 +39,7 @@ button img {
 }
 
 button {
-  background-color: #2fa5e9;
+  background-color: var(--theme-surface-alt-bg);
   border: 0;
   padding: 0;
 }

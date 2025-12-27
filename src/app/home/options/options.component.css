@@ -31,8 +31,9 @@
 }
 
 .card {
-  background-color: #3880ec;
+  background-color: var(--theme-surface-bg);
   border: 0;
+  color: var(--theme-surface-text);
 }
 
 .inpaint-button {
