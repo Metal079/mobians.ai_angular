@@ -342,7 +342,13 @@
         <div class="pagination">
           <button class="btn btn-sm btn-primary" (click)="previousPage()"
             [disabled]="currentPageNumber === 1">Previous</button>
-          <span>Page {{ currentPageNumber }} of {{ totalPages }}</span>
+          <span class="page-edit-container">
+            Page <input type="number" class="page-input" [(ngModel)]="editPageNumber" 
+              min="1" [max]="totalPages" 
+              (keyup.enter)="goToPage()" 
+              (blur)="goToPage()"
+              #pageInput> of {{ totalPages }}
+          </span>
           <button class="btn btn-sm btn-primary" (click)="nextPage()"
             [disabled]="currentPageNumber === totalPages">Next</button>
         </div>
@@ -385,7 +391,13 @@
         <div class="pagination">
           <button class="btn btn-sm btn-primary" (click)="previousFavoritePage()"
             [disabled]="favoriteCurrentPageNumber === 1">Previous</button>
-          <span>Page {{ favoriteCurrentPageNumber }} of {{ favoriteTotalPages }}</span>
+          <span class="page-edit-container">
+            Page <input type="number" class="page-input" [(ngModel)]="editFavoritePageNumber" 
+              min="1" [max]="favoriteTotalPages" 
+              (keyup.enter)="goToFavoritePage()" 
+              (blur)="goToFavoritePage()"
+              #favoritePageInput> of {{ favoriteTotalPages }}
+          </span>
           <button class="btn btn-sm btn-primary" (click)="nextFavoritePage()"
             [disabled]="favoriteCurrentPageNumber === favoriteTotalPages">Next</button>
         </div>

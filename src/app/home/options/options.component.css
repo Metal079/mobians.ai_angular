@@ -128,15 +128,48 @@
 .pagination {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   /* Space buttons evenly */
   margin-top: 20px;
 }
 
 .pagination .btn {
-  width: 48%;
-  /* Make pagination buttons larger */
+  width: 30%;
+  /* Make pagination buttons appropriately sized */
   padding: 10px 0;
   /* Increase padding for easier tapping */
+}
+
+.page-edit-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(0, 123, 255, 0.06);
+}
+
+.page-input {
+  width: 60px;
+  text-align: center;
+  padding: 4px 8px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  font-size: inherit;
+}
+
+.page-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Remove spinner arrows from number input */
+.page-input::-webkit-outer-spin-button,
+.page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.page-input[type=number] {
+  -moz-appearance: textfield;
 }
 
 /* loras */
@@ -403,12 +436,25 @@
     margin-top: 20px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
   }
 
   .pagination .btn {
-    width: 48%;
+    width: 30%;
     /* Ensure pagination buttons are easy to tap */
     padding: 10px 0;
+  }
+
+  .page-edit-container {
+    padding: 8px 10px;
+    gap: 6px;
+    font-size: 14px;
+  }
+
+  .page-input {
+    width: 50px;
+    padding: 6px;
+    font-size: 14px;
   }
 
   /* Menu dropdowns */

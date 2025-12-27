@@ -148,6 +148,7 @@ export class OptionsComponent implements OnInit {
   totalPages = 1;
   isLoading: boolean = false;
   imageHistoryMetadata: MobiansImageMetadata[] = [];
+  editPageNumber: number = 1;
   blobUrls: string[] = [];
 
   // For Favorites tab
@@ -157,6 +158,7 @@ export class OptionsComponent implements OnInit {
   favoriteImagesPerPage: number = 4;
   favoriteSearchQuery: string = '';
   debouncedFavoriteSearch: () => void;
+  editFavoritePageNumber: number = 1;
 
   // For storing favorite images metadata
   favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
@@ -1876,6 +1878,7 @@ export class OptionsComponent implements OnInit {
       this.imageHistoryMetadata = results;
       this.favoriteImageHistoryMetadata = results.filter(image => image.favorite);
       this.currentPageNumber = 1;
+      this.editPageNumber = this.currentPageNumber;
       this.totalPages = Math.ceil(results.length / this.imagesPerPage);
 
       // Load the first page of images
@@ -2023,6 +2026,7 @@ export class OptionsComponent implements OnInit {
     this.currentPageImages = [];
     this.currentPageNumber--;
     this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    this.editPageNumber = this.currentPageNumber;
 
     console.log('Current page number:', this.currentPageNumber);
     console.log('Current page images:', this.currentPageImages);
@@ -2035,11 +2039,27 @@ export class OptionsComponent implements OnInit {
     this.currentPageImages = [];
     this.currentPageNumber++;
     this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    this.editPageNumber = this.currentPageNumber;
 
     console.log('Current page number:', this.currentPageNumber);
     console.log('Current page images:', this.currentPageImages);
     console.log('Prev page images:', this.prevPageImages);
     console.log('Next page images:', this.nextPageImages);
+  }
+
+  async goToPage() {
+    // Clamp the page number to valid range
+    let targetPage = Math.round(this.editPageNumber);
+    if (targetPage < 1) targetPage = 1;
+    if (targetPage > this.totalPages) targetPage = this.totalPages;
+
+    if (targetPage !== this.currentPageNumber) {
+      this.currentPageImages = this.clearBase64Data(this.currentPageImages);
+      this.currentPageImages = [];
+      this.currentPageNumber = targetPage;
+      this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    }
+    this.editPageNumber = this.currentPageNumber;
   }
 
   clearBase64Data(images: MobiansImage[]) {
@@ -2100,6 +2120,7 @@ export class OptionsComponent implements OnInit {
          console.log('All images deleted from IndexedDB');
          this.currentPageImages = [];
          this.currentPageNumber = 1;
+         this.editPageNumber = this.currentPageNumber;
          this.totalPages = 1;
        };
 
@@ -2398,6 +2419,7 @@ export class OptionsComponent implements OnInit {
     if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
       this.favoriteCurrentPageNumber = 1;
     }
+    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
 
     this.paginateFavoriteImages(this.favoriteCurrentPageNumber).then(images => {
       this.favoritePageImages = images;
@@ -2460,11 +2482,26 @@ export class OptionsComponent implements OnInit {
   async previousFavoritePage() {
     this.favoriteCurrentPageNumber--;
     this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
   }
 
   async nextFavoritePage() {
     this.favoriteCurrentPageNumber++;
     this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+  }
+
+  async goToFavoritePage() {
+    // Clamp the page number to valid range
+    let targetPage = Math.round(this.editFavoritePageNumber);
+    if (targetPage < 1) targetPage = 1;
+    if (targetPage > this.favoriteTotalPages) targetPage = this.favoriteTotalPages;
+
+    if (targetPage !== this.favoriteCurrentPageNumber) {
+      this.favoriteCurrentPageNumber = targetPage;
+      this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+    }
+    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
   }
 
   async favoriteSearchImages() {
@@ -2610,6 +2647,7 @@ export class OptionsComponent implements OnInit {
       if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
         this.favoriteCurrentPageNumber = 1;
       }
+      this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
 
       this.paginateFavoriteImages(this.favoriteCurrentPageNumber).then(images => {
         this.favoritePageImages = images;
