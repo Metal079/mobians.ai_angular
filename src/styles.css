@@ -92,6 +92,11 @@ body.theme-navy .p-button.p-button-primary:active {
   border-color: var(--theme-primary-active);
 }
 
+body.theme-navy .badge.bg-primary {
+  background-color: var(--theme-primary) !important;
+  color: var(--theme-primary-text);
+}
+
 ::selection {
   background-color: #fcbe14;
   /* Change this color to your desired selection background color */
