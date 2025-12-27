@@ -538,8 +538,13 @@ export class OptionsComponent implements OnInit {
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
         this.generationRequest.job_type = "img2img";
-        image.blob = image.blob
-        this.generationRequest.image = image.base64;
+        // Only set image data if base64 is present; submitJob() will convert from blob if needed
+        if (image.base64) {
+          this.generationRequest.image = image.base64;
+        } else {
+          // Clear any stale image data - submitJob() will convert from blob
+          this.generationRequest.image = undefined;
+        }
         this.referenceImage = image;
 
         // Set the aspect ratio
@@ -1189,8 +1194,32 @@ export class OptionsComponent implements OnInit {
 
     // set reference image if there is one
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
-      // set image to base64 string if exists and non- "", else set to url
-      this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob!);
+      // Convert blob to base64 if blob exists
+      if (this.referenceImage.blob) {
+        this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob);
+      } else {
+        // No blob available - clear the reference image state to prevent sending img2img without image
+        console.warn('Reference image has no blob data, falling back to txt2img');
+        this.referenceImage = undefined;
+        this.generationRequest.job_type = "txt2img";
+        this.generationRequest.image = undefined;
+      }
+    }
+
+    // CRITICAL: Validate that img2img/inpainting jobs have image data before sending
+    // This prevents the bug where job_type is img2img but no image is attached
+    if ((this.generationRequest.job_type === 'img2img' || this.generationRequest.job_type === 'inpainting') 
+        && !this.generationRequest.image) {
+      console.error('BUG PREVENTED: Attempted to send img2img/inpainting without image data. Resetting to txt2img.');
+      this.generationRequest.job_type = "txt2img";
+      this.referenceImage = undefined;
+      this.sharedService.setReferenceImage(null);
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Reference image lost',
+        detail: 'The reference image data was lost. Generating as text-to-image instead. Please re-add your reference image if needed.',
+        life: 6000
+      });
     }
 
     const requestToSend = {
@@ -1608,6 +1637,12 @@ export class OptionsComponent implements OnInit {
     const blob = await this.getDownloadBlob(image);
     if (!blob) {
       console.error('Failed to load image data for reference image');
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Image Load Failed',
+        detail: 'Could not load the image data. Please try another image.',
+        life: 4000
+      });
       return;
     }
 
@@ -1619,7 +1654,8 @@ export class OptionsComponent implements OnInit {
     // Set the reference image to the selected image
     image.blob = blob;
     this.referenceImage = image;
-    this.generationRequest.image = image.blob;
+    // Note: Don't set generationRequest.image here - submitJob() will convert blob to base64
+    // Setting it to the blob object was a bug that could cause issues
     this.sharedService.setReferenceImage(image);
 
     // update prompt
