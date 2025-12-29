@@ -156,8 +156,6 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
       },
       createOrder: async () => {
         console.log('PayPal createOrder called for package:', packageId);
-        this.processing = true;
-        this.cdr.detectChanges();
         
         try {
           const response = await this.api.createPayPalOrder(packageId).toPromise();
@@ -165,7 +163,6 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
           return response.order_id;
         } catch (err: any) {
           console.error('PayPal createOrder error:', err);
-          this.processing = false;
           this.cdr.detectChanges();
           const message = err?.error?.detail || 'Failed to create order';
           this.messageService.add({
@@ -178,6 +175,9 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
         }
       },
       onApprove: async (data: any) => {
+        this.processing = true;
+        this.cdr.detectChanges();
+        
         try {
           const response = await this.api.capturePayPalOrder(data.orderID).toPromise();
           this.processing = false;
