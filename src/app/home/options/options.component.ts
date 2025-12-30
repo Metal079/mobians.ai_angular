@@ -1198,7 +1198,12 @@ export class OptionsComponent implements OnInit {
       return { ...historyLora, strength };
     });
 
-    return resolved.slice(0, this.maxLoras);
+    const targetBaseModel = this.models_types?.[this.generationRequest.model];
+    const filtered = targetBaseModel
+      ? resolved.filter((lora) => lora?.base_model === targetBaseModel)
+      : resolved;
+
+    return filtered.slice(0, this.maxLoras);
   }
 
   // Send job to django api and retrieve job id.
@@ -1751,8 +1756,16 @@ export class OptionsComponent implements OnInit {
       this.sharedService.setPrompt(image.prompt!);
     }
 
-    const hasHistoryLoras = Array.isArray(image.loras) && image.loras.length > 0;
+    const historyLoras = Array.isArray(image.loras) ? image.loras : [];
+    const hasHistoryLoras = historyLoras.length > 0;
     if (hasHistoryLoras) {
+      const targetBaseModel = this.models_types?.[this.generationRequest.model];
+      const hasCompatibleLoras = !targetBaseModel
+        ? true
+        : historyLoras.some((lora) => lora?.base_model === targetBaseModel);
+      if (!hasCompatibleLoras) {
+        return;
+      }
       this.pendingLoraLoadImage = image;
       this.showLoraLoadPrompt = true;
     }
