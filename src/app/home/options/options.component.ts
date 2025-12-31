@@ -686,9 +686,11 @@ export class OptionsComponent implements OnInit {
     const baseCost = this.creditCosts[modelType] ?? this.creditCosts['SD 1.5'] ?? 0;
     const loraCount = this.selectedLoras?.length ?? 0;
     const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
-    this.creditCost = baseCost + (loraCount * perLoraCost);
-    this.upscaleCreditCost = baseCost * 3;
-    this.hiresCreditCost = baseCost * 4;
+    const loraTotalCost = loraCount * perLoraCost;
+    this.creditCost = baseCost + loraTotalCost;
+    // LoRAs have 3x cost for upscale and 4x cost for enhanced generation
+    this.upscaleCreditCost = (baseCost * 3) + (loraTotalCost * 3);
+    this.hiresCreditCost = (baseCost * 4) + (loraTotalCost * 4);
     this.enforceHiresConstraints();
   }
 
