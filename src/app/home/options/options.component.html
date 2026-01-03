@@ -325,6 +325,10 @@
           <div *ngFor="let image of currentPageImages" class="history-item">
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
+              <!-- Sync indicator (synced) - shows cloud icon for synced images -->
+              <div class="sync-indicator synced" *ngIf="isImageSynced(image.UUID)" title="Synced to cloud">
+                <i class="bi bi-cloud-check-fill"></i>
+              </div>
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
@@ -363,6 +367,81 @@
 
       <!-- Favorites Tab -->
       <p-tabPanel header="Favorites">
+        <div class="favorites-tab">
+          <!-- Bulk Selection Controls -->
+          <div class="bulk-controls d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <button class="btn btn-sm favorites-control-btn" 
+              [ngClass]="bulkSelectMode ? 'btn-warning' : 'btn-outline-secondary'"
+              (click)="toggleBulkSelectMode()">
+              <i class="bi" [ngClass]="bulkSelectMode ? 'bi-x-circle' : 'bi-check2-square'"></i>
+              {{ bulkSelectMode ? 'Exit Select' : 'Select' }}
+            </button>
+
+            <button class="btn btn-sm btn-outline-success favorites-control-btn" (click)="showTagManager = !showTagManager">
+              <i class="bi bi-folder-plus"></i> Manage Tags
+            </button>
+            
+            <ng-container *ngIf="bulkSelectMode">
+              <span class="badge bg-primary">{{ selectedImages.size }} selected</span>
+              <div class="bulk-actions d-flex gap-1" *ngIf="selectedImages.size > 0">
+                <button class="btn btn-sm btn-outline-info" (click)="openTagAssignDialog()" title="Assign to tag">
+                  <i class="bi bi-folder-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-success" (click)="bulkDownload()" title="Download as ZIP">
+                  <i class="bi bi-download"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" (click)="bulkDelete()" title="Delete selected">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </ng-container>
+          </div>
+
+          <!-- Tag Filter + Manager -->
+          <div class="tag-section mb-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+              <button class="btn btn-sm favorites-tag-btn" 
+                [ngClass]="selectedTagFilter === null ? 'btn-primary' : 'btn-outline-primary'"
+                (click)="filterByTag(null)">
+                All
+              </button>
+              <button *ngFor="let tag of availableTags" 
+                class="btn btn-sm favorites-tag-btn"
+                [ngClass]="selectedTagFilter === tag.id ? 'btn-primary' : 'btn-outline-secondary'"
+                [style.border-color]="tag.color"
+                [style.color]="selectedTagFilter === tag.id ? '#fff' : tag.color"
+                [style.background-color]="selectedTagFilter === tag.id ? tag.color : null"
+                (click)="filterByTag(tag.id)">
+                {{ tag.name }} ({{ tag.imageCount || 0 }})
+              </button>
+            </div>
+
+          <!-- Tag Manager Inline Panel -->
+          <div *ngIf="showTagManager" class="tag-manager-panel card p-3 mb-2">
+            <h6>Create New Tag</h6>
+            <div class="d-flex gap-2 mb-2">
+              <input type="text" class="form-control form-control-sm" 
+                placeholder="Tag name..." 
+                [(ngModel)]="newTagName"
+                (keyup.enter)="createTag()">
+              <button class="btn btn-sm btn-success" (click)="createTag()" [disabled]="!newTagName.trim()">
+                <i class="bi bi-plus"></i> Create
+              </button>
+            </div>
+            <div *ngIf="availableTags.length > 0">
+              <h6>Your Tags</h6>
+              <div class="d-flex flex-wrap gap-2">
+                <div *ngFor="let tag of availableTags" class="tag-item d-flex align-items-center gap-1 px-2 py-1 rounded"
+                  [style.background-color]="tag.color + '33'">
+                  <span [style.color]="tag.color">{{ tag.name }}</span>
+                  <span class="badge bg-secondary">{{ tag.imageCount || 0 }}</span>
+                  <i class="bi bi-x-circle text-danger" style="cursor: pointer" (click)="deleteTag(tag)"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Favorites Content -->
         <div class="sorting-options">
           <div class="search-bar">
@@ -371,17 +450,37 @@
           </div>
         </div>
         <div class="history-grid">
-          <div *ngFor="let image of favoritePageImages" class="history-item">
+          <div *ngFor="let image of favoritePageImages" class="history-item"
+            [class.selected]="bulkSelectMode && isImageSelected(image)">
             <div class="image-container">
-              <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
-              <div class="top-left-icon">
+              <img [src]="image.url" alt="Generated Image" 
+                (click)="bulkSelectMode ? toggleImageSelection(image, $event) : openImageDetails(image)">
+              
+              <!-- Sync indicator (synced) - click to unsync -->
+              <div class="sync-indicator synced clickable" *ngIf="isImageSynced(image.UUID) && !bulkSelectMode" 
+                title="Synced to cloud (click to unsync)" (click)="$event.stopPropagation(); unsyncSingleImage(image)">
+                <i class="bi bi-cloud-check-fill"></i>
+              </div>
+              <!-- Sync button (not synced) - click to sync -->
+              <div class="sync-indicator clickable" *ngIf="isLoggedIn && !isImageSynced(image.UUID) && !bulkSelectMode" 
+                title="Sync to cloud" (click)="$event.stopPropagation(); syncSingleImage(image)">
+                <i class="bi bi-cloud-upload"></i>
+              </div>
+
+              <!-- Selection checkbox overlay -->
+              <div class="selection-checkbox" *ngIf="bulkSelectMode"
+                (click)="toggleImageSelection(image, $event)">
+                <i class="bi" [ngClass]="isImageSelected(image) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+              </div>
+
+              <div class="top-left-icon" *ngIf="!bulkSelectMode">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
               </div>
-              <div class="bottom-left-icon">
+              <div class="bottom-left-icon" *ngIf="!bulkSelectMode">
                 <i class="bi bi-download" (click)="$event.stopPropagation(); downloadImage(image, $event)" aria-label="Download Image"></i>
               </div>
-              <div class="top-right-icon">
+              <div class="top-right-icon" *ngIf="!bulkSelectMode">
                 <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)" aria-label="Delete Image"></i>
               </div>
             </div>
@@ -408,10 +507,31 @@
           <button class="btn btn-sm btn-primary" (click)="nextFavoritePage()"
             [disabled]="favoriteCurrentPageNumber === favoriteTotalPages">Next</button>
         </div>
+        </div>
       </p-tabPanel>
     </p-tabView>
   </div>
 </div>
+
+<!-- Tag Assignment Dialog -->
+<p-dialog [(visible)]="showTagAssignDialog" [modal]="true" [dismissableMask]="true" [closable]="true"
+  [style]="{width: 'min(90vw, 400px)'}" header="Assign to Tag">
+  <ng-template pTemplate="content">
+    <p>Select a tag to add {{ tagAssignImageUUIDs.length }} image(s) to:</p>
+    <div class="d-flex flex-wrap gap-2 mt-3">
+      <button *ngFor="let tag of availableTags" 
+        class="btn btn-outline-primary"
+        [style.border-color]="tag.color"
+        [style.color]="tag.color"
+        (click)="assignTagToImages(tag)">
+        <i class="bi bi-folder"></i> {{ tag.name }}
+      </button>
+    </div>
+    <div *ngIf="availableTags.length === 0" class="text-muted mt-3">
+      No Tags yet. Create one in the Favorites tab!
+    </div>
+  </ng-template>
+</p-dialog>
 
 <!-- Load LoRAs Prompt -->
 <p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"

@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
-import { MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
+import { MobiansImage, MobiansImageMetadata, ImageTag } from 'src/_shared/mobians-image.interface';
 import { interval, of } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, skip } from 'rxjs/operators';
@@ -21,6 +21,8 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
 import { AuthService } from 'src/app/auth/auth.service';
+import { ImageSyncService, SyncStatus } from 'src/app/image-sync.service';
+import JSZip from 'jszip';
 
 
 @Component({
@@ -172,6 +174,29 @@ export class OptionsComponent implements OnInit {
   // For storing favorite images metadata
   favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
 
+  // Bulk Selection Mode
+  bulkSelectMode: boolean = false;
+  selectedImages: Set<string> = new Set(); // Set of UUIDs
+  
+  // Tags Management
+  availableTags: ImageTag[] = [];
+  selectedTagFilter: string | null = null; // Currently selected tag for filtering
+  showTagManager: boolean = false;
+  newTagName: string = '';
+  tagColors: string[] = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+  showTagAssignDialog: boolean = false;
+  tagAssignImageUUIDs: string[] = []; // Images to assign tags to
+
+  // Sync properties
+  syncStatus: SyncStatus = {
+    syncEnabled: false,
+    imagesInCloud: 0,
+    quota: { used: 0, limit: 1000 },
+    lastSyncTime: null,
+    isSyncing: false
+  };
+  syncProgress: { current: number; total: number } | null = null;
+
   // New properties for menus
   showOptions: boolean = false;
   showHistory: boolean = false;
@@ -263,6 +288,7 @@ export class OptionsComponent implements OnInit {
     , private blobMigrationService: BlobMigrationService
     , private lockService: GenerationLockService
     , private authService: AuthService
+    , private imageSyncService: ImageSyncService
   ) {
     // Load in loras info
     this.loadLoras();
@@ -316,7 +342,7 @@ export class OptionsComponent implements OnInit {
         return;
       }
 
-      const request = indexedDB.open(this.dbName, 37); // Increment version number
+      const request = indexedDB.open(this.dbName, 38); // Increment version number for new schema
 
       request.onerror = (event) => {
         console.error("Failed to open database:", event);
@@ -355,6 +381,13 @@ export class OptionsComponent implements OnInit {
           console.log("blobStore store created");
         }
 
+        // Create TagStore for user-defined tags
+        if (!db.objectStoreNames.contains('TagStore')) {
+          const tagStore = db.createObjectStore('TagStore', { keyPath: "id" });
+          tagStore.createIndex('name', 'name', { unique: true });
+          console.log("TagStore created");
+        }
+
         const transaction = (event.target as IDBOpenDBRequest).transaction;
         if (transaction) {
           const store = transaction.objectStore(this.storeName);
@@ -382,25 +415,50 @@ export class OptionsComponent implements OnInit {
               store.createIndex('favorite', 'favorite', { unique: false });
               console.log("Favorite index created");
             }
+
+            // Create 'syncPriority' index for cross-device sync ordering
+            if (!store.indexNames.contains('syncPriority')) {
+              store.createIndex('syncPriority', 'syncPriority', { unique: false });
+              console.log("SyncPriority index created");
+            }
+
+            // Create 'model' index for filtering by model
+            if (!store.indexNames.contains('model')) {
+              store.createIndex('model', 'model', { unique: false });
+              console.log("Model index created");
+            }
           } catch (error) {
-            console.warn("Full-text index not supported in this browser:", error);
+            console.warn("Some indexes not supported in this browser:", error);
           }
 
-          // Iterate over all existing records and set 'favorite' to false if missing
+          // Iterate over all existing records and set default values for new fields
           try {
             const allRequest = store.getAll();
             allRequest.onsuccess = () => {
               const allRecords = allRequest.result as MobiansImage[];
               allRecords.forEach(record => {
+                let needsUpdate = false;
                 if (typeof record.favorite !== 'boolean') {
                   record.favorite = false;
+                  needsUpdate = true;
+                }
+                if (!Array.isArray(record.tags)) {
+                  record.tags = [];
+                  needsUpdate = true;
+                }
+                if (typeof record.syncPriority !== 'number') {
+                  // Default sync priority: favorites get higher priority
+                  record.syncPriority = record.favorite ? 100 : 0;
+                  needsUpdate = true;
+                }
+                if (needsUpdate) {
                   store.put(record);
                 }
               });
-              console.log("All existing records have been initialized with 'favorite' property.");
+              console.log("All existing records have been initialized with new properties.");
             };
             allRequest.onerror = (event) => {
-              console.error("Error initializing 'favorite' property for existing records:", event);
+              console.error("Error initializing properties for existing records:", event);
             };
           } catch (error) {
             console.error("Error during records initialization:", error);
@@ -512,8 +570,13 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.prompt = value;
     });
 
+    // Subscribe to sync status changes
+    this.imageSyncService.syncStatus$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(status => {
+      this.syncStatus = status;
+    });
+
     // Subscribe to credits changes
-    this.authService.credits$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(creditsData => {
+    this.authService.credits$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async creditsData => {
       if (creditsData) {
         this.userCredits = creditsData.credits;
         this.isLoggedIn = true;
@@ -1019,12 +1082,45 @@ export class OptionsComponent implements OnInit {
     this.updateCreditCost();
 
     try {
+      // Load user-defined tags
+      await this.loadTags();
+      
       // Use the new queryImages function to load the initial set of images
       await this.searchImages();
       this.currentPageImages = await this.paginateImages(1);
       console.log('Current page images:', this.currentPageImages);
+      
+      // Update tag counts after loading images
+      await this.updateTagCounts();
+      
+      // If logged in, sync with cloud (fetch status and merge images)
+      if (this.authService.isLoggedIn()) {
+        await this.syncFromCloud();
+      }
     } catch (error) {
       console.error("Error accessing database:", error);
+    }
+  }
+  
+  /**
+   * Sync from cloud: fetch sync status and merge any cloud images to local storage
+   */
+  private async syncFromCloud() {
+    try {
+      // Refresh sync status from server (verifies synced UUIDs)
+      await this.imageSyncService.fetchSyncStatus();
+      
+      // Download and merge any cloud images to local storage
+      const mergedCount = await this.mergeCloudImages();
+      if (mergedCount > 0) {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Synced from Cloud',
+          detail: `${mergedCount} image(s) restored from cloud.`
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync from cloud:', error);
     }
   }
 
@@ -1517,7 +1613,15 @@ export class OptionsComponent implements OnInit {
                 prompt: this.generationRequest.prompt,
                 loras: historyLoras,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
-                url: blobUrl // Generate URL
+                url: blobUrl, // Generate URL
+                // New metadata fields for hover display
+                model: this.generationRequest.model,
+                seed: this.currentSeed,
+                negativePrompt: this.generationRequest.negative_prompt,
+                cfg: this.generationRequest.guidance_scale,
+                tags: [],
+                syncPriority: 0,
+                lastModified: new Date()
               } as MobiansImage;
             });
             // Track created URLs for later revocation
@@ -1541,7 +1645,24 @@ export class OptionsComponent implements OnInit {
 
             // Add the images to the image history metadata
             this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
-              return { UUID: image.UUID, prompt: image.prompt!, promptSummary: image.promptSummary, loras: image.loras, timestamp: image.timestamp!, aspectRatio: image.aspectRatio, width: image.width, height: image.height, favorite: false } as MobiansImageMetadata;
+              return { 
+                UUID: image.UUID, 
+                prompt: image.prompt!, 
+                promptSummary: image.promptSummary, 
+                loras: image.loras, 
+                timestamp: image.timestamp!, 
+                aspectRatio: image.aspectRatio, 
+                width: image.width, 
+                height: image.height, 
+                favorite: false,
+                model: image.model,
+                seed: image.seed,
+                negativePrompt: image.negativePrompt,
+                cfg: image.cfg,
+                tags: [],
+                syncPriority: 0,
+                lastModified: image.lastModified
+              } as MobiansImageMetadata;
             }));
 
             try {
@@ -2451,13 +2572,47 @@ export class OptionsComponent implements OnInit {
   }
 
   //#region Favorite Images
-  toggleFavorite(image: MobiansImage) {
+  async toggleFavorite(image: MobiansImage) {
+    const wasFavorite = image.favorite;
     image.favorite = !image.favorite;
     this.updateImageInDB(image);
     this.updateFavoriteImages();
+
+    // If favoriting: auto-sync to cloud (if logged in and below limit)
+    if (image.favorite && this.authService.isLoggedIn()) {
+      const blob = await this.getImageBlob(image.UUID);
+      if (blob) {
+        this.imageSyncService.syncImage(image, blob).then(success => {
+          if (success) {
+            console.log('Image synced to cloud:', image.UUID);
+          }
+        });
+      }
+    }
+    
+    // If unfavoriting: unsync from cloud
+    if (wasFavorite && !image.favorite && this.isImageSynced(image.UUID)) {
+      this.imageSyncService.unsyncImage(image.UUID).then(success => {
+        if (success) {
+          console.log('Image unsynced from cloud:', image.UUID);
+        }
+      });
+    }
   }
 
   async deleteImage(image: MobiansImage) {
+    // Check if image is synced - warn user it will be deleted on all devices
+    if (this.isImageSynced(image.UUID)) {
+      const confirmed = confirm(
+        'This image is synced to the cloud. Deleting it will remove it from ALL your devices. Are you sure?'
+      );
+      if (!confirmed) {
+        return;
+      }
+      // Unsync from cloud first
+      await this.imageSyncService.unsyncImage(image.UUID);
+    }
+
     // Remove from current images arrays
     this.currentPageImages = this.currentPageImages.filter(img => img.UUID !== image.UUID);
     this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => img.UUID !== image.UUID);
@@ -2529,18 +2684,23 @@ export class OptionsComponent implements OnInit {
   }
 
   updateFavoriteImages() {
-    if (this.favoriteSearchQuery) {
-      const filteredImages = this.imageHistoryMetadata;
-      this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
+    // Start with all favorites
+    this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
+    
+    // Apply tag filter if selected
+    if (this.selectedTagFilter) {
+      this.favoriteImageHistoryMetadata = this.favoriteImageHistoryMetadata.filter(image => 
+        image.tags?.includes(this.selectedTagFilter!)
+      );
+    }
 
-      // Only show images that match the search query
+    // Apply search query filter
+    if (this.favoriteSearchQuery) {
       this.favoriteImageHistoryMetadata = this.favoriteImageHistoryMetadata.filter(image =>
         image.prompt && image.prompt.toLowerCase().includes(this.favoriteSearchQuery.toLowerCase())
       );
     }
-    else {
-      this.favoriteImageHistoryMetadata = this.imageHistoryMetadata.filter(image => image.favorite);
-    }
+    
     this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
 
     if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
@@ -2793,6 +2953,662 @@ export class OptionsComponent implements OnInit {
       });
        } finally {
       this.isSearching = false;
+    }
+  }
+  //#endregion
+
+  //#region Bulk Selection
+  toggleBulkSelectMode() {
+    this.bulkSelectMode = !this.bulkSelectMode;
+    if (!this.bulkSelectMode) {
+      this.selectedImages.clear();
+    }
+  }
+
+  toggleImageSelection(image: MobiansImage, event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.selectedImages.has(image.UUID)) {
+      this.selectedImages.delete(image.UUID);
+    } else {
+      this.selectedImages.add(image.UUID);
+    }
+  }
+
+  isImageSelected(image: MobiansImage): boolean {
+    return this.selectedImages.has(image.UUID);
+  }
+
+  selectAllOnPage() {
+    this.currentPageImages.forEach(img => this.selectedImages.add(img.UUID));
+  }
+
+  selectAllFavoritesOnPage() {
+    this.favoritePageImages.forEach(img => this.selectedImages.add(img.UUID));
+  }
+
+  deselectAll() {
+    this.selectedImages.clear();
+  }
+
+  async bulkFavorite() {
+    const imagesToUpdate = this.imageHistoryMetadata.filter(img => this.selectedImages.has(img.UUID));
+    for (const img of imagesToUpdate) {
+      img.favorite = true;
+      await this.updateImageInDB(img as MobiansImage);
+    }
+    this.updateFavoriteImages();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Favorited',
+      detail: `${imagesToUpdate.length} images added to favorites.`
+    });
+  }
+
+  async bulkUnfavorite() {
+    const imagesToUpdate = this.imageHistoryMetadata.filter(img => this.selectedImages.has(img.UUID));
+    for (const img of imagesToUpdate) {
+      img.favorite = false;
+      await this.updateImageInDB(img as MobiansImage);
+    }
+    this.updateFavoriteImages();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Unfavorited',
+      detail: `${imagesToUpdate.length} images removed from favorites.`
+    });
+  }
+
+  async bulkDelete() {
+    if (!confirm(`Are you sure you want to delete ${this.selectedImages.size} images? This cannot be undone.`)) {
+      return;
+    }
+    
+    const uuidsToDelete = Array.from(this.selectedImages);
+    for (const uuid of uuidsToDelete) {
+      const image = this.imageHistoryMetadata.find(img => img.UUID === uuid);
+      if (image) {
+        await this.deleteImageFromDB(image as MobiansImage);
+      }
+    }
+    
+    // Update local arrays
+    this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => !this.selectedImages.has(img.UUID));
+    this.currentPageImages = this.currentPageImages.filter(img => !this.selectedImages.has(img.UUID));
+    this.favoriteImageHistoryMetadata = this.favoriteImageHistoryMetadata.filter(img => !this.selectedImages.has(img.UUID));
+    this.favoritePageImages = this.favoritePageImages.filter(img => !this.selectedImages.has(img.UUID));
+    
+    // Recalculate pagination
+    this.totalPages = Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage);
+    this.favoriteTotalPages = Math.ceil(this.favoriteImageHistoryMetadata.length / this.favoriteImagesPerPage);
+    
+    const deletedCount = this.selectedImages.size;
+    this.selectedImages.clear();
+    
+    // Reload current page
+    if (this.currentPageNumber > this.totalPages) {
+      this.currentPageNumber = Math.max(1, this.totalPages);
+    }
+    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Deleted',
+      detail: `${deletedCount} images deleted.`
+    });
+  }
+
+  async bulkDownload() {
+    if (this.selectedImages.size === 0) return;
+    
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Preparing Download',
+      detail: `Preparing ${this.selectedImages.size} images for download...`
+    });
+
+    const zip = new JSZip();
+    const uuids = Array.from(this.selectedImages);
+    
+    for (let i = 0; i < uuids.length; i++) {
+      const uuid = uuids[i];
+      const image = this.imageHistoryMetadata.find(img => img.UUID === uuid);
+      if (!image) continue;
+      
+      const blob = await this.getBlobFromStore(uuid);
+      if (blob) {
+        const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+        zip.file(`mobians-${uuid}.${ext}`, blob);
+      }
+    }
+    
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mobians-images-${Date.now()}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Download Complete',
+      detail: `${uuids.length} images downloaded as ZIP.`
+    });
+  }
+  //#endregion
+
+  //#region Tag Management
+  async loadTags() {
+    try {
+      const db = await this.getDatabase();
+      if (!db.objectStoreNames.contains('TagStore')) {
+        return;
+      }
+      const transaction = db.transaction('TagStore', 'readonly');
+      const store = transaction.objectStore('TagStore');
+      const request = store.getAll();
+      
+      const localTags = await new Promise<ImageTag[]>((resolve) => {
+        request.onsuccess = () => {
+          resolve(request.result || []);
+        };
+        request.onerror = () => {
+          console.error('Failed to load tags');
+          resolve([]);
+        };
+      });
+      
+      this.availableTags = localTags;
+      
+      // Merge cloud tags if logged in
+      if (this.authService.isLoggedIn()) {
+        await this.mergeCloudTags();
+      }
+    } catch (error) {
+      console.error('Error loading tags:', error);
+    }
+  }
+  
+  /**
+   * Merge cloud tags with local tags (adds any missing cloud tags locally)
+   */
+  private async mergeCloudTags() {
+    try {
+      const cloudTags = await this.imageSyncService.getCloudTags();
+      if (cloudTags.length === 0) {
+        // No cloud tags, sync local tags to cloud if we have any
+        if (this.availableTags.length > 0) {
+          await this.imageSyncService.syncTags(this.availableTags);
+        }
+        return;
+      }
+      
+      const db = await this.getDatabase();
+      const transaction = db.transaction('TagStore', 'readwrite');
+      const store = transaction.objectStore('TagStore');
+      
+      let tagsAdded = 0;
+      for (const cloudTag of cloudTags) {
+        const exists = this.availableTags.some(t => t.id === cloudTag.id);
+        if (!exists) {
+          const tagWithCount: ImageTag = { ...cloudTag, imageCount: 0 };
+          store.put(tagWithCount);
+          this.availableTags.push(tagWithCount);
+          tagsAdded++;
+        }
+      }
+      
+      if (tagsAdded > 0) {
+        console.log(`Merged ${tagsAdded} cloud tags to local storage`);
+      }
+      
+      // Also sync any local tags that aren't in cloud yet
+      const localTagsNotInCloud = this.availableTags.filter(
+        lt => !cloudTags.some(ct => ct.id === lt.id)
+      );
+      if (localTagsNotInCloud.length > 0) {
+        await this.imageSyncService.syncTags(this.availableTags);
+      }
+    } catch (error) {
+      console.error('Failed to merge cloud tags:', error);
+    }
+  }
+
+  /**
+   * Download and merge synced images from cloud into local storage
+   */
+  async mergeCloudImages(): Promise<number> {
+    try {
+      const { images, blobs } = await this.imageSyncService.downloadFromCloud();
+      
+      if (images.length === 0) {
+        console.log('No cloud images to merge');
+        return 0;
+      }
+      
+      const db = await this.getDatabase();
+      let imagesAdded = 0;
+      
+      for (const image of images) {
+        // Check if image already exists locally
+        const exists = await new Promise<boolean>((resolve) => {
+          const transaction = db.transaction(this.storeName, 'readonly');
+          const store = transaction.objectStore(this.storeName);
+          const request = store.get(image.UUID);
+          request.onsuccess = () => resolve(!!request.result);
+          request.onerror = () => resolve(false);
+        });
+        
+        if (!exists) {
+          // Add image metadata to ImageStore
+          const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
+          const imageStore = transaction.objectStore(this.storeName);
+          const blobStore = transaction.objectStore('blobStore');
+          
+          imageStore.put(image);
+          
+          // Add blob if available
+          const blob = blobs.get(image.UUID);
+          if (blob) {
+            blobStore.put({ UUID: image.UUID, blob });
+          }
+          
+          imagesAdded++;
+        }
+      }
+      
+      if (imagesAdded > 0) {
+        console.log(`Merged ${imagesAdded} cloud images to local storage`);
+        // Refresh image list
+        await this.searchImages();
+        this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+        this.updateFavoriteImages();
+        await this.updateTagCounts();
+      }
+      
+      return imagesAdded;
+    } catch (error) {
+      console.error('Failed to merge cloud images:', error);
+      return 0;
+    }
+  }
+
+  async createTag() {
+    if (!this.newTagName.trim()) return;
+    
+    const newTag: ImageTag = {
+      id: uuidv4(),
+      name: this.newTagName.trim(),
+      color: this.tagColors[this.availableTags.length % this.tagColors.length],
+      createdAt: new Date(),
+      imageCount: 0
+    };
+    
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction('TagStore', 'readwrite');
+      const store = transaction.objectStore('TagStore');
+      store.put(newTag);
+      
+      this.availableTags.push(newTag);
+      this.newTagName = '';
+      
+      // Sync tags to cloud if logged in
+      if (this.authService.isLoggedIn()) {
+        await this.imageSyncService.syncTags(this.availableTags);
+      }
+      
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Tag Created',
+        detail: `Tag "${newTag.name}" created successfully.`
+      });
+    } catch (error) {
+      console.error('Failed to create tag:', error);
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to create tag.'
+      });
+    }
+  }
+
+  async deleteTag(tag: ImageTag) {
+    if (!confirm(`Are you sure you want to delete the tag "${tag.name}"? Images will not be deleted.`)) {
+      return;
+    }
+    
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction(['TagStore', this.storeName], 'readwrite');
+      const tagStore = transaction.objectStore('TagStore');
+      const imageStore = transaction.objectStore(this.storeName);
+      
+      // Delete the tag
+      tagStore.delete(tag.id);
+      
+      // Remove tag from all images
+      const allImages = await new Promise<MobiansImage[]>((resolve) => {
+        const request = imageStore.getAll();
+        request.onsuccess = () => resolve(request.result);
+      });
+      
+      for (const image of allImages) {
+        if (image.tags?.includes(tag.id)) {
+          image.tags = image.tags.filter(t => t !== tag.id);
+          imageStore.put(image);
+        }
+      }
+      
+      this.availableTags = this.availableTags.filter(t => t.id !== tag.id);
+      
+      // Update local metadata
+      this.imageHistoryMetadata.forEach(img => {
+        if (img.tags?.includes(tag.id)) {
+          img.tags = img.tags.filter(t => t !== tag.id);
+        }
+      });
+      
+      // Sync tags to cloud if logged in
+      if (this.authService.isLoggedIn()) {
+        await this.imageSyncService.syncTags(this.availableTags);
+      }
+      
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Tag Deleted',
+        detail: `Tag "${tag.name}" deleted.`
+      });
+    } catch (error) {
+      console.error('Failed to delete tag:', error);
+    }
+  }
+
+  openTagAssignDialog(imageUUIDs?: string[]) {
+    this.tagAssignImageUUIDs = imageUUIDs || Array.from(this.selectedImages);
+    if (this.tagAssignImageUUIDs.length === 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'No Images Selected',
+        detail: 'Please select images to assign tags.'
+      });
+      return;
+    }
+    this.showTagAssignDialog = true;
+  }
+
+  async assignTagToImages(tag: ImageTag) {
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      
+      for (const uuid of this.tagAssignImageUUIDs) {
+        const request = store.get(uuid);
+        await new Promise<void>((resolve) => {
+          request.onsuccess = () => {
+            const image = request.result as MobiansImage;
+            if (image) {
+              if (!image.tags) image.tags = [];
+              if (!image.tags.includes(tag.id)) {
+                image.tags.push(tag.id);
+                store.put(image);
+                
+                // Update local metadata
+                const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
+                if (localImg) {
+                  if (!localImg.tags) localImg.tags = [];
+                  if (!localImg.tags.includes(tag.id)) {
+                    localImg.tags.push(tag.id);
+                  }
+                }
+              }
+            }
+            resolve();
+          };
+        });
+      }
+      
+      // Update tag count
+      await this.updateTagCounts();
+      
+      this.showTagAssignDialog = false;
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Tags Assigned',
+        detail: `Tag "${tag.name}" assigned to ${this.tagAssignImageUUIDs.length} images.`
+      });
+    } catch (error) {
+      console.error('Failed to assign tag:', error);
+    }
+  }
+
+  async removeTagFromImages(tag: ImageTag, imageUUIDs: string[]) {
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      
+      for (const uuid of imageUUIDs) {
+        const request = store.get(uuid);
+        await new Promise<void>((resolve) => {
+          request.onsuccess = () => {
+            const image = request.result as MobiansImage;
+            if (image && image.tags) {
+              image.tags = image.tags.filter(t => t !== tag.id);
+              store.put(image);
+              
+              // Update local metadata
+              const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
+              if (localImg && localImg.tags) {
+                localImg.tags = localImg.tags.filter(t => t !== tag.id);
+              }
+            }
+            resolve();
+          };
+        });
+      }
+      
+      await this.updateTagCounts();
+    } catch (error) {
+      console.error('Failed to remove tag:', error);
+    }
+  }
+
+  async updateTagCounts() {
+    const tagCounts: { [id: string]: number } = {};
+    this.availableTags.forEach(t => tagCounts[t.id] = 0);
+    
+    this.imageHistoryMetadata.forEach(img => {
+      img.tags?.forEach(tagId => {
+        if (tagCounts[tagId] !== undefined) {
+          tagCounts[tagId]++;
+        }
+      });
+    });
+    
+    this.availableTags.forEach(tag => {
+      tag.imageCount = tagCounts[tag.id] || 0;
+    });
+  }
+
+  filterByTag(tagId: string | null) {
+    this.selectedTagFilter = tagId;
+    this.updateFavoriteImages();
+  }
+
+  getTagById(tagId: string): ImageTag | undefined {
+    return this.availableTags.find(t => t.id === tagId);
+  }
+
+  getImageTags(image: MobiansImage | MobiansImageMetadata): ImageTag[] {
+    if (!image.tags) return [];
+    return image.tags
+      .map(tagId => this.availableTags.find(t => t.id === tagId))
+      .filter((t): t is ImageTag => t !== undefined);
+  }
+  //#endregion
+
+  //#region Cloud Sync
+  /**
+   * Check if an image is synced to the cloud
+   */
+  isImageSynced(imageUUID: string): boolean {
+    return this.imageSyncService.isImageSynced(imageUUID);
+  }
+
+  /**
+   * Manually sync old/non-favorite images to the cloud
+   */
+  async syncOldImages() {
+    if (!this.authService.isLoggedIn()) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Login Required',
+        detail: 'Please log in to sync images to the cloud.'
+      });
+      return;
+    }
+
+    // Get all images that aren't synced yet
+    const allImages: MobiansImage[] = [];
+    for (const meta of this.imageHistoryMetadata) {
+      if (!this.isImageSynced(meta.UUID)) {
+        await this.loadImageData(meta);
+        allImages.push(meta);
+      }
+    }
+
+    if (allImages.length === 0) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'All Synced',
+        detail: 'All your images are already synced to the cloud.'
+      });
+      return;
+    }
+
+    this.syncProgress = { current: 0, total: allImages.length };
+
+    const result = await this.imageSyncService.syncBatchImages(
+      allImages,
+      (uuid) => this.getImageBlob(uuid),
+      (current, total) => {
+        this.syncProgress = { current, total };
+      }
+    );
+
+    this.syncProgress = null;
+
+    if (result.success) {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Sync Complete',
+        detail: `Synced ${result.uploadedCount} images to the cloud.`
+      });
+    } else {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Sync Failed',
+        detail: result.errors.join(', ')
+      });
+    }
+  }
+
+  /**
+   * Fetch sync status from server
+   */
+  async refreshSyncStatus() {
+    await this.imageSyncService.fetchSyncStatus();
+  }
+
+  /**
+   * Sync a single image to the cloud (called from sync button on image)
+   */
+  async syncSingleImage(image: MobiansImage) {
+    if (!this.authService.isLoggedIn()) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Login Required',
+        detail: 'Please log in to sync images to the cloud.'
+      });
+      return;
+    }
+
+    const blob = await this.getImageBlob(image.UUID);
+    if (!blob) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Sync Failed',
+        detail: 'Could not find image data.'
+      });
+      return;
+    }
+
+    const success = await this.imageSyncService.syncImage(image, blob);
+    if (success) {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Synced',
+        detail: 'Image synced to cloud!'
+      });
+    } else {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Sync Failed',
+        detail: 'Could not sync image. Check quota.'
+      });
+    }
+  }
+
+  /**
+   * Unsync a single image from the cloud (remove from cloud backup)
+   */
+  async unsyncSingleImage(image: MobiansImage) {
+    const confirmed = confirm(
+      'Remove this image from cloud backup? It will no longer sync across devices, but will remain on this device.'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const success = await this.imageSyncService.unsyncImage(image.UUID);
+    if (success) {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Unsynced',
+        detail: 'Image removed from cloud backup.'
+      });
+    } else {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Unsync Failed',
+        detail: 'Could not remove image from cloud.'
+      });
+    }
+  }
+
+  /**
+   * Get blob for an image from IndexedDB
+   */
+  async getImageBlob(uuid: string): Promise<Blob | undefined> {
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction(this.blobStoreName, 'readonly');
+      const store = transaction.objectStore(this.blobStoreName);
+      
+      return new Promise((resolve, reject) => {
+        const request = store.get(uuid);
+        request.onsuccess = () => resolve(request.result?.blob);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('Failed to get image blob:', error);
+      return undefined;
     }
   }
   //#endregion
