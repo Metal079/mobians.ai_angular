@@ -3349,9 +3349,9 @@ export class OptionsComponent implements OnInit {
   }
 
   /**
-   * Start periodic cloud sync for tags.
+   * Start periodic cloud sync for tags and image metadata.
    * This handles cross-browser and cross-device synchronization
-   * by periodically fetching tags from the cloud.
+   * by periodically fetching updates from the cloud.
    */
   private startCloudTagSync(): void {
     // Clear any existing interval
@@ -3371,16 +3371,20 @@ export class OptionsComponent implements OnInit {
       }
       
       try {
+        // Sync tags from cloud
         await this.mergeCloudTags();
+        // Sync image metadata (tags, favorites) from cloud
+        await this.mergeCloudImages();
         await this.updateTagCounts();
       } catch (error) {
-        console.error('Periodic cloud tag sync failed:', error);
+        console.error('Periodic cloud sync failed:', error);
       }
     }, this.cloudSyncIntervalMs);
   }
 
   /**
-   * Download and merge synced images from cloud into local storage
+   * Download and merge synced images from cloud into local storage.
+   * Also updates tags and favorite status on existing local images from cloud.
    */
   async mergeCloudImages(): Promise<number> {
     try {
@@ -3393,37 +3397,60 @@ export class OptionsComponent implements OnInit {
       
       const db = await this.getDatabase();
       let imagesAdded = 0;
+      let imagesUpdated = 0;
       
-      for (const image of images) {
+      for (const cloudImage of images) {
         // Check if image already exists locally
-        const exists = await new Promise<boolean>((resolve) => {
+        const localImage = await new Promise<MobiansImage | null>((resolve) => {
           const transaction = db.transaction(this.storeName, 'readonly');
           const store = transaction.objectStore(this.storeName);
-          const request = store.get(image.UUID);
-          request.onsuccess = () => resolve(!!request.result);
-          request.onerror = () => resolve(false);
+          const request = store.get(cloudImage.UUID);
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => resolve(null);
         });
         
-        if (!exists) {
-          // Add image metadata to ImageStore
+        if (!localImage) {
+          // Add new image from cloud
           const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
           const imageStore = transaction.objectStore(this.storeName);
           const blobStore = transaction.objectStore('blobStore');
           
-          imageStore.put(image);
+          imageStore.put(cloudImage);
           
           // Add blob if available
-          const blob = blobs.get(image.UUID);
+          const blob = blobs.get(cloudImage.UUID);
           if (blob) {
-            blobStore.put({ UUID: image.UUID, blob });
+            blobStore.put({ UUID: cloudImage.UUID, blob });
           }
           
           imagesAdded++;
+        } else {
+          // Image exists - update tags and favorite status from cloud
+          const tagsChanged = JSON.stringify(localImage.tags || []) !== JSON.stringify(cloudImage.tags || []);
+          const favoriteChanged = localImage.favorite !== cloudImage.favorite;
+          
+          if (tagsChanged || favoriteChanged) {
+            const transaction = db.transaction(this.storeName, 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            
+            localImage.tags = cloudImage.tags || [];
+            localImage.favorite = cloudImage.favorite;
+            store.put(localImage);
+            
+            // Update local metadata cache
+            const cachedImg = this.imageHistoryMetadata.find(i => i.UUID === cloudImage.UUID);
+            if (cachedImg) {
+              cachedImg.tags = cloudImage.tags || [];
+              cachedImg.favorite = cloudImage.favorite;
+            }
+            
+            imagesUpdated++;
+          }
         }
       }
       
-      if (imagesAdded > 0) {
-        console.log(`Merged ${imagesAdded} cloud images to local storage`);
+      if (imagesAdded > 0 || imagesUpdated > 0) {
+        console.log(`Cloud sync: ${imagesAdded} images added, ${imagesUpdated} images updated`);
         // Refresh image list
         await this.searchImages();
         this.currentPageImages = await this.paginateImages(this.currentPageNumber);
@@ -3431,7 +3458,7 @@ export class OptionsComponent implements OnInit {
         await this.updateTagCounts();
       }
       
-      return imagesAdded;
+      return imagesAdded + imagesUpdated;
     } catch (error) {
       console.error('Failed to merge cloud images:', error);
       return 0;
@@ -3572,6 +3599,8 @@ export class OptionsComponent implements OnInit {
       const transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
       
+      const updatedImages: { uuid: string; tags: string[] }[] = [];
+      
       for (const uuid of this.tagAssignImageUUIDs) {
         const request = store.get(uuid);
         await new Promise<void>((resolve) => {
@@ -3582,6 +3611,7 @@ export class OptionsComponent implements OnInit {
               if (!image.tags.includes(tag.id)) {
                 image.tags.push(tag.id);
                 store.put(image);
+                updatedImages.push({ uuid: image.UUID, tags: [...image.tags] });
                 
                 // Update local metadata
                 const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
@@ -3596,6 +3626,13 @@ export class OptionsComponent implements OnInit {
             resolve();
           };
         });
+      }
+      
+      // Sync tag changes to cloud for synced images
+      if (this.authService.isLoggedIn() && updatedImages.length > 0) {
+        for (const { uuid, tags } of updatedImages) {
+          await this.imageSyncService.updateImageMetadata(uuid, { tags });
+        }
       }
       
       // Update tag count
@@ -3619,6 +3656,8 @@ export class OptionsComponent implements OnInit {
       const transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
       
+      const updatedImages: { uuid: string; tags: string[] }[] = [];
+      
       for (const uuid of imageUUIDs) {
         const request = store.get(uuid);
         await new Promise<void>((resolve) => {
@@ -3627,6 +3666,7 @@ export class OptionsComponent implements OnInit {
             if (image && image.tags) {
               image.tags = image.tags.filter(t => t !== tag.id);
               store.put(image);
+              updatedImages.push({ uuid: image.UUID, tags: [...image.tags] });
               
               // Update local metadata
               const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
@@ -3637,6 +3677,13 @@ export class OptionsComponent implements OnInit {
             resolve();
           };
         });
+      }
+      
+      // Sync tag changes to cloud for synced images
+      if (this.authService.isLoggedIn() && updatedImages.length > 0) {
+        for (const { uuid, tags } of updatedImages) {
+          await this.imageSyncService.updateImageMetadata(uuid, { tags });
+        }
       }
       
       await this.updateTagCounts();

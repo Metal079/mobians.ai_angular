@@ -399,6 +399,36 @@ export class ImageSyncService {
   }
 
   /**
+   * Update just the metadata (tags, favorite status) of a synced image
+   * without re-uploading the blob. More efficient for tag operations.
+   */
+  async updateImageMetadata(
+    imageUUID: string, 
+    updates: { tags?: string[]; is_favorite?: boolean }
+  ): Promise<boolean> {
+    if (!this.authService.isLoggedIn()) {
+      return false;
+    }
+
+    // Only update if image is synced to cloud
+    if (!this.isImageSynced(imageUUID)) {
+      return false;
+    }
+
+    try {
+      await firstValueFrom(
+        this.http.patch(`${this.API_URL}/history/sync/image/${imageUUID}`, updates, {
+          headers: this.getAuthHeaders()
+        })
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to update image metadata:', error);
+      return false;
+    }
+  }
+
+  /**
    * Remove an image from cloud sync
    */
   async unsyncImage(imageUUID: string): Promise<boolean> {
