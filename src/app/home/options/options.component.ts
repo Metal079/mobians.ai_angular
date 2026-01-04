@@ -227,6 +227,10 @@ export class OptionsComponent implements OnInit {
   private readonly pendingJobKey = 'mobians:pending-job';
   private readonly queueEtaKey = 'mobians:queue-eta';
   private readonly pendingMaxAgeMs = 24 * 60 * 60 * 1000; // 24h max age for pending jobs
+  private readonly tagsUpdateKey = 'mobians:tags-updated';
+  private readonly tagTombstonesKey = 'mobians:tag-tombstones';
+  private cloudSyncInterval?: number;
+  private readonly cloudSyncIntervalMs = 60000; // Sync tags from cloud every 60 seconds
 
   // Sorting
   selectedSortOption: string = 'timestamp';
@@ -329,6 +333,18 @@ export class OptionsComponent implements OnInit {
         const pending = this.getPendingJob();
         this.enableGenerationButton = !pending;
         this.loadingChange.emit(!!pending);
+      }
+      if (e.key === this.tagsUpdateKey) {
+        let payload: { action?: string; tagId?: string } | undefined;
+        try {
+          payload = e.newValue ? JSON.parse(e.newValue) : undefined;
+        } catch {
+          payload = undefined;
+        }
+        void this.handleTagsUpdated(payload);
+      }
+      if (e.key === this.tagTombstonesKey) {
+        void this.handleTagsUpdated();
       }
     });
   }
@@ -692,6 +708,9 @@ export class OptionsComponent implements OnInit {
     }
     if (this.referenceImageSubscription) {
       this.referenceImageSubscription.unsubscribe();
+    }
+    if (this.cloudSyncInterval) {
+      clearInterval(this.cloudSyncInterval);
     }
 
     // Revoke all object URLs to prevent memory leaks
@@ -1097,6 +1116,9 @@ export class OptionsComponent implements OnInit {
       if (this.authService.isLoggedIn()) {
         await this.syncFromCloud();
       }
+      
+      // Start periodic cloud sync for tags (handles cross-browser/cross-device sync)
+      this.startCloudTagSync();
     } catch (error) {
       console.error("Error accessing database:", error);
     }
@@ -2041,8 +2063,9 @@ export class OptionsComponent implements OnInit {
   }
 
   // Modified searchImages function
-  async searchImages() {
+  async searchImages(preservePage: boolean = false) {
     this.isSearching = true;
+    const previousPage = this.currentPageNumber;
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction([this.storeName], 'readonly');
@@ -2073,13 +2096,20 @@ export class OptionsComponent implements OnInit {
               const projectedResults = searchResults.map(item => ({
                 UUID: item.UUID,
                 prompt: item.prompt,
-                promptSummary: item.prompt?.slice(0, 50) + '...', // Truncate prompt summary
+                promptSummary: item.promptSummary || (item.prompt ? item.prompt.slice(0, 50) + '...' : ''),
                 timestamp: item.timestamp,
                 aspectRatio: item.aspectRatio,
                 width: item.width,
                 height: item.height,
                 loras: item.loras,
-                favorite: item.favorite
+                favorite: item.favorite,
+                tags: item.tags || [],
+                model: item.model,
+                seed: item.seed,
+                negativePrompt: item.negativePrompt,
+                cfg: item.cfg,
+                syncPriority: item.syncPriority,
+                lastModified: item.lastModified
               }));
               console.log('Full-text search results:', projectedResults);
               console.log('Number of results:', projectedResults.length);
@@ -2125,12 +2155,21 @@ export class OptionsComponent implements OnInit {
       // ... (rest of your code for sorting and pagination)
       this.imageHistoryMetadata = results;
       this.favoriteImageHistoryMetadata = results.filter(image => image.favorite);
-      this.currentPageNumber = 1;
-      this.editPageNumber = this.currentPageNumber;
       this.totalPages = Math.ceil(results.length / this.imagesPerPage);
 
-      // Load the first page of images
-      this.currentPageImages = await this.paginateImages(1);
+      const targetPage = preservePage
+        ? Math.min(previousPage, Math.max(1, this.totalPages))
+        : 1;
+
+      this.currentPageNumber = targetPage;
+      this.editPageNumber = this.currentPageNumber;
+
+      // Load the target page of images
+      if (this.totalPages > 0) {
+        this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+      } else {
+        this.currentPageImages = [];
+      }
 
       this.updateFavoriteImages();
 
@@ -2358,6 +2397,14 @@ export class OptionsComponent implements OnInit {
       return;
     }
      try {
+       if (this.authService.isLoggedIn()) {
+         for (const image of this.imageHistoryMetadata) {
+           if (this.isImageSynced(image.UUID)) {
+             await this.imageSyncService.unsyncImage(image.UUID);
+           }
+         }
+       }
+
        const db = await this.getDatabase();
        let transaction = db.transaction(this.storeName, 'readwrite');
        const store = transaction.objectStore(this.storeName);
@@ -2366,10 +2413,6 @@ export class OptionsComponent implements OnInit {
 
        request.onsuccess = (event) => {
          console.log('All images deleted from IndexedDB');
-         this.currentPageImages = [];
-         this.currentPageNumber = 1;
-         this.editPageNumber = this.currentPageNumber;
-         this.totalPages = 1;
        };
 
        // Delete second table too
@@ -2391,6 +2434,19 @@ export class OptionsComponent implements OnInit {
            resolve(undefined);
          };
        });
+
+       this.currentPageImages = [];
+       this.imageHistoryMetadata = [];
+       this.favoritePageImages = [];
+       this.favoriteImageHistoryMetadata = [];
+       this.currentPageNumber = 1;
+       this.editPageNumber = this.currentPageNumber;
+       this.totalPages = 1;
+       this.favoriteCurrentPageNumber = 1;
+       this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+       this.favoriteTotalPages = 1;
+       this.selectedImages.clear();
+       await this.updateTagCounts();
      } catch (error) {
        console.error('Failed to open database', error);
      }
@@ -2643,6 +2699,24 @@ export class OptionsComponent implements OnInit {
       await this.loadImageData(this.favoriteImageHistoryMetadata[nextFavoriteImageIndex]);
       this.favoritePageImages.push(this.favoriteImageHistoryMetadata[nextFavoriteImageIndex]);
     }
+
+    if (this.currentPageNumber > this.totalPages) {
+      this.currentPageNumber = Math.max(1, this.totalPages);
+      this.editPageNumber = this.currentPageNumber;
+      this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    } else {
+      this.editPageNumber = this.currentPageNumber;
+    }
+
+    if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
+      this.favoriteCurrentPageNumber = Math.max(1, this.favoriteTotalPages);
+      this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+      this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+    } else {
+      this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    }
+
+    await this.updateTagCounts();
   }
 
   async updateImageInDB(image: MobiansImage) {
@@ -2808,13 +2882,20 @@ export class OptionsComponent implements OnInit {
         return searchResults.map(item => ({
           UUID: item.UUID,
           prompt: item.prompt,
-          promptSummary: item.prompt?.slice(0, 50) + '...', // Truncate prompt summary
+          promptSummary: item.promptSummary || (item.prompt ? item.prompt.slice(0, 50) + '...' : ''),
           timestamp: item.timestamp,
           aspectRatio: item.aspectRatio,
           width: item.width,
           height: item.height,
           loras: item.loras,
-          favorite: item.favorite
+          favorite: item.favorite,
+          tags: item.tags || [],
+          model: item.model,
+          seed: item.seed,
+          negativePrompt: item.negativePrompt,
+          cfg: item.cfg,
+          syncPriority: item.syncPriority,
+          lastModified: item.lastModified
         }));
       };
 
@@ -2854,13 +2935,20 @@ export class OptionsComponent implements OnInit {
                   favResults.push({
                     UUID: image.UUID,
                     prompt: image.prompt,
-                    promptSummary: image.prompt?.slice(0, 50) + '...',
+                    promptSummary: image.promptSummary || (image.prompt ? image.prompt.slice(0, 50) + '...' : ''),
                     timestamp: image.timestamp,
                     aspectRatio: image.aspectRatio,
                     width: image.width,
                     height: image.height,
                     loras: image.loras,
-                    favorite: image.favorite
+                    favorite: image.favorite,
+                    tags: image.tags || [],
+                    model: image.model,
+                    seed: image.seed,
+                    negativePrompt: image.negativePrompt,
+                    cfg: image.cfg,
+                    syncPriority: image.syncPriority,
+                    lastModified: image.lastModified
                   });
                 }
                 cursor.continue();
@@ -2891,13 +2979,20 @@ export class OptionsComponent implements OnInit {
                 favResults.push({
                   UUID: image.UUID,
                   prompt: image.prompt,
-                  promptSummary: image.prompt?.slice(0, 50) + '...',
+                  promptSummary: image.promptSummary || (image.prompt ? image.prompt.slice(0, 50) + '...' : ''),
                   timestamp: image.timestamp,
                   aspectRatio: image.aspectRatio,
                   width: image.width,
                   height: image.height,
                   loras: image.loras,
-                  favorite: image.favorite
+                  favorite: image.favorite,
+                  tags: image.tags || [],
+                  model: image.model,
+                  seed: image.seed,
+                  negativePrompt: image.negativePrompt,
+                  cfg: image.cfg,
+                  syncPriority: image.syncPriority,
+                  lastModified: image.lastModified
                 });
               }
               cursor.continue();
@@ -2918,6 +3013,12 @@ export class OptionsComponent implements OnInit {
       let filteredResults = favoritedResults.filter(image =>
         image.prompt && image.prompt.toLowerCase().includes(query)
       );
+
+      if (this.selectedTagFilter) {
+        filteredResults = filteredResults.filter(image =>
+          image.tags?.includes(this.selectedTagFilter!)
+        );
+      }
 
       // **Step 3: Sort the Results by Timestamp (Descending)**
       filteredResults.sort((a, b) => {
@@ -3026,11 +3127,20 @@ export class OptionsComponent implements OnInit {
     }
     
     const uuidsToDelete = Array.from(this.selectedImages);
-    for (const uuid of uuidsToDelete) {
-      const image = this.imageHistoryMetadata.find(img => img.UUID === uuid);
-      if (image) {
-        await this.deleteImageFromDB(image as MobiansImage);
+    const imagesToDelete = uuidsToDelete
+      .map(uuid => this.imageHistoryMetadata.find(img => img.UUID === uuid))
+      .filter((image): image is MobiansImage => !!image);
+
+    if (this.authService.isLoggedIn()) {
+      for (const image of imagesToDelete) {
+        if (this.isImageSynced(image.UUID)) {
+          await this.imageSyncService.unsyncImage(image.UUID);
+        }
       }
+    }
+
+    for (const image of imagesToDelete) {
+      await this.deleteImageFromDB(image);
     }
     
     // Update local arrays
@@ -3051,6 +3161,15 @@ export class OptionsComponent implements OnInit {
       this.currentPageNumber = Math.max(1, this.totalPages);
     }
     this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    this.editPageNumber = this.currentPageNumber;
+
+    if (this.favoriteCurrentPageNumber > this.favoriteTotalPages) {
+      this.favoriteCurrentPageNumber = Math.max(1, this.favoriteTotalPages);
+    }
+    this.favoritePageImages = await this.paginateFavoriteImages(this.favoriteCurrentPageNumber);
+    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+
+    await this.updateTagCounts();
     
     this.messageService.add({
       severity: 'success',
@@ -3121,8 +3240,27 @@ export class OptionsComponent implements OnInit {
           resolve([]);
         };
       });
+
+      const tombstones = this.readTagTombstones();
+      const filteredTags = tombstones.size > 0
+        ? localTags.filter(tag => !tombstones.has(tag.id))
+        : localTags;
+
+      if (filteredTags.length !== localTags.length) {
+        const cleanupTx = db.transaction('TagStore', 'readwrite');
+        const cleanupStore = cleanupTx.objectStore('TagStore');
+        localTags.forEach(tag => {
+          if (tombstones.has(tag.id)) {
+            cleanupStore.delete(tag.id);
+          }
+        });
+        await new Promise<void>((resolve) => {
+          cleanupTx.oncomplete = () => resolve();
+          cleanupTx.onerror = () => resolve();
+        });
+      }
       
-      this.availableTags = localTags;
+      this.availableTags = filteredTags;
       
       // Merge cloud tags if logged in
       if (this.authService.isLoggedIn()) {
@@ -3134,48 +3272,111 @@ export class OptionsComponent implements OnInit {
   }
   
   /**
-   * Merge cloud tags with local tags (adds any missing cloud tags locally)
+   * Sync tags with cloud - cloud is the authoritative source of truth.
+   * When logged in, cloud tags completely replace local tags to avoid conflicts.
+   * Local-only tags are synced to cloud first to preserve them.
    */
   private async mergeCloudTags() {
     try {
-      const cloudTags = await this.imageSyncService.getCloudTags();
-      if (cloudTags.length === 0) {
-        // No cloud tags, sync local tags to cloud if we have any
-        if (this.availableTags.length > 0) {
-          await this.imageSyncService.syncTags(this.availableTags);
+      // First, handle any tombstones (tags deleted locally that need to be deleted from cloud)
+      const tombstones = this.readTagTombstones();
+      if (tombstones.size > 0) {
+        for (const tagId of tombstones) {
+          await this.imageSyncService.deleteCloudTag(tagId);
         }
-        return;
+        // Clear tombstones after syncing deletions
+        this.clearTagTombstones();
+      }
+
+      // Fetch the authoritative cloud tags
+      const cloudTags = await this.imageSyncService.getCloudTags();
+      
+      // Build a map of cloud tags by NAME (since name is the unique constraint in DB)
+      const cloudTagsByName = new Map(cloudTags.map(t => [t.name.toLowerCase(), t]));
+      
+      // Find local tags that don't exist in cloud (by name) - these need to be synced UP
+      const localOnlyTags = this.availableTags.filter(
+        lt => !cloudTagsByName.has(lt.name.toLowerCase())
+      );
+      
+      // Sync local-only tags to cloud before we replace local with cloud
+      if (localOnlyTags.length > 0) {
+        console.log(`Syncing ${localOnlyTags.length} local-only tags to cloud`);
+        await this.imageSyncService.syncTags(localOnlyTags);
+        // Re-fetch cloud tags to get the synced versions with correct IDs
+        const updatedCloudTags = await this.imageSyncService.getCloudTags();
+        cloudTags.length = 0;
+        cloudTags.push(...updatedCloudTags);
       }
       
+      // Now replace local IndexedDB with cloud tags (cloud is source of truth)
       const db = await this.getDatabase();
       const transaction = db.transaction('TagStore', 'readwrite');
       const store = transaction.objectStore('TagStore');
       
-      let tagsAdded = 0;
+      // Clear all local tags first
+      store.clear();
+      
+      // Add all cloud tags to local
+      const newAvailableTags: ImageTag[] = [];
       for (const cloudTag of cloudTags) {
-        const exists = this.availableTags.some(t => t.id === cloudTag.id);
-        if (!exists) {
-          const tagWithCount: ImageTag = { ...cloudTag, imageCount: 0 };
-          store.put(tagWithCount);
-          this.availableTags.push(tagWithCount);
-          tagsAdded++;
-        }
+        const tagWithCount: ImageTag = { ...cloudTag, imageCount: 0 };
+        store.put(tagWithCount);
+        newAvailableTags.push(tagWithCount);
       }
       
-      if (tagsAdded > 0) {
-        console.log(`Merged ${tagsAdded} cloud tags to local storage`);
-      }
+      await new Promise<void>((resolve) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => resolve();
+      });
       
-      // Also sync any local tags that aren't in cloud yet
-      const localTagsNotInCloud = this.availableTags.filter(
-        lt => !cloudTags.some(ct => ct.id === lt.id)
-      );
-      if (localTagsNotInCloud.length > 0) {
-        await this.imageSyncService.syncTags(this.availableTags);
-      }
+      // Replace in-memory tags with cloud tags
+      this.availableTags = newAvailableTags;
+      
+      console.log(`Cloud sync complete: ${cloudTags.length} tags loaded from cloud`);
     } catch (error) {
-      console.error('Failed to merge cloud tags:', error);
+      console.error('Failed to sync with cloud tags:', error);
     }
+  }
+
+  /**
+   * Clear all tag tombstones after they've been synced to cloud
+   */
+  private clearTagTombstones(): void {
+    try {
+      localStorage.removeItem(this.tagTombstonesKey);
+    } catch {}
+  }
+
+  /**
+   * Start periodic cloud sync for tags.
+   * This handles cross-browser and cross-device synchronization
+   * by periodically fetching tags from the cloud.
+   */
+  private startCloudTagSync(): void {
+    // Clear any existing interval
+    if (this.cloudSyncInterval) {
+      clearInterval(this.cloudSyncInterval);
+    }
+    
+    // Only sync if logged in
+    if (!this.authService.isLoggedIn()) {
+      return;
+    }
+    
+    this.cloudSyncInterval = window.setInterval(async () => {
+      // Only sync if still logged in and document is visible
+      if (!this.authService.isLoggedIn() || document.hidden) {
+        return;
+      }
+      
+      try {
+        await this.mergeCloudTags();
+        await this.updateTagCounts();
+      } catch (error) {
+        console.error('Periodic cloud tag sync failed:', error);
+      }
+    }, this.cloudSyncIntervalMs);
   }
 
   /**
@@ -3256,6 +3457,8 @@ export class OptionsComponent implements OnInit {
       
       this.availableTags.push(newTag);
       this.newTagName = '';
+
+      this.notifyTagsUpdated('create', newTag.id);
       
       // Sync tags to cloud if logged in
       if (this.authService.isLoggedIn()) {
@@ -3283,10 +3486,15 @@ export class OptionsComponent implements OnInit {
     }
     
     try {
+      this.addTagTombstone(tag.id);
       const db = await this.getDatabase();
       const transaction = db.transaction(['TagStore', this.storeName], 'readwrite');
       const tagStore = transaction.objectStore('TagStore');
       const imageStore = transaction.objectStore(this.storeName);
+      const transactionDone = new Promise<void>((resolve) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => resolve();
+      });
       
       // Delete the tag
       tagStore.delete(tag.id);
@@ -3303,6 +3511,8 @@ export class OptionsComponent implements OnInit {
           imageStore.put(image);
         }
       }
+
+      await transactionDone;
       
       this.availableTags = this.availableTags.filter(t => t.id !== tag.id);
       
@@ -3312,12 +3522,27 @@ export class OptionsComponent implements OnInit {
           img.tags = img.tags.filter(t => t !== tag.id);
         }
       });
-      
+
+      if (this.selectedTagFilter === tag.id) {
+        this.selectedTagFilter = null;
+      }
+
+      await this.updateTagCounts();
+      this.updateFavoriteImages();
+      this.notifyTagsUpdated('delete', tag.id);
+
       // Sync tags to cloud if logged in
       if (this.authService.isLoggedIn()) {
+        const deletedInCloud = await this.imageSyncService.deleteCloudTag(tag.id);
         await this.imageSyncService.syncTags(this.availableTags);
+        if (!deletedInCloud) {
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Cloud Sync',
+            detail: 'Tag removed locally but could not be deleted from the cloud.'
+          });
+        }
       }
-      
       this.messageService.add({
         severity: 'success',
         summary: 'Tag Deleted',
@@ -3375,6 +3600,7 @@ export class OptionsComponent implements OnInit {
       
       // Update tag count
       await this.updateTagCounts();
+      this.notifyTagsUpdated('assign', tag.id);
       
       this.showTagAssignDialog = false;
       this.messageService.add({
@@ -3414,6 +3640,7 @@ export class OptionsComponent implements OnInit {
       }
       
       await this.updateTagCounts();
+      this.notifyTagsUpdated('unassign', tag.id);
     } catch (error) {
       console.error('Failed to remove tag:', error);
     }
@@ -3677,6 +3904,64 @@ export class OptionsComponent implements OnInit {
     try {
       localStorage.setItem(this.queueEtaKey, JSON.stringify({ queue_position, eta, ts: Date.now() }));
     } catch {}
+  }
+
+  private readTagTombstones(): Set<string> {
+    try {
+      const raw = localStorage.getItem(this.tagTombstonesKey);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed.filter((id) => typeof id === 'string'));
+    } catch {}
+    return new Set();
+  }
+
+  private saveTagTombstones(tombstones: Set<string>): void {
+    try {
+      localStorage.setItem(this.tagTombstonesKey, JSON.stringify([...tombstones]));
+    } catch {}
+  }
+
+  private addTagTombstone(tagId: string): void {
+    const tombstones = this.readTagTombstones();
+    if (tombstones.has(tagId)) return;
+    tombstones.add(tagId);
+    this.saveTagTombstones(tombstones);
+  }
+
+  private removeTagTombstone(tagId: string): void {
+    const tombstones = this.readTagTombstones();
+    if (!tombstones.delete(tagId)) return;
+    this.saveTagTombstones(tombstones);
+  }
+
+  private notifyTagsUpdated(action?: string, tagId?: string): void {
+    try {
+      localStorage.setItem(this.tagsUpdateKey, JSON.stringify({ ts: Date.now(), action, tagId }));
+    } catch {}
+  }
+
+  private async handleTagsUpdated(payload?: { action?: string; tagId?: string }): Promise<void> {
+    await this.loadTags();
+
+    const tagId = payload?.tagId;
+    if (payload?.action === 'delete' && tagId) {
+      this.imageHistoryMetadata.forEach(img => {
+        if (img.tags?.includes(tagId)) {
+          img.tags = img.tags.filter(t => t !== tagId);
+        }
+      });
+    } else if (payload?.action === 'assign' || payload?.action === 'unassign') {
+      await this.searchImages(true);
+    }
+
+    await this.updateTagCounts();
+
+    if (this.selectedTagFilter && !this.availableTags.some(t => t.id === this.selectedTagFilter)) {
+      this.selectedTagFilter = null;
+    }
+
+    this.updateFavoriteImages();
   }
 
   private handleExpiredPendingJob(pending: { job_id: string; request?: any; createdAt?: number }) {

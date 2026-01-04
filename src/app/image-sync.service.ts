@@ -144,9 +144,11 @@ export class ImageSyncService {
       return false;
     }
 
+    const wasSynced = this.isImageSynced(image.UUID);
+
     // Check quota
     const status = this.syncStatusSubject.value;
-    if (status.quota.used >= status.quota.limit && !this.isImageSynced(image.UUID)) {
+    if (status.quota.used >= status.quota.limit && !wasSynced) {
       console.log('Sync quota exceeded');
       return false;
     }
@@ -187,10 +189,10 @@ export class ImageSyncService {
       const currentStatus = this.syncStatusSubject.value;
       this.syncStatusSubject.next({
         ...currentStatus,
-        imagesInCloud: currentStatus.imagesInCloud + (this.isImageSynced(image.UUID) ? 0 : 1),
+        imagesInCloud: currentStatus.imagesInCloud + (wasSynced ? 0 : 1),
         quota: {
           ...currentStatus.quota,
-          used: currentStatus.quota.used + (this.isImageSynced(image.UUID) ? 0 : 1)
+          used: currentStatus.quota.used + (wasSynced ? 0 : 1)
         }
       });
 
@@ -342,6 +344,30 @@ export class ImageSyncService {
       return true;
     } catch (error) {
       console.error('Failed to sync tags:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a synced tag from the cloud.
+   */
+  async deleteCloudTag(tagId: string): Promise<boolean> {
+    if (!this.authService.isLoggedIn()) {
+      return false;
+    }
+
+    try {
+      await firstValueFrom(
+        this.http.delete(`${this.API_URL}/history/sync/tags/${tagId}`, {
+          headers: this.getAuthHeaders()
+        })
+      );
+      return true;
+    } catch (error) {
+      if ((error as any)?.status === 404) {
+        return true;
+      }
+      console.error('Failed to delete cloud tag:', error);
       return false;
     }
   }
