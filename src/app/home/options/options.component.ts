@@ -3309,6 +3309,15 @@ export class OptionsComponent implements OnInit {
         cloudTags.push(...updatedCloudTags);
       }
       
+      // Build a map of old local tag IDs to new cloud tag IDs (for remapping image references)
+      const tagIdRemapping = new Map<string, string>();
+      for (const localTag of this.availableTags) {
+        const cloudTag = cloudTags.find(ct => ct.name.toLowerCase() === localTag.name.toLowerCase());
+        if (cloudTag && cloudTag.id !== localTag.id) {
+          tagIdRemapping.set(localTag.id, cloudTag.id);
+        }
+      }
+      
       // Now replace local IndexedDB with cloud tags (cloud is source of truth)
       const db = await this.getDatabase();
       const transaction = db.transaction('TagStore', 'readwrite');
@@ -3333,9 +3342,72 @@ export class OptionsComponent implements OnInit {
       // Replace in-memory tags with cloud tags
       this.availableTags = newAvailableTags;
       
+      // If any tag IDs changed, remap image tag references
+      if (tagIdRemapping.size > 0) {
+        console.log(`Remapping ${tagIdRemapping.size} tag ID(s) on images`);
+        await this.remapImageTagIds(tagIdRemapping);
+      }
+      
       console.log(`Cloud sync complete: ${cloudTags.length} tags loaded from cloud`);
     } catch (error) {
       console.error('Failed to sync with cloud tags:', error);
+    }
+  }
+  
+  /**
+   * Remap old tag IDs to new tag IDs on all images.
+   * This handles the case where a tag existed locally with one ID
+   * but the cloud has the same tag name with a different ID.
+   */
+  private async remapImageTagIds(idMapping: Map<string, string>): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      
+      const allImages = await new Promise<MobiansImage[]>((resolve) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve([]);
+      });
+      
+      let remappedCount = 0;
+      for (const image of allImages) {
+        if (!image.tags || image.tags.length === 0) continue;
+        
+        let changed = false;
+        const newTags = image.tags.map(tagId => {
+          const newId = idMapping.get(tagId);
+          if (newId) {
+            changed = true;
+            return newId;
+          }
+          return tagId;
+        });
+        
+        if (changed) {
+          image.tags = newTags;
+          store.put(image);
+          remappedCount++;
+          
+          // Update local metadata cache
+          const cachedImg = this.imageHistoryMetadata.find(i => i.UUID === image.UUID);
+          if (cachedImg) {
+            cachedImg.tags = newTags;
+          }
+        }
+      }
+      
+      await new Promise<void>((resolve) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => resolve();
+      });
+      
+      if (remappedCount > 0) {
+        console.log(`Remapped tag IDs on ${remappedCount} images`);
+      }
+    } catch (error) {
+      console.error('Failed to remap image tag IDs:', error);
     }
   }
 
