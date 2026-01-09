@@ -179,25 +179,49 @@
   flex-wrap: wrap;
 }
 
-.loras-grid {
+.lora-toolbar {
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+
+.lora-toolbar__controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.lora-toolbar__control .form-label {
+  margin-bottom: 0.25rem;
+}
+
+.lora-toolbar__toggle .form-check {
   display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  /* Space between items */
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lora-toolbar__toggle .form-check-label {
+  margin: 0;
+}
+
+.loras-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
   overflow-y: auto;
-  /* Enable scrolling if the content exceeds the height */
   overflow-x: hidden;
-  /* Hide horizontal scrollbar */
 }
 
 .lora-card {
   border: 1px solid #ddd;
   border-radius: 8px;
-  overflow: visible;
-  min-height: 190px;
-  /* Set a minimum height to prevent layout shifts */
-  max-width: 600px;
-  /* Enforce a consistent card width */
+  overflow: hidden;
+  min-height: 230px;
+  background: #fff;
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .lora-image {
@@ -206,6 +230,21 @@
   object-fit: cover;
   object-position: center top;
   /* Align the image towards the top */
+}
+
+.lora-favorite-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+.lora-favorite-btn i {
+  color: #f5b700;
 }
 
 .lora-info {
@@ -240,7 +279,7 @@
   align-items: center;
   margin-bottom: 10px;
   /* flex-wrap: nowrap; Prevent wrapping */
-  max-width: 30%;
+  max-width: 100%;
   /* Ensure it doesn't exceed the container width */
 }
 
@@ -346,16 +385,20 @@
 }
 
 .lora-card {
-  width: calc(33% - 15px);
-  border: 1px solid #ddd;
+  width: 100%;
   box-sizing: border-box;
 }
 
 .btn.btn-primary.lora-request-btn {
   width: 100%;
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 768px) {
+  .lora-toolbar__controls {
+    grid-template-columns: 1fr;
+  }
+
   .button-group {
     flex-direction: row;
     width: 100%;
@@ -375,6 +418,10 @@
 }
 
 @media (max-width: 480px) {
+  .loras-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
   .input-button-container {
     flex-direction: column;
     align-items: flex-start;

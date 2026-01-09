@@ -577,10 +577,33 @@
       [style]="{ width: '100%', marginBottom: '10px' }" (onChange)="filterLoras()">
     </p-multiSelect>
 
-    <!-- Search and Add Custom LoRA -->
-    <div class="d-flex justify-content-between mb-3">
-      <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [(ngModel)]="loraSearchQuery"
-        (ngModelChange)="filterLoras()">
+    <!-- Search + Sort + Favorites -->
+    <div class="lora-toolbar mb-3">
+      <div class="lora-toolbar__search">
+        <label class="form-label">Search LoRAs</label>
+        <input type="text" class="form-control" placeholder="Search by name or version..." [(ngModel)]="loraSearchQuery"
+          (ngModelChange)="filterLoras()">
+      </div>
+      <div class="lora-toolbar__controls">
+        <div class="lora-toolbar__control">
+          <label class="form-label">Sort by</label>
+          <select class="form-select" [(ngModel)]="loraSortOrder" (ngModelChange)="filterLoras()">
+            <option value="most_used">Most used</option>
+            <option value="last_used">Last used</option>
+            <option value="favorites">Favorites first</option>
+            <option value="alpha_asc">Alphabetical A → Z</option>
+            <option value="alpha_desc">Alphabetical Z → A</option>
+          </select>
+        </div>
+        <div class="lora-toolbar__control lora-toolbar__toggle">
+          <label class="form-label">Favorites only</label>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" [(ngModel)]="loraFavoritesOnly"
+              (ngModelChange)="filterLoras()">
+            <span class="form-check-label">Show</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Full-Sized Image Dialog -->
@@ -599,6 +622,9 @@
         Request LoRAs!
       </button>
       <div *ngFor="let lora of filteredLoras" class="lora-card">
+        <button class="btn btn-light lora-favorite-btn" type="button" (click)="toggleLoraFavorite(lora, $event)">
+          <i class="bi" [ngClass]="isLoraFavorite(lora) ? 'bi-star-fill' : 'bi-star'"></i>
+        </button>
         <img [src]="lora.image_url" [alt]="lora.name" class="lora-image"
           (click)="openImageModalLoraPreview(lora.image_url)">
         <div class="lora-info">
