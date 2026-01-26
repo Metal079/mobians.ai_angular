@@ -23,7 +23,7 @@
             <i class="bi bi-inboxes"></i>
             <div class="stat-info">
               <span class="stat-value">{{ loraSuggestions.length }}</span>
-              <span class="stat-label">Pending</span>
+              <span class="stat-label">{{ suggestionsStatusLabel }}</span>
             </div>
           </div>
         </div>
@@ -223,6 +223,7 @@
             </span>
             <p-multiSelect [options]="suggBaseModelOptions" [(ngModel)]="selectedSuggBaseModels" placeholder="Base model(s)" (onChange)="filterSuggestions()" [showToggleAll]="false" [display]="'chip'" styleClass="filter-multiselect"></p-multiSelect>
           </div>
+          <p-button [label]="showRejectedSuggestions ? 'Show Pending' : 'Show Rejected'" icon="bi bi-funnel" styleClass="p-button-outlined" (onClick)="toggleRejectedSuggestions()"></p-button>
           <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" (onClick)="loadSuggestions()"></p-button>
         </div>
         <p-table
@@ -284,7 +285,7 @@
                                 [loading]="isSuggestionProcessing(row)"
                                 [disabled]="isSuggestionProcessing(row)"
                                 (onClick)="approveSuggestion(row)"></p-button>
-                      <p-button label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger p-button-outlined" 
+                      <p-button *ngIf="!showRejectedSuggestions" label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger p-button-outlined" 
                                 [loading]="isSuggestionProcessing(row)"
                                 [disabled]="isSuggestionProcessing(row)"
                                 (onClick)="rejectSuggestion(row)"></p-button>
@@ -348,7 +349,7 @@
                             [loading]="isSuggestionProcessing(row)" 
                             [disabled]="isSuggestionProcessing(row)"
                             (onClick)="approveSuggestion(row)"></p-button>
-                  <p-button icon="bi bi-x-lg" styleClass="p-button-danger p-button-rounded p-button-outlined p-button-sm" pTooltip="Reject" tooltipPosition="top"
+                  <p-button *ngIf="!showRejectedSuggestions" icon="bi bi-x-lg" styleClass="p-button-danger p-button-rounded p-button-outlined p-button-sm" pTooltip="Reject" tooltipPosition="top"
                             [loading]="isSuggestionProcessing(row)"
                             [disabled]="isSuggestionProcessing(row)"
                             (onClick)="rejectSuggestion(row)"></p-button>
@@ -362,7 +363,7 @@
               <td colspan="8">
                 <div class="empty-state success">
                   <i class="bi bi-check-circle"></i>
-                  <p>No pending suggestions</p>
+                  <p>{{ showRejectedSuggestions ? 'No rejected suggestions' : 'No pending suggestions' }}</p>
                 </div>
               </td>
             </tr>

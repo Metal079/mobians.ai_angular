@@ -94,8 +94,8 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
-  getLoraSuggestions(): Observable<any> {
-    const url = `${this.apiBaseUrl}/get_lora_suggestions/`;
+  getLoraSuggestions(status: string = 'pending'): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_lora_suggestions/?status=${encodeURIComponent(status)}`;
     return this.http.get(url);
   }
 

@@ -59,6 +59,9 @@ export class AdminComponent implements OnInit, OnDestroy {
   savingLora: { [key: string]: boolean } = {};
   processingSuggestion: { [key: string]: boolean } = {};
 
+  // Suggestions view mode
+  showRejectedSuggestions = false;
+
   // Inline editing state
   editingDisplayName: { [key: string]: boolean } = {};
   editDisplayNameValue: { [key: string]: string } = {};
@@ -128,7 +131,8 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   loadSuggestions(): void {
     this.loadingSuggestions = true;
-    this.sdService.getLoraSuggestions().subscribe({
+    const status = this.showRejectedSuggestions ? 'rejected' : 'pending';
+    this.sdService.getLoraSuggestions(status).subscribe({
       next: (rows: any[]) => {
         this.loraSuggestions = Array.isArray(rows) ? rows : [];
   this.expandedRowKeysSuggestions = {}; // reset
@@ -266,6 +270,9 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   rejectSuggestion(s: any): void {
+    if (this.showRejectedSuggestions) {
+      return;
+    }
     this.confirmationService.confirm({
       message: `Are you sure you want to reject "${s.name}"? This action cannot be undone.`,
       header: 'Confirm Rejection',
@@ -273,6 +280,15 @@ export class AdminComponent implements OnInit, OnDestroy {
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => this.doRejectSuggestion(s)
     });
+  }
+
+  toggleRejectedSuggestions(): void {
+    this.showRejectedSuggestions = !this.showRejectedSuggestions;
+    this.loadSuggestions();
+  }
+
+  get suggestionsStatusLabel(): string {
+    return this.showRejectedSuggestions ? 'Rejected' : 'Pending';
   }
 
   private doRejectSuggestion(s: any): void {
