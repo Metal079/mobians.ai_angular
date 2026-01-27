@@ -198,6 +198,7 @@
   /* Set a minimum height to prevent layout shifts */
   max-width: 600px;
   /* Enforce a consistent card width */
+  position: relative;
 }
 
 .lora-image {
@@ -240,7 +241,8 @@
   align-items: center;
   margin-bottom: 10px;
   /* flex-wrap: nowrap; Prevent wrapping */
-  max-width: 30%;
+  width: 100%;
+  max-width: 100%;
   /* Ensure it doesn't exceed the container width */
 }
 
@@ -259,6 +261,90 @@
   /* Prevent wrapping */
   max-width: 100%;
   /* Adjust based on image and button width */
+}
+
+.lora-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lora-tag-filter {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.lora-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.lora-sort-select {
+  min-width: 140px;
+}
+
+.lora-favorites-toggle {
+  height: 30px;
+  width: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lora-favorites-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lora-clear-filters {
+  color: #6c757d;
+  opacity: 0.65;
+  text-decoration: none;
+  padding: 0 4px;
+}
+
+.lora-clear-filters:hover {
+  opacity: 0.9;
+}
+
+.lora-favorite-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.lora-favorite-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lora-favorite-btn.is-favorite {
+  color: #ffd966;
+  opacity: 1;
+}
+
+.lora-favorite-btn:hover {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.selected-loras-panel {
+  margin-top: 12px;
 }
 
 /* Menu dropdowns */
@@ -492,6 +578,15 @@
 
   .d-flex.justify-content-between.mb-3 input {
     margin-bottom: 0px;
+  }
+
+  .lora-filter-row {
+    flex-wrap: wrap;
+  }
+
+  .lora-filter-controls {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 

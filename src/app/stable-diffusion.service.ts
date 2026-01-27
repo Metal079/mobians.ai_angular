@@ -94,6 +94,16 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
+  getLoraPreferences(): Observable<any> {
+    const url = `${this.apiBaseUrl}/lora/preferences`;
+    return this.http.get(url);
+  }
+
+  syncLoraPreferences(data: { preferences: Array<{ version_id: number; is_favorite?: boolean; last_used_at?: string }> }): Observable<any> {
+    const url = `${this.apiBaseUrl}/lora/preferences`;
+    return this.http.post(url, data);
+  }
+
   getLoraSuggestions(status: string = 'pending'): Observable<any> {
     const url = `${this.apiBaseUrl}/get_lora_suggestions/?status=${encodeURIComponent(status)}`;
     return this.http.get(url);

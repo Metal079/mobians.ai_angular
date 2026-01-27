@@ -571,14 +571,32 @@
       </span>
     </p>
 
-    <!-- Tag Selection Buttons -->
-    <p-multiSelect [options]="loraTagOptions" [(ngModel)]="selectedTags" optionLabel="optionLabel"
-      optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43" placeholder="Filter Loras by tags"
-      [style]="{ width: '100%', marginBottom: '10px' }" (onChange)="filterLoras()">
-    </p-multiSelect>
+    <!-- Tag Selection Buttons + Sort/Favorites Controls -->
+    <div class="lora-filter-row">
+      <p-multiSelect [options]="loraTagOptions" [(ngModel)]="selectedTags" optionLabel="optionLabel"
+        optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43" placeholder="Filter Loras by tags"
+        styleClass="lora-tag-filter" [style]="{ width: '100%' }" (onChange)="filterLoras()">
+      </p-multiSelect>
+      <div class="lora-filter-controls">
+        <button type="button" class="btn btn-outline-secondary btn-sm lora-favorites-toggle"
+          [class.active]="showFavoriteLorasOnly" (click)="toggleFavoriteLorasOnly()"
+          [disabled]="!isLoggedIn"
+          [attr.title]="isLoggedIn ? 'Show favorites only' : 'Login required to view favorites'">
+          <i class="bi" [ngClass]="showFavoriteLorasOnly ? 'bi-star-fill' : 'bi-star'"></i>
+        </button>
+        <select class="form-select form-select-sm lora-sort-select" [(ngModel)]="loraSortOption"
+          (ngModelChange)="onLoraSortChange($event)">
+          <option *ngFor="let option of loraSortOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+        <button type="button" class="btn btn-link btn-sm lora-clear-filters" (click)="clearLoraFilters()"
+          title="Clear LoRA filters">
+          <i class="bi bi-x-circle"></i>
+        </button>
+      </div>
+    </div>
 
     <!-- Search and Add Custom LoRA -->
-    <div class="d-flex justify-content-between mb-3">
+    <div class="d-flex justify-content-between mb-3 lora-search-row">
       <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [(ngModel)]="loraSearchQuery"
         (ngModelChange)="filterLoras()">
     </div>
@@ -599,30 +617,41 @@
         Request LoRAs!
       </button>
       <div *ngFor="let lora of filteredLoras" class="lora-card">
+        <button class="lora-favorite-btn" type="button" (click)="toggleLoraFavorite(lora, $event)"
+          [disabled]="!isLoggedIn"
+          [class.is-favorite]="isLoraFavorite(lora)"
+          [attr.title]="isLoggedIn ? 'Favorite LoRA' : 'Login required to favorite'">
+          <i class="bi" [ngClass]="isLoraFavorite(lora) ? 'bi-star-fill' : 'bi-star'"></i>
+        </button>
         <img [src]="lora.image_url" [alt]="lora.name" class="lora-image"
           (click)="openImageModalLoraPreview(lora.image_url)">
         <div class="lora-info">
           <h5 class="lora-name">{{ lora.name }}</h5>
           <p class="lora-version">{{ lora.version }}</p>
         </div>
-        <button class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">Select</button>
+        <button *ngIf="!isLoraSelected(lora)" class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">
+          Select
+        </button>
+        <button *ngIf="isLoraSelected(lora)" class="btn btn-danger btn-sm w-100" (click)="removeLora(lora)">
+          Remove
+        </button>
       </div>
     </div>
+  </div>
 
-    <!-- Selected LoRA Display with Sliders -->
-    <div *ngIf="selectedLoras.length > 0" class="mt-3">
-      <h6>Selected LoRAs:</h6>
-      <div *ngFor="let loraItem of selectedLoras" class="selected-lora-item">
-        <div class="d-flex align-items-center">
-          <img [src]="loraItem.image_url" [alt]="loraItem.name" class="selected-lora-image">
-          <div class="selected-lora-details">
-            <h5 class="lora-name">{{ loraItem.name }}</h5>
-            <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
-              (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
-            <span>Strength: {{ loraItem.strength }}</span>
-          </div>
-          <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
+  <!-- Selected LoRA Display with Sliders -->
+  <div *ngIf="selectedLoras.length > 0" class="selected-loras-panel">
+    <h6>Selected LoRAs:</h6>
+    <div *ngFor="let loraItem of selectedLoras" class="selected-lora-item">
+      <div class="d-flex align-items-center">
+        <img [src]="loraItem.image_url" [alt]="loraItem.name" class="selected-lora-image">
+        <div class="selected-lora-details">
+          <h5 class="lora-name">{{ loraItem.name }}</h5>
+          <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
+            (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
+          <span>Strength: {{ loraItem.strength }}</span>
         </div>
+        <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
       </div>
     </div>
   </div>

@@ -213,6 +213,19 @@ export class OptionsComponent implements OnInit {
   filteredLoras: any[] = [];
   selectedLoras: any[] = [];
   maxLoras: number = 3;
+  loraSortOption: 'most-used' | 'last-used' | 'alphabetical' = 'most-used';
+  loraSortOptions: { label: string; value: 'most-used' | 'last-used' | 'alphabetical' }[] = [
+    { label: 'Most used', value: 'most-used' },
+    { label: 'Last used', value: 'last-used' },
+    { label: 'Alphabetical', value: 'alphabetical' }
+  ];
+  showFavoriteLorasOnly: boolean = false;
+  private loraFavorites: Record<string, boolean> = {};
+  private loraLastUsed: Record<string, number> = {};
+  private readonly loraSortKey = 'mobians:lora-sort';
+  private readonly loraFavoritesOnlyKey = 'mobians:lora-favorites-only';
+  private loraPrefsLoadedFromCloud: boolean = false;
+  private loraPrefsLoading: boolean = false;
 
   // to show full sized lora image
   displayModal: boolean = false;
@@ -294,6 +307,7 @@ export class OptionsComponent implements OnInit {
     , private authService: AuthService
     , private imageSyncService: ImageSyncService
   ) {
+    this.loadLoraUiState();
     // Load in loras info
     this.loadLoras();
 
@@ -663,6 +677,7 @@ export class OptionsComponent implements OnInit {
       this.supporter = userData.has_required_role;
       this.serverMember = userData.is_member_of_your_guild;
         }
+        this.tryLoadLoraPreferencesFromCloud();
       }
     });
     // Removed localStorage restore; session should be provided by backend if needed
@@ -1924,6 +1939,7 @@ export class OptionsComponent implements OnInit {
     }
     this.selectedLoras = this.resolveHistoryLoras(image.loras);
     this.generationRequest.loras = this.selectedLoras;
+    this.markLorasUsed(this.selectedLoras);
     this.updateCreditCost();
   }
 
@@ -2521,25 +2537,38 @@ export class OptionsComponent implements OnInit {
 
   filterLoras() {
     // First filter by model type
-    this.filteredLoras = this.loras.filter(lora => lora.base_model === this.models_types[this.generationRequest.model]);
+    let filtered = this.loras.filter(lora => lora.base_model === this.models_types[this.generationRequest.model]);
 
     // Filter by nsfw (ie. Hide nsfw if showNSFWLoras is false)
     if (!this.showNSFWLoras) {
-      this.filteredLoras = this.filteredLoras.filter(lora => !lora.is_nsfw);
+      filtered = filtered.filter(lora => !lora.is_nsfw);
     }
 
     // Then filter by search query
-    this.filteredLoras = this.filteredLoras.filter(lora =>
+    filtered = filtered.filter(lora =>
       (lora.name.toLowerCase().includes(this.loraSearchQuery.toLowerCase()) || lora.version.toLowerCase().includes(this.loraSearchQuery.toLowerCase()))
     );
 
-    // Sort by most uses
-    this.filteredLoras = this.filteredLoras.sort((a, b) => b.uses - a.uses);
-
     // Filter by selected filters
     if (this.selectedTags.length > 0) {
-      this.filteredLoras = this.filteredLoras.filter(lora => lora.tags.some((tag: string) => this.selectedTags.includes(tag)));
+      filtered = filtered.filter(lora => lora.tags.some((tag: string) => this.selectedTags.includes(tag)));
     }
+
+    if (this.showFavoriteLorasOnly) {
+      filtered = filtered.filter(lora => this.isLoraFavorite(lora));
+    }
+
+    const sortOption = this.loraSortOption || 'most-used';
+    if (sortOption === 'alphabetical') {
+      filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } else if (sortOption === 'last-used') {
+      filtered = filtered.sort((a, b) => this.getLoraLastUsed(b) - this.getLoraLastUsed(a));
+    } else {
+      // Sort by most uses (default)
+      filtered = filtered.sort((a, b) => (b.uses || 0) - (a.uses || 0));
+    }
+
+    this.filteredLoras = filtered;
   }
 
   // Function to select a LoRA
@@ -2556,6 +2585,8 @@ export class OptionsComponent implements OnInit {
       lora.strength = 1.0; // Set the default strength to 1.0
       this.selectedLoras.push(lora);
       this.generationRequest.loras = this.selectedLoras;
+
+      this.markLoraUsed(lora);
 
       // Add the trigger prompt, if it exists to the prompt input (only if it's not already there)
       if (lora.trigger_words) {
@@ -2613,6 +2644,219 @@ export class OptionsComponent implements OnInit {
     }
 
     this.updateCreditCost();
+  }
+
+  isLoraSelected(lora: any): boolean {
+    const targetKey = this.getLoraKey(lora);
+    if (!targetKey) return false;
+    return this.selectedLoras.some(item => this.getLoraKey(item) === targetKey);
+  }
+
+  isLoraFavorite(lora: any): boolean {
+    const key = this.getLoraKey(lora);
+    if (!key) return false;
+    return !!this.loraFavorites[key];
+  }
+
+  toggleLoraFavorite(lora: any, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!this.authService.isLoggedIn()) {
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Login Required',
+        detail: 'Sign in to favorite LoRAs across devices.'
+      });
+      return;
+    }
+    const key = this.getLoraKey(lora);
+    if (!key) return;
+    const nextValue = !this.loraFavorites[key];
+    if (nextValue) {
+      this.loraFavorites[key] = true;
+    } else {
+      delete this.loraFavorites[key];
+    }
+    this.filterLoras();
+    this.syncLoraPreferencesToCloud();
+  }
+
+  toggleFavoriteLorasOnly() {
+    this.showFavoriteLorasOnly = !this.showFavoriteLorasOnly;
+    this.saveLoraUiState();
+    this.filterLoras();
+  }
+
+  onLoraSortChange(value: 'most-used' | 'last-used' | 'alphabetical') {
+    this.loraSortOption = value;
+    this.saveLoraUiState();
+    this.filterLoras();
+  }
+
+  clearLoraFilters() {
+    this.loraSearchQuery = '';
+    this.selectedTags = [];
+    this.showFavoriteLorasOnly = false;
+    this.loraSortOption = 'most-used';
+    this.saveLoraUiState();
+    this.filterLoras();
+    this.refreshLoraFiltersList();
+  }
+
+  private getLoraKey(lora: any): string | null {
+    if (!lora) return null;
+    if (lora.version_id != null) return String(lora.version_id);
+    const name = lora?.name ?? '';
+    const version = lora?.version ?? '';
+    const combined = `${name}::${version}`.trim();
+    return combined.length > 0 ? combined : null;
+  }
+
+  private getLoraLastUsed(lora: any): number {
+    const key = this.getLoraKey(lora);
+    if (!key) return 0;
+    return this.loraLastUsed[key] || 0;
+  }
+
+  private markLoraUsed(lora: any) {
+    const key = this.getLoraKey(lora);
+    if (!key) return;
+    this.loraLastUsed[key] = Date.now();
+    if (this.authService.isLoggedIn()) {
+      this.syncLoraPreferencesToCloud();
+    }
+  }
+
+  private markLorasUsed(loras: any[]) {
+    if (!Array.isArray(loras)) return;
+    const now = Date.now();
+    let changed = false;
+    loras.forEach((lora) => {
+      const key = this.getLoraKey(lora);
+      if (!key) return;
+      this.loraLastUsed[key] = now;
+      changed = true;
+    });
+    if (changed) {
+      if (this.authService.isLoggedIn()) {
+        this.syncLoraPreferencesToCloud();
+      }
+    }
+  }
+
+  private loadLoraUiState() {
+    try {
+      const sortRaw = localStorage.getItem(this.loraSortKey);
+      if (sortRaw === 'most-used' || sortRaw === 'last-used' || sortRaw === 'alphabetical') {
+        this.loraSortOption = sortRaw;
+      }
+      const favoritesOnlyRaw = localStorage.getItem(this.loraFavoritesOnlyKey);
+      if (favoritesOnlyRaw != null) {
+        this.showFavoriteLorasOnly = favoritesOnlyRaw === 'true';
+      }
+    } catch {}
+  }
+
+  private saveLoraUiState() {
+    try {
+      localStorage.setItem(this.loraSortKey, this.loraSortOption);
+      localStorage.setItem(this.loraFavoritesOnlyKey, this.showFavoriteLorasOnly.toString());
+    } catch {}
+  }
+
+  private tryLoadLoraPreferencesFromCloud() {
+    if (!this.authService.isLoggedIn() || this.loraPrefsLoading || this.loraPrefsLoadedFromCloud) {
+      return;
+    }
+    this.loraPrefsLoading = true;
+    this.stableDiffusionService.getLoraPreferences().subscribe({
+      next: (prefs: any[]) => {
+        this.mergeLoraPreferencesFromCloud(Array.isArray(prefs) ? prefs : []);
+        this.loraPrefsLoadedFromCloud = true;
+        this.loraPrefsLoading = false;
+      },
+      error: () => {
+        this.loraPrefsLoading = false;
+      }
+    });
+  }
+
+  private mergeLoraPreferencesFromCloud(prefs: any[]) {
+    const cloudFavorites: Record<string, boolean> = {};
+    const cloudLastUsed: Record<string, number> = {};
+    prefs.forEach((pref) => {
+      if (pref?.version_id == null) return;
+      const key = String(pref.version_id);
+      if (pref?.is_favorite) {
+        cloudFavorites[key] = true;
+      }
+      if (pref?.last_used_at) {
+        const parsed = Date.parse(pref.last_used_at);
+        if (!Number.isNaN(parsed)) {
+          cloudLastUsed[key] = parsed;
+        }
+      }
+    });
+
+    const mergedFavorites: Record<string, boolean> = {};
+    const mergedLastUsed: Record<string, number> = {};
+    const keys = new Set<string>([
+      ...Object.keys(this.loraFavorites || {}),
+      ...Object.keys(this.loraLastUsed || {}),
+      ...Object.keys(cloudFavorites || {}),
+      ...Object.keys(cloudLastUsed || {})
+    ]);
+
+    keys.forEach((key) => {
+      const isFavorite = !!this.loraFavorites[key] || !!cloudFavorites[key];
+      if (isFavorite) mergedFavorites[key] = true;
+      const localLast = this.loraLastUsed[key] || 0;
+      const cloudLast = cloudLastUsed[key] || 0;
+      const lastUsed = Math.max(localLast, cloudLast);
+      if (lastUsed > 0) mergedLastUsed[key] = lastUsed;
+    });
+
+    this.loraFavorites = mergedFavorites;
+    this.loraLastUsed = mergedLastUsed;
+    this.filterLoras();
+    this.refreshLoraFiltersList();
+  }
+
+  private syncLoraPreferencesToCloud() {
+    if (!this.authService.isLoggedIn()) return;
+    const payload = this.buildLoraPreferencesPayload();
+    if (payload.length === 0) return;
+    this.stableDiffusionService.syncLoraPreferences({ preferences: payload }).subscribe({
+      next: () => {},
+      error: () => {}
+    });
+  }
+
+  private buildLoraPreferencesPayload(): any[] {
+    const keys = new Set<string>([
+      ...Object.keys(this.loraFavorites || {}),
+      ...Object.keys(this.loraLastUsed || {})
+    ]);
+    const payload: any[] = [];
+    keys.forEach((key) => {
+      const versionId = this.parseLoraKeyToVersionId(key);
+      if (versionId == null) return;
+      const lastUsedMs = this.loraLastUsed[key];
+      payload.push({
+        version_id: versionId,
+        is_favorite: this.loraFavorites[key] ? true : undefined,
+        last_used_at: lastUsedMs ? new Date(lastUsedMs).toISOString() : undefined
+      });
+    });
+    return payload;
+  }
+
+  private parseLoraKeyToVersionId(key: string): number | null {
+    const parsed = Number(key);
+    if (!Number.isFinite(parsed)) return null;
+    return parsed;
   }
 
   // Method to open the modal with the full-sized image
