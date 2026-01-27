@@ -64,13 +64,51 @@
   <p-progressSpinner *ngIf="isLoading" styleClass="ml-2" strokeWidth="4" animationDuration=".5s"></p-progressSpinner>
   </div>
 
+  <!-- User pending requests (hidden by default) -->
+  <div *ngIf="userPendingSuggestions.length > 0" class="p-field pending-toggle">
+    <button
+      pButton
+      type="button"
+      [label]="showPendingRequests ? 'Hide my pending requests' : 'Show my pending requests'"
+      [icon]="showPendingRequests ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+      class="p-button-outlined pending-toggle-btn"
+      (click)="togglePendingRequests()"
+    ></button>
+    <span class="pending-count">({{ userPendingSuggestions.length }})</span>
+    <p-progressSpinner *ngIf="loadingStatuses" styleClass="ml-2" strokeWidth="3" animationDuration=".5s"></p-progressSpinner>
+  </div>
+
+  <div *ngIf="userPendingSuggestions.length > 0 && showPendingRequests" class="p-field pending-requests">
+    <div class="pending-header">
+      <div class="pending-title">
+        Your pending requests
+      </div>
+    </div>
+    <div class="pending-list">
+      <div *ngFor="let item of userPendingSuggestions" class="pending-item">
+        <div class="pending-info">
+          <div class="pending-name">{{ item.name }}</div>
+          <div class="pending-meta">
+            {{ item.version || 'Unknown version' }} • {{ item.base_model || 'Unknown base model' }}
+          </div>
+        </div>
+        <button pButton type="button" label="Cancel" icon="pi pi-times" class="p-button-danger pending-cancel-btn" (click)="cancelSuggestion(item)"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Mobile View: Card layout for LoRA results -->
   <div *ngIf="!isLoading && searchResults && searchResults.length > 0" class="p-field mobile-results">
-    <div *ngFor="let lora of searchResults" class="lora-card" [ngClass]="{'selected': lora === selectedLoRA}" (click)="selectLora(lora)">
+    <div *ngFor="let lora of searchResults" class="lora-card" 
+      [ngClass]="[getLoraStatusClass(lora), lora === selectedLoRA ? 'selected' : '']"
+      (click)="selectLora(lora)">
       <div class="lora-card-header">
         <!-- Image click triggers the image expansion dialog -->
         <img *ngIf="lora.images && lora.images.length > 0" [src]="lora.images[0].url" alt="LoRA Preview" class="preview-image" (click)="openImageDialog(lora.images[0].url)" />
         <div class="lora-card-title">{{ lora.name }}</div>
+        <ng-container *ngIf="getLoraStatus(lora) as status">
+          <span class="status-pill" [ngClass]="'status-' + status">{{ statusLabels[status] }}</span>
+        </ng-container>
       </div>
       <div class="lora-card-body">
         <div class="lora-creator">

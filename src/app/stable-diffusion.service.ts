@@ -99,6 +99,11 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
+  getMyLoraSuggestions(status: string = 'pending'): Observable<any> {
+    const url = `${this.apiBaseUrl}/get_my_lora_suggestions/?status=${encodeURIComponent(status)}`;
+    return this.http.get(url);
+  }
+
   // Admin endpoints
   updateLora(loraId: number, data: { is_active?: boolean; is_nsfw?: boolean; name?: string }): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}`;
@@ -158,6 +163,11 @@ export class StableDiffusionService {
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
     return this.http.post(url, body, {'headers':headers});
+  }
+
+  cancelLoraSuggestion(suggestionId: number): Observable<any> {
+    const url = `${this.apiBaseUrl}/cancel_lora_suggestion/${encodeURIComponent(String(suggestionId))}/`;
+    return this.http.post(url, {});
   }
 
   getJobStatus(jobId: string): Observable<any> {

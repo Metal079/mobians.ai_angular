@@ -48,6 +48,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 10px;
     /* Add spacing between header and body */
 }
@@ -62,6 +63,7 @@
 .lora-card-title {
     font-size: 1.1rem;
     font-weight: bold;
+    flex: 1 1 auto;
 }
 
 /* Body part with creator and stats */
@@ -111,14 +113,12 @@
 
 /* Highlight the selected card */
 .lora-card.selected {
-    background-color: #e0f7fa;
-    /* Light blue highlight */
     border-color: #00796b;
+    box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.35);
 }
 
 .lora-card:hover {
-    background-color: #e0f7fa;
-    /* Slight hover effect */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
 }
 
 .preview-image {
@@ -149,6 +149,142 @@
     /* we want this to be always showing at the botomn of the window */
     position: sticky;
     bottom: 10px; 
+}
+
+/* Status highlighting */
+.lora-card.status-approved {
+    border-color: #2e7d32;
+    background-color: #e8f5e9;
+}
+
+.lora-card.status-pending {
+    border-color: #f9a825;
+    background-color: #fff8e1;
+}
+
+.lora-card.status-rejected {
+    border-color: #ef9a9a;
+    background-color: #ffebee;
+}
+
+.status-pill {
+    margin-left: auto;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.status-pill.status-approved {
+    background-color: #2e7d32;
+    color: #fff;
+}
+
+.status-pill.status-pending {
+    background-color: #f9a825;
+    color: #fff;
+}
+
+.status-pill.status-rejected {
+    background-color: #ef5350;
+    color: #fff;
+}
+
+/* Pending requests section */
+.pending-requests {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #f5d76e;
+    background-color: #fffde7;
+}
+
+.pending-toggle {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pending-count {
+    font-weight: 600;
+    color: #7a6b24;
+}
+
+.pending-toggle-btn {
+    border-color: #f5d76e !important;
+    color: #7a6b24 !important;
+}
+
+.pending-toggle-btn:hover {
+    background-color: #fff8d6 !important;
+}
+
+.pending-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.pending-title {
+    font-weight: 600;
+}
+
+.pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pending-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #f0e7b3;
+}
+
+.pending-item:last-child {
+    border-bottom: none;
+}
+
+.pending-cancel-btn {
+    width: 110px;
+    justify-content: center;
+}
+
+:host ::ng-deep .pending-cancel-btn.p-button {
+    background-color: #e53935;
+    border-color: #e53935;
+    color: #fff;
+}
+
+:host ::ng-deep .pending-cancel-btn.p-button:enabled:hover {
+    background-color: #c62828;
+    border-color: #c62828;
+}
+
+.pending-cancel-btn .pi {
+    margin-right: 6px;
+}
+
+.pending-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pending-name {
+    font-weight: 600;
+}
+
+.pending-meta {
+    font-size: 0.85rem;
+    color: #666;
 }
 
 @media screen and (max-width: 600px) {

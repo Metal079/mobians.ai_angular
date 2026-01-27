@@ -4,6 +4,8 @@ import { DynamicDialogConfig } from 'primeng/dynamicdialog';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MessageService } from 'primeng/api';
 import { SharedService } from 'src/app/shared.service';
+import { forkJoin, of } from 'rxjs';
+import { catchError, finalize } from 'rxjs/operators';
 
 
 @Component({
@@ -12,7 +14,7 @@ import { SharedService } from 'src/app/shared.service';
   styleUrls: ['./add-loras.component.css']
 })
 export class AddLorasComponent {
-  selectedSearchOption: string | null = null; // No default selected, user must pick
+  selectedSearchOption: string | null = 'lora_name'; // Default to Search by Name
   loraSha256: string = '';
   loraFile: File | null = null;
   searchField: string = ''; // New field for search field
@@ -25,6 +27,22 @@ export class AddLorasComponent {
   imageToShow: string = ''; // The image URL to show in the dialog
 
   isLoading: boolean = false;
+  loadingStatuses: boolean = false;
+  showPendingRequests: boolean = false;
+
+  approvedVersionIds: Set<string> = new Set();
+  pendingVersionIds: Set<string> = new Set();
+  rejectedVersionIds: Set<string> = new Set();
+
+  pendingSuggestions: any[] = [];
+  rejectedSuggestions: any[] = [];
+  userPendingSuggestions: any[] = [];
+
+  statusLabels: Record<'approved' | 'pending' | 'rejected', string> = {
+    approved: 'Approved',
+    pending: 'Pending',
+    rejected: 'Rejected'
+  };
 
   constructor(
     public ref: DynamicDialogRef
@@ -38,11 +56,13 @@ export class AddLorasComponent {
     const fromParent = this.config?.data?.showNSFWLoras;
     if (typeof fromParent === 'boolean') {
       this.showNSFWLoras = fromParent;
-      return;
+    } else {
+      const stored = localStorage.getItem('showNSFWLoras');
+      if (stored != null) this.showNSFWLoras = stored === 'true';
     }
 
-    const stored = localStorage.getItem('showNSFWLoras');
-    if (stored != null) this.showNSFWLoras = stored === 'true';
+    this.loadApprovedLoras();
+    this.loadSuggestionStatuses();
   }
 
   onShowNsfwChanged(): void {
@@ -171,6 +191,7 @@ export class AddLorasComponent {
             detail: 'LoRA suggestion added successfully',
             life: 5000  // Here is the addition.
           });
+          this.loadSuggestionStatuses();
         },
         error: (error: any) => {
           console.log('error', error);
@@ -194,6 +215,118 @@ export class AddLorasComponent {
 
   close() {
     this.ref.close({ showNSFWLoras: this.showNSFWLoras });
+  }
+
+  loadApprovedLoras() {
+    this.stableDiffusionService.getLoras('active').subscribe({
+      next: (rows: any[]) => {
+        this.approvedVersionIds.clear();
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          if (row?.is_active === false) return;
+          const id = this.getVersionId(row);
+          if (id) this.approvedVersionIds.add(id);
+        });
+      },
+      error: (error: any) => {
+        console.log('Failed to load approved LoRAs', error);
+      }
+    });
+  }
+
+  loadSuggestionStatuses() {
+    this.loadingStatuses = true;
+    forkJoin({
+      pending: this.stableDiffusionService.getMyLoraSuggestions('pending').pipe(catchError(() => of([]))),
+      rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([])))
+    })
+      .pipe(finalize(() => (this.loadingStatuses = false)))
+      .subscribe(({ pending, rejected }) => {
+        this.pendingSuggestions = Array.isArray(pending) ? pending : [];
+        this.rejectedSuggestions = Array.isArray(rejected) ? rejected : [];
+
+        this.pendingVersionIds.clear();
+        this.rejectedVersionIds.clear();
+
+        this.pendingSuggestions.forEach((row) => {
+          const id = this.getVersionId(row);
+          if (id) this.pendingVersionIds.add(id);
+        });
+
+        this.rejectedSuggestions.forEach((row) => {
+          const id = this.getVersionId(row);
+          if (id) this.rejectedVersionIds.add(id);
+        });
+
+        this.updateUserPendingSuggestions();
+      });
+  }
+
+  updateUserPendingSuggestions() {
+    this.userPendingSuggestions = [...this.pendingSuggestions];
+    if (this.userPendingSuggestions.length === 0) {
+      this.showPendingRequests = false;
+    }
+  }
+
+  cancelSuggestion(suggestion: any) {
+    const suggestionId = suggestion?.id;
+    if (!suggestionId) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Unable to cancel',
+        detail: 'Missing suggestion ID.',
+        life: 4000
+      });
+      return;
+    }
+
+    if (!confirm(`Cancel your request for "${suggestion?.name || 'this LoRA'}"?`)) {
+      return;
+    }
+
+    this.stableDiffusionService.cancelLoraSuggestion(suggestionId).subscribe({
+      next: (response: any) => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Cancelled',
+          detail: response?.message || 'LoRA request cancelled.',
+          life: 4000
+        });
+        this.loadSuggestionStatuses();
+      },
+      error: (error: any) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Cancel failed',
+          detail: error?.error?.detail || 'Unable to cancel this request.',
+          life: 5000
+        });
+      }
+    });
+  }
+
+  togglePendingRequests(): void {
+    this.showPendingRequests = !this.showPendingRequests;
+  }
+
+  getLoraStatus(lora: any): 'approved' | 'pending' | 'rejected' | null {
+    const id = this.getVersionId(lora);
+    if (!id) return null;
+    if (this.approvedVersionIds.has(id)) return 'approved';
+    if (this.pendingVersionIds.has(id)) return 'pending';
+    if (this.rejectedVersionIds.has(id)) return 'rejected';
+    return null;
+  }
+
+  getLoraStatusClass(lora: any): string {
+    const status = this.getLoraStatus(lora);
+    return status ? `status-${status}` : '';
+  }
+
+  private getVersionId(row: any): string | null {
+    const id = row?.model_version_id ?? row?.version_id ?? row?.lora_version_id ?? row?.modelVersionId ?? row?.versionId;
+    if (id === undefined || id === null || id === '') return null;
+    return String(id);
   }
 
   showError(error: any) {
