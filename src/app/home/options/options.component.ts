@@ -4235,7 +4235,10 @@ export class OptionsComponent implements OnInit {
         }
       });
     });
-  
+
+    // Remove lora tags that have less than 3 occurrences
+    this.loraTagOptions = this.loraTagOptions.filter(option => option.count >= 3);
+
     // Sort by count now that counting is complete
     this.loraTagOptions.sort((a, b) => b.count - a.count);
   
