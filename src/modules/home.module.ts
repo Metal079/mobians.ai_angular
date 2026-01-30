@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 
 import { ImageGridComponent } from 'src/app/home/image-grid/image-grid.component';
 import { OptionsComponent } from 'src/app/home/options/options.component';
+import { GenerationOptionsPanelComponent } from 'src/app/home/options/generation-options-panel/generation-options-panel.component';
+import { ImageHistoryPanelComponent } from 'src/app/home/options/image-history-panel/image-history-panel.component';
+import { LorasPanelComponent } from 'src/app/home/options/loras-panel/loras-panel.component';
 import { FaqComponent } from 'src/app/home/faq/faq.component';
 import { ImageModalComponent } from 'src/app/home/image-modal/image-modal.component';
 import { GligenDisplayComponent } from 'src/app/home/gligen-display/gligen-display.component';
@@ -41,6 +44,9 @@ import { MultiSelectModule } from 'primeng/multiselect';
   declarations: [
     ImageGridComponent,
     OptionsComponent,
+    GenerationOptionsPanelComponent,
+    ImageHistoryPanelComponent,
+    LorasPanelComponent,
     FaqComponent,
     ImageModalComponent,
     GligenDisplayComponent,

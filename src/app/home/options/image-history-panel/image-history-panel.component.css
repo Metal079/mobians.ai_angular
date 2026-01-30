@@ -1,0 +1,338 @@
+.card {
+  background-color: var(--theme-surface-bg);
+  border: 0;
+  color: var(--theme-surface-text);
+}
+
+.card-body {
+  min-height: 75vh;
+  max-height: fit-content;
+  overflow-y: auto;
+  transition: height 0.5s ease-in-out;
+  max-width: 600px;
+  overflow: hidden;
+}
+
+/* Menu dropdown */
+#historyCollapse {
+  margin-left: 20px;
+}
+
+.search-bar {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.search-bar input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-gap: 10px;
+  margin-top: 10px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.history-item {
+  cursor: pointer;
+}
+
+.history-item img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.history-item img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.history-grid {
+  grid-gap: 20px;
+}
+
+.image-container {
+  position: relative;
+  display: inline-block;
+}
+
+.top-left-icon {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5em;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.top-right-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5em;
+  border-radius: 50%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  z-index: 2;
+}
+
+.bottom-left-icon {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5em;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.top-left-icon i,
+.top-right-icon i,
+.bottom-left-icon i {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  padding: 4px 6px;
+  line-height: 1;
+}
+
+.history-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.summary-text {
+  max-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  text-align: center;
+}
+
+.no-images-message {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.pagination .btn {
+  width: 30%;
+  padding: 10px 0;
+}
+
+.page-edit-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(0, 123, 255, 0.06);
+}
+
+.page-input {
+  width: 60px;
+  text-align: center;
+  padding: 4px 8px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  font-size: inherit;
+}
+
+.page-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Remove spinner arrows from number input */
+.page-input::-webkit-outer-spin-button,
+.page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.page-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Bulk Selection Styles */
+.bulk-controls {
+  padding: 0.5rem;
+  background: rgba(0, 123, 255, 0.05);
+  border-radius: 0.5rem;
+}
+
+.bulk-actions {
+  margin-left: auto;
+}
+
+.history-item.selected .image-container {
+  outline: 3px solid #007bff;
+  outline-offset: 2px;
+}
+
+.selection-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  cursor: pointer;
+  font-size: 1.5em;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.selection-checkbox i {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  padding: 4px;
+}
+
+.selection-checkbox .bi-check-circle-fill {
+  color: #28a745;
+  background: white;
+}
+
+/* Tag Section Styles */
+.tag-section {
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+  padding-bottom: 0.5rem;
+}
+
+.tag-manager-panel {
+  background: rgba(0, 123, 255, 0.03);
+  border: 1px solid rgba(0, 123, 255, 0.1);
+}
+
+.tag-item {
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Favorites tab button readability */
+.favorites-tab .favorites-control-btn,
+.favorites-tab .favorites-tag-btn {
+  font-weight: 600;
+  border-width: 2px;
+}
+
+.favorites-tab .favorites-control-btn.btn-outline-secondary,
+.favorites-tab .favorites-control-btn.btn-outline-success,
+.favorites-tab .favorites-tag-btn.btn-outline-primary,
+.favorites-tab .favorites-tag-btn.btn-outline-secondary {
+  background-color: rgba(255, 255, 255, 0.18);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.favorites-tab .favorites-control-btn.btn-outline-secondary,
+.favorites-tab .favorites-control-btn.btn-outline-success,
+.favorites-tab .favorites-tag-btn.btn-outline-primary {
+  color: var(--theme-surface-text);
+}
+
+/* Sync Indicator on Image Thumbnails */
+.sync-indicator {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-radius: 50%;
+  padding: 5px 7px;
+  font-size: 1.35em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.sync-indicator.synced {
+  color: #4ECDC4;
+}
+
+.sync-indicator.synced:not(.clickable) {
+  pointer-events: none;
+}
+
+.sync-indicator.clickable {
+  cursor: pointer;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.sync-indicator.clickable:hover {
+  background: rgba(0, 123, 255, 0.8);
+  transform: scale(1.15);
+}
+
+.sync-indicator.synced.clickable:hover {
+  background: rgba(220, 53, 69, 0.8);
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  #historyCollapse {
+    margin-left: 0;
+  }
+
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card-body {
+    min-height: 70vh;
+    max-height: 80vh;
+    overflow-y: auto;
+    transition: height 0.5s ease-in-out;
+  }
+
+  .page-edit-container {
+    padding: 8px 10px;
+    gap: 6px;
+    font-size: 14px;
+  }
+
+  .page-input {
+    width: 50px;
+    padding: 6px;
+    font-size: 14px;
+  }
+
+  .bulk-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bulk-actions {
+    margin-left: 0;
+    margin-top: 0.5rem;
+    justify-content: center;
+  }
+
+  .tag-section .btn {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+  }
+}
+

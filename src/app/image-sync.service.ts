@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 import { MobiansImage, MobiansImageMetadata, ImageTag } from '../_shared/mobians-image.interface';
 import { AuthService } from './auth/auth.service';
@@ -274,7 +274,7 @@ export class ImageSyncService {
   /**
    * Download synced images from cloud to local device
    */
-  async downloadFromCloud(): Promise<{ images: MobiansImage[], blobs: Map<string, Blob> }> {
+  async downloadFromCloud(includeBlobs: boolean = true): Promise<{ images: MobiansImage[], blobs: Map<string, Blob> }> {
     const images: MobiansImage[] = [];
     const blobs = new Map<string, Blob>();
 
@@ -283,9 +283,11 @@ export class ImageSyncService {
     }
 
     try {
+      const params = new HttpParams().set('include_blobs', includeBlobs ? 'true' : 'false');
       const response = await firstValueFrom(
         this.http.get<any[]>(`${this.API_URL}/history/sync/images`, {
-          headers: this.getAuthHeaders()
+          headers: this.getAuthHeaders(),
+          params
         })
       );
 
@@ -310,7 +312,7 @@ export class ImageSyncService {
         images.push(image);
 
         // Convert base64 blob back to Blob
-        if (item.image_blob) {
+        if (includeBlobs && item.image_blob) {
           const blob = this.base64ToBlob(item.image_blob, 'image/webp');
           blobs.set(item.image_uuid, blob);
         }

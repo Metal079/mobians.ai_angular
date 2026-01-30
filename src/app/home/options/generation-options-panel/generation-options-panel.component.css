@@ -1,0 +1,33 @@
+.card {
+  background-color: var(--theme-surface-bg);
+  border: 0;
+  color: var(--theme-surface-text);
+}
+
+.card-body {
+  min-height: 75vh;
+  max-height: fit-content;
+  overflow-y: auto;
+  transition: height 0.5s ease-in-out;
+  max-width: 600px;
+  overflow: hidden;
+}
+
+/* Menu dropdown */
+#collapseExample {
+  margin-left: 20px;
+}
+
+@media (max-width: 480px) {
+  .card-body {
+    min-height: 70vh;
+    max-height: 80vh;
+    overflow-y: auto;
+    transition: height 0.5s ease-in-out;
+  }
+
+  #collapseExample {
+    margin-left: 0;
+  }
+}
+
