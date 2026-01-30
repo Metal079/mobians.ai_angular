@@ -5,12 +5,13 @@
 }
 
 .card-body {
-  min-height: 75vh;
-  max-height: fit-content;
+  min-height: 0;
+  max-height: 85vh;
   overflow-y: auto;
+  overflow-x: hidden;
   transition: height 0.5s ease-in-out;
   max-width: 600px;
-  overflow: hidden;
+  width: 100%;
 }
 
 /* Menu dropdown */
@@ -18,8 +19,16 @@
   margin-left: 20px;
 }
 
+.sorting-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
 .search-bar {
-  width: 100%;
+  flex: 1 1 240px;
   margin-bottom: 10px;
 }
 
@@ -28,12 +37,27 @@
   box-sizing: border-box;
 }
 
+.density-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
+}
+
+.density-label {
+  font-size: 0.85rem;
+  color: var(--theme-surface-text);
+  opacity: 0.85;
+}
+
 .history-grid {
+  --history-columns: 2;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-gap: 10px;
+  grid-template-columns: repeat(var(--history-columns), 1fr);
+  grid-gap: 20px;
   margin-top: 10px;
-  max-width: 400px;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -54,10 +78,6 @@
 .history-item img:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.history-grid {
-  grid-gap: 20px;
 }
 
 .image-container {
@@ -101,30 +121,66 @@
   z-index: 2;
 }
 
+.bottom-right-icon {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5em;
+  border-radius: 50%;
+  z-index: 2;
+}
+
 .top-left-icon i,
 .top-right-icon i,
-.bottom-left-icon i {
+.bottom-left-icon i,
+.bottom-right-icon i {
   background: rgba(0, 0, 0, 0.35);
   border-radius: 999px;
   padding: 4px 6px;
   line-height: 1;
 }
 
-.history-details {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 5px;
+.bottom-right-icon i.active {
+  background: rgba(0, 123, 255, 0.7);
 }
 
-.summary-text {
-  max-height: 40px;
+.image-info-overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 42px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 3;
+}
+
+.info-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.info-value {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  word-break: break-word;
+  max-height: 4.6em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  text-align: center;
 }
 
 .no-images-message {
@@ -221,13 +277,31 @@
   padding-bottom: 0.5rem;
 }
 
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-delete-btn {
+  border: none;
+  background: transparent;
+  color: #dc3545;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.tag-delete-btn:hover {
+  color: #ff6b6b;
+}
+
 .tag-manager-panel {
   background: rgba(0, 123, 255, 0.03);
   border: 1px solid rgba(0, 123, 255, 0.1);
-}
-
-.tag-item {
-  border: 1px solid rgba(0,0,0,0.1);
 }
 
 /* Favorites tab button readability */
@@ -268,6 +342,12 @@
   z-index: 10;
 }
 
+.sync-indicator.inline {
+  position: static;
+  padding: 4px 6px;
+  font-size: 1.1em;
+}
+
 .sync-indicator.synced {
   color: #4ECDC4;
 }
@@ -296,15 +376,37 @@
     margin-left: 0;
   }
 
+  .sorting-options {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .density-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .density-controls select {
+    flex: 1 1 auto;
+  }
+
   .history-grid {
-    grid-template-columns: repeat(2, 1fr);
+    --history-columns: 2 !important;
   }
 
   .card-body {
-    min-height: 70vh;
-    max-height: 80vh;
-    overflow-y: auto;
-    transition: height 0.5s ease-in-out;
+    max-height: 82vh;
+    padding-top: 0.25rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .search-bar {
+    flex: 1 1 0px;
+    margin-bottom: 6px;
+  }
+
+  .history-grid {
+    margin-top: 4px;
   }
 
   .page-edit-container {
@@ -320,8 +422,11 @@
   }
 
   .bulk-controls {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.35rem;
   }
 
   .bulk-actions {
@@ -330,9 +435,24 @@
     justify-content: center;
   }
 
+  .tag-manager-panel {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .tag-manager-panel h6 {
+    margin-bottom: 0.35rem;
+  }
+
+  .tag-manager-panel .form-control-sm {
+    padding: 0.25rem 0.5rem;
+  }
+
+  .tag-manager-panel .btn {
+    padding: 0.25rem 0.5rem;
+  }
+
   .tag-section .btn {
     font-size: 0.8rem;
     padding: 0.25rem 0.5rem;
   }
 }
-

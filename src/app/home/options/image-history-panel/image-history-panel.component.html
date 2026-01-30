@@ -9,16 +9,21 @@
             <input type="text" pInputText placeholder="Search prompts" [ngModel]="searchQuery"
               (ngModelChange)="onSearchQueryChange($event)">
           </div>
+          <div class="density-controls">
+            <label class="density-label" for="imagesPerPageAll">Images per page</label>
+            <select id="imagesPerPageAll" class="form-select form-select-sm" [ngModel]="imagesPerPage"
+              (ngModelChange)="onImagesPerPageChange($event)" aria-label="Images per page">
+              <option *ngFor="let option of imagesPerPageOptions" [ngValue]="option">
+                {{ option }} per page
+              </option>
+            </select>
+          </div>
         </div>
         <!-- Image History Panel -->
-        <div class="history-grid">
+        <div class="history-grid" [style.--history-columns]="gridColumns">
           <div *ngFor="let image of currentPageImages" class="history-item">
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
-              <!-- Sync indicator (synced) - shows cloud icon for synced images -->
-              <div class="sync-indicator synced" *ngIf="isImageSynced(image.UUID)" title="Synced to cloud">
-                <i class="bi bi-cloud-check-fill"></i>
-              </div>
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
@@ -32,10 +37,33 @@
                 <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)"
                   aria-label="Delete Image"></i>
               </div>
-            </div>
-            <div class="history-details">
-              <span>{{ image.timestamp | date:'short' }}</span>
-              <span class="summary-text">{{ image.promptSummary }}</span>
+              <div class="bottom-right-icon">
+                <i class="bi bi-info-circle" [class.active]="isImageInfoOpen(image)"
+                  (click)="toggleImageInfo(image, $event)" aria-label="Image info"></i>
+              </div>
+              <div class="image-info-overlay" *ngIf="isImageInfoOpen(image)"
+                (click)="$event.stopPropagation(); toggleImageInfo(image, $event)">
+                <div class="info-line">
+                  <span class="info-label">Date</span>
+                  <span class="info-value">{{ image.timestamp | date:'short' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Model</span>
+                  <span class="info-value">{{ image.model || 'Unknown' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Seed</span>
+                  <span class="info-value">{{ image.seed ?? '—' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">LoRAs</span>
+                  <span class="info-value">{{ formatLoras(image) }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Prompt</span>
+                  <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -95,13 +123,19 @@
                 (click)="filterByTag(null)">
                 All
               </button>
-              <button *ngFor="let tag of availableTags" class="btn btn-sm favorites-tag-btn"
-                [ngClass]="selectedTagFilter === tag.id ? 'btn-primary' : 'btn-outline-secondary'"
-                [style.border-color]="tag.color" [style.color]="selectedTagFilter === tag.id ? '#fff' : tag.color"
-                [style.background-color]="selectedTagFilter === tag.id ? tag.color : null"
-                (click)="filterByTag(tag.id)">
-                {{ tag.name }} ({{ tag.imageCount || 0 }})
-              </button>
+              <div *ngFor="let tag of availableTags" class="tag-pill">
+                <button class="btn btn-sm favorites-tag-btn tag-filter-btn"
+                  [ngClass]="selectedTagFilter === tag.id ? 'btn-primary' : 'btn-outline-secondary'"
+                  [style.border-color]="tag.color" [style.color]="selectedTagFilter === tag.id ? '#fff' : tag.color"
+                  [style.background-color]="selectedTagFilter === tag.id ? tag.color : null"
+                  (click)="filterByTag(tag.id)">
+                  {{ tag.name }} ({{ tag.imageCount || 0 }})
+                </button>
+                <button type="button" class="tag-delete-btn" *ngIf="showTagManager"
+                  (click)="$event.stopPropagation(); deleteTag(tag)" aria-label="Delete tag">
+                  <i class="bi bi-x-circle"></i>
+                </button>
+              </div>
             </div>
 
             <!-- Tag Manager Inline Panel -->
@@ -114,18 +148,6 @@
                   <i class="bi bi-plus"></i> Create
                 </button>
               </div>
-              <div *ngIf="availableTags.length > 0">
-                <h6>Your Tags</h6>
-                <div class="d-flex flex-wrap gap-2">
-                  <div *ngFor="let tag of availableTags"
-                    class="tag-item d-flex align-items-center gap-1 px-2 py-1 rounded"
-                    [style.background-color]="tag.color + '33'">
-                    <span [style.color]="tag.color">{{ tag.name }}</span>
-                    <span class="badge bg-secondary">{{ tag.imageCount || 0 }}</span>
-                    <i class="bi bi-x-circle text-danger" style="cursor: pointer" (click)="deleteTag(tag)"></i>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -136,24 +158,21 @@
             <input type="text" pInputText placeholder="Search prompts" [ngModel]="favoriteSearchQuery"
               (ngModelChange)="onFavoriteSearchQueryChange($event)">
           </div>
+          <div class="density-controls">
+            <label class="density-label" for="imagesPerPageFavorites">Images per page</label>
+            <select id="imagesPerPageFavorites" class="form-select form-select-sm" [ngModel]="imagesPerPage"
+              (ngModelChange)="onImagesPerPageChange($event)" aria-label="Images per page">
+              <option *ngFor="let option of imagesPerPageOptions" [ngValue]="option">
+                {{ option }} per page
+              </option>
+            </select>
+          </div>
         </div>
-        <div class="history-grid">
+        <div class="history-grid" [style.--history-columns]="gridColumns">
           <div *ngFor="let image of favoritePageImages" class="history-item"
             [class.selected]="bulkSelectMode && isImageSelected(image)">
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="onFavoriteImageClick(image, $event)">
-
-              <!-- Sync indicator (synced) - click to unsync -->
-              <div class="sync-indicator synced clickable" *ngIf="isImageSynced(image.UUID) && !bulkSelectMode"
-                title="Synced to cloud (click to unsync)"
-                (click)="$event.stopPropagation(); unsyncSingleImage(image)">
-                <i class="bi bi-cloud-check-fill"></i>
-              </div>
-              <!-- Sync button (not synced) - click to sync -->
-              <div class="sync-indicator clickable" *ngIf="isLoggedIn && !isImageSynced(image.UUID) && !bulkSelectMode"
-                title="Sync to cloud" (click)="$event.stopPropagation(); syncSingleImage(image)">
-                <i class="bi bi-cloud-upload"></i>
-              </div>
 
               <!-- Selection checkbox overlay -->
               <div class="selection-checkbox" *ngIf="bulkSelectMode"
@@ -174,10 +193,33 @@
                 <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)"
                   aria-label="Delete Image"></i>
               </div>
-            </div>
-            <div class="history-details">
-              <span>{{ image.timestamp | date:'short' }}</span>
-              <span class="summary-text">{{ image.promptSummary }}</span>
+              <div class="bottom-right-icon" *ngIf="!bulkSelectMode">
+                <i class="bi bi-info-circle" [class.active]="isImageInfoOpen(image)"
+                  (click)="toggleImageInfo(image, $event)" aria-label="Image info"></i>
+              </div>
+              <div class="image-info-overlay" *ngIf="!bulkSelectMode && isImageInfoOpen(image)"
+                (click)="$event.stopPropagation(); toggleImageInfo(image, $event)">
+                <div class="info-line">
+                  <span class="info-label">Date</span>
+                  <span class="info-value">{{ image.timestamp | date:'short' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Model</span>
+                  <span class="info-value">{{ image.model || 'Unknown' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Seed</span>
+                  <span class="info-value">{{ image.seed ?? '—' }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">LoRAs</span>
+                  <span class="info-value">{{ formatLoras(image) }}</span>
+                </div>
+                <div class="info-line">
+                  <span class="info-label">Prompt</span>
+                  <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

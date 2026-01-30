@@ -45,6 +45,19 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   editFavoritePageNumber = 1;
   favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
 
+  imagesPerPageOptions: number[] = [4, 8, 16];
+  gridColumns = 2;
+  private openInfoImages: Set<string> = new Set();
+  private imagesPerPageUserSet = false;
+  private readonly mobileBreakpointPx = 768;
+  private readonly imagesPerPageKey = 'mobians:history-images-per-page';
+  private readonly onViewportResize = () => {
+    if (this.imagesPerPageUserSet) return;
+    const size = this.getDefaultImagesPerPage();
+    if (size === this.imagesPerPage) return;
+    void this.applyImagesPerPage(size, false);
+  };
+
   bulkSelectMode = false;
   selectedImages: Set<string> = new Set();
 
@@ -111,6 +124,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.setImagesPerPageDefaults();
+
     this.imageSyncService.syncStatus$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
@@ -124,6 +139,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
 
     window.addEventListener('storage', this.onStorage);
+    window.addEventListener('resize', this.onViewportResize);
     this.initializeHistory().catch((error) => {
       console.error('Failed to initialize image history:', error);
     });
@@ -131,6 +147,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     window.removeEventListener('storage', this.onStorage);
+    window.removeEventListener('resize', this.onViewportResize);
     if (this.cloudSyncInterval) {
       clearInterval(this.cloudSyncInterval);
     }
@@ -255,6 +272,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async openImageDetails(image: MobiansImage) {
+    this.closeImageInfo(image);
+
     const blob = await this.getDownloadBlob(image);
     if (!blob) {
       this.messageService.add({
@@ -392,6 +411,129 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   onFavoriteSearchQueryChange(nextValue: string) {
     this.favoriteSearchQuery = nextValue;
     this.debouncedFavoriteSearch();
+  }
+
+  async onImagesPerPageChange(nextValue: number) {
+    const size = Number(nextValue);
+    if (!Number.isFinite(size) || size <= 0) return;
+    await this.applyImagesPerPage(size, true);
+  }
+
+  toggleImageInfo(image: MobiansImage, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const key = this.getImageInfoKey(image);
+    if (!key) return;
+    if (this.openInfoImages.has(key)) {
+      this.openInfoImages.delete(key);
+      return;
+    }
+    this.openInfoImages.add(key);
+  }
+
+  isImageInfoOpen(image: MobiansImage): boolean {
+    const key = this.getImageInfoKey(image);
+    return key ? this.openInfoImages.has(key) : false;
+  }
+
+  private closeImageInfo(image: MobiansImage) {
+    const key = this.getImageInfoKey(image);
+    if (key) {
+      this.openInfoImages.delete(key);
+    }
+  }
+
+  private getImageInfoKey(image: MobiansImage): string | null {
+    return image.UUID || image.url || null;
+  }
+
+  private updateGridColumns(pageSize: number) {
+    if (pageSize <= 4) {
+      this.gridColumns = 2;
+    } else if (pageSize <= 8) {
+      this.gridColumns = 3;
+    } else {
+      this.gridColumns = 4;
+    }
+  }
+
+  private getDefaultImagesPerPage(): number {
+    if (typeof window === 'undefined') return 8;
+    return window.matchMedia(`(max-width: ${this.mobileBreakpointPx}px)`).matches ? 4 : 8;
+  }
+
+  private setImagesPerPageDefaults() {
+    const saved = this.getSavedImagesPerPage();
+    const size = saved ?? this.getDefaultImagesPerPage();
+    this.imagesPerPageUserSet = saved !== null;
+    this.imagesPerPage = size;
+    this.favoriteImagesPerPage = size;
+    this.updateGridColumns(size);
+  }
+
+  private async applyImagesPerPage(size: number, markUserChoice: boolean) {
+    if (markUserChoice) {
+      this.imagesPerPageUserSet = true;
+      this.saveImagesPerPagePreference(size);
+    }
+    if (size === this.imagesPerPage && size === this.favoriteImagesPerPage) return;
+
+    this.imagesPerPage = size;
+    this.favoriteImagesPerPage = size;
+    this.updateGridColumns(size);
+
+    this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
+    if (this.currentPageNumber > this.totalPages) {
+      this.currentPageNumber = this.totalPages;
+    }
+    this.editPageNumber = this.currentPageNumber;
+    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    await this.updateFavoriteImages();
+  }
+
+  private getSavedImagesPerPage(): number | null {
+    try {
+      const raw = localStorage.getItem(this.imagesPerPageKey);
+      if (!raw) return null;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return null;
+      if (parsed === 12) {
+        localStorage.setItem(this.imagesPerPageKey, '8');
+        return 8;
+      }
+      return this.imagesPerPageOptions.includes(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveImagesPerPagePreference(size: number) {
+    try {
+      localStorage.setItem(this.imagesPerPageKey, String(size));
+    } catch {}
+  }
+
+  formatLoras(image: MobiansImage): string {
+    const loras = Array.isArray(image?.loras) ? image.loras : [];
+    if (loras.length === 0) return 'None';
+    const names = loras
+      .map((lora: any) => {
+        if (!lora) return '';
+        if (typeof lora === 'string') return lora;
+        if (typeof lora === 'object') {
+          return lora.name || lora.displayName || lora.id || lora.model || lora.filename || '';
+        }
+        return String(lora);
+      })
+      .map((name) => String(name).trim())
+      .filter(Boolean);
+    if (names.length === 0) {
+      return `${loras.length} LoRA${loras.length === 1 ? '' : 's'}`;
+    }
+    const display = names.slice(0, 3).join(', ');
+    return names.length > 3 ? `${display} +${names.length - 3} more` : display;
   }
 
   toggleBulkSelectMode() {
