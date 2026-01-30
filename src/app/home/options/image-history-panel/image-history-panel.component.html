@@ -20,7 +20,7 @@
           </div>
         </div>
         <!-- Image History Panel -->
-        <div class="history-grid" [style.--history-columns]="gridColumns">
+        <div class="history-grid" [style.--history-columns]="gridColumns" [class.compact-grid]="gridColumns >= 4">
           <div *ngFor="let image of currentPageImages" class="history-item">
             <div class="image-container">
               <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
@@ -168,7 +168,7 @@
             </select>
           </div>
         </div>
-        <div class="history-grid" [style.--history-columns]="gridColumns">
+        <div class="history-grid" [style.--history-columns]="gridColumns" [class.compact-grid]="gridColumns >= 4">
           <div *ngFor="let image of favoritePageImages" class="history-item"
             [class.selected]="bulkSelectMode && isImageSelected(image)">
             <div class="image-container">

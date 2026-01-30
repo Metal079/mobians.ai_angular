@@ -390,10 +390,6 @@
     flex: 1 1 auto;
   }
 
-  .history-grid {
-    --history-columns: 2 !important;
-  }
-
   .card-body {
     max-height: 82vh;
     padding-top: 0.25rem;
@@ -407,6 +403,29 @@
 
   .history-grid {
     margin-top: 4px;
+    gap: 10px;
+  }
+
+  .top-left-icon,
+  .top-right-icon,
+  .bottom-left-icon,
+  .bottom-right-icon {
+    font-size: 1.15em;
+  }
+
+  .top-left-icon i,
+  .top-right-icon i,
+  .bottom-left-icon i,
+  .bottom-right-icon i {
+    padding: 3px 5px;
+  }
+
+  .history-grid.compact-grid .top-left-icon,
+  .history-grid.compact-grid .top-right-icon,
+  .history-grid.compact-grid .bottom-left-icon,
+  .history-grid.compact-grid .bottom-right-icon,
+  .history-grid.compact-grid .image-info-overlay {
+    display: none;
   }
 
   .page-edit-container {
