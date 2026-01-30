@@ -1265,30 +1265,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       let results: MobiansImage[];
 
-      if (store.indexNames.contains('promptFullText') && 'getAll' in IDBIndex.prototype) {
-        try {
-          const index = store.index('promptFullText');
-          results = await new Promise<MobiansImage[]>((resolve, reject) => {
-            const request = query.length > 0
-              ? (index as any).getAll(query)
-              : (index as any).getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-          });
-        } catch (error) {
-          console.warn('Full-text search not supported or failed, falling back:', error);
-          results = await new Promise<MobiansImage[]>((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-          });
-        }
-      } else {
+      try {
         results = await new Promise<MobiansImage[]>((resolve, reject) => {
           const request = store.getAll();
           request.onsuccess = () => resolve(request.result || []);
           request.onerror = () => reject(request.error);
         });
+      } catch (error) {
+        console.warn('Failed to load images for search, falling back:', error);
+        results = [];
       }
 
       if (query.length > 0) {
