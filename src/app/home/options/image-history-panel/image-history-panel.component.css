@@ -142,6 +142,20 @@
   line-height: 1;
 }
 
+.history-grid.compact-grid .top-left-icon,
+.history-grid.compact-grid .top-right-icon,
+.history-grid.compact-grid .bottom-left-icon,
+.history-grid.compact-grid .bottom-right-icon {
+  font-size: 1.2em;
+}
+
+.history-grid.compact-grid .top-left-icon i,
+.history-grid.compact-grid .top-right-icon i,
+.history-grid.compact-grid .bottom-left-icon i,
+.history-grid.compact-grid .bottom-right-icon i {
+  padding: 3px 5px;
+}
+
 .bottom-right-icon i.active {
   background: rgba(0, 123, 255, 0.7);
 }

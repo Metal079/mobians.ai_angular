@@ -45,7 +45,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   editFavoritePageNumber = 1;
   favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
 
-  imagesPerPageOptions: number[] = [4, 8, 16];
+  imagesPerPageOptions: number[] = [4, 9, 16];
   gridColumns = 2;
   private openInfoImages: Set<string> = new Set();
   private imagesPerPageUserSet = false;
@@ -452,7 +452,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private updateGridColumns(pageSize: number) {
     if (pageSize <= 4) {
       this.gridColumns = 2;
-    } else if (pageSize <= 8) {
+    } else if (pageSize <= 9) {
       this.gridColumns = 3;
     } else {
       this.gridColumns = 4;
@@ -460,8 +460,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private getDefaultImagesPerPage(): number {
-    if (typeof window === 'undefined') return 8;
-    return window.matchMedia(`(max-width: ${this.mobileBreakpointPx}px)`).matches ? 4 : 8;
+    if (typeof window === 'undefined') return 9;
+    return window.matchMedia(`(max-width: ${this.mobileBreakpointPx}px)`).matches ? 4 : 9;
   }
 
   private setImagesPerPageDefaults() {
@@ -500,8 +500,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const parsed = Number(raw);
       if (!Number.isFinite(parsed)) return null;
       if (parsed === 12) {
-        localStorage.setItem(this.imagesPerPageKey, '8');
-        return 8;
+        localStorage.setItem(this.imagesPerPageKey, '9');
+        return 9;
+      }
+      if (parsed === 8) {
+        localStorage.setItem(this.imagesPerPageKey, '9');
+        return 9;
       }
       return this.imagesPerPageOptions.includes(parsed) ? parsed : null;
     } catch {
