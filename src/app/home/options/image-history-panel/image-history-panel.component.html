@@ -21,9 +21,17 @@
         </div>
         <!-- Image History Panel -->
         <div class="history-grid" [style.--history-columns]="gridColumns" [class.compact-grid]="gridColumns >= 4">
-          <div *ngFor="let image of currentPageImages" class="history-item">
-            <div class="image-container">
-              <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
+          <ng-container *ngIf="isLoadingAll && currentPageImages.length === 0">
+            <div *ngFor="let _ of getPlaceholders(imagesPerPage)" class="history-item placeholder">
+              <div class="image-container">
+                <div class="image-skeleton"></div>
+              </div>
+            </div>
+          </ng-container>
+          <ng-container *ngIf="currentPageImages.length > 0">
+            <div *ngFor="let image of currentPageImages" class="history-item">
+              <div class="image-container">
+                <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
@@ -64,11 +72,18 @@
                   <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
+            <div *ngFor="let _ of getPlaceholders(imagesPerPage - currentPageImages.length)"
+              class="history-item placeholder ghost">
+              <div class="image-container">
+                <div class="image-skeleton"></div>
+              </div>
+            </div>
+          </ng-container>
         </div>
         <!-- Show message if no images are available -->
-        <div *ngIf="currentPageImages.length === 0" class="no-images-message">
+        <div *ngIf="currentPageImages.length === 0 && !isLoadingAll" class="no-images-message">
           No generated images available.
         </div>
         <div class="pagination">
@@ -169,10 +184,18 @@
           </div>
         </div>
         <div class="history-grid" [style.--history-columns]="gridColumns" [class.compact-grid]="gridColumns >= 4">
-          <div *ngFor="let image of favoritePageImages" class="history-item"
-            [class.selected]="bulkSelectMode && isImageSelected(image)">
-            <div class="image-container">
-              <img [src]="image.url" alt="Generated Image" (click)="onFavoriteImageClick(image, $event)">
+          <ng-container *ngIf="isLoadingFavorites && favoritePageImages.length === 0">
+            <div *ngFor="let _ of getPlaceholders(favoriteImagesPerPage)" class="history-item placeholder">
+              <div class="image-container">
+                <div class="image-skeleton"></div>
+              </div>
+            </div>
+          </ng-container>
+          <ng-container *ngIf="favoritePageImages.length > 0">
+            <div *ngFor="let image of favoritePageImages" class="history-item"
+              [class.selected]="bulkSelectMode && isImageSelected(image)">
+              <div class="image-container">
+                <img [src]="image.url" alt="Generated Image" (click)="onFavoriteImageClick(image, $event)">
 
               <!-- Selection checkbox overlay -->
               <div class="selection-checkbox" *ngIf="bulkSelectMode"
@@ -220,11 +243,18 @@
                   <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
+            <div *ngFor="let _ of getPlaceholders(favoriteImagesPerPage - favoritePageImages.length)"
+              class="history-item placeholder ghost">
+              <div class="image-container">
+                <div class="image-skeleton"></div>
+              </div>
+            </div>
+          </ng-container>
         </div>
         <!-- Show message if no images are available -->
-        <div *ngIf="favoritePageImages.length === 0" class="no-images-message">
+        <div *ngIf="favoritePageImages.length === 0 && !isLoadingFavorites" class="no-images-message">
           No favorite images available.
         </div>
         <div class="pagination">

@@ -9,7 +9,6 @@
   max-height: 85vh;
   overflow-y: auto;
   overflow-x: hidden;
-  transition: height 0.5s ease-in-out;
   max-width: 600px;
   width: 100%;
 }
@@ -82,7 +81,35 @@
 
 .image-container {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
+}
+
+.history-item.placeholder {
+  pointer-events: none;
+}
+
+.history-item.placeholder.ghost {
+  visibility: hidden;
+}
+
+.image-skeleton {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 25%, rgba(255, 255, 255, 0.18) 50%, rgba(255, 255, 255, 0.08) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .top-left-icon {

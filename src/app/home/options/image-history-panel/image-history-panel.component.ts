@@ -32,6 +32,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   imagesPerPage = 4;
   totalPages = 1;
   isLoading = false;
+  isLoadingAll = false;
   imageHistoryMetadata: MobiansImageMetadata[] = [];
   editPageNumber = 1;
   blobUrls: string[] = [];
@@ -44,6 +45,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   debouncedFavoriteSearch: () => void;
   editFavoritePageNumber = 1;
   favoriteImageHistoryMetadata: MobiansImageMetadata[] = [];
+  isLoadingFavorites = false;
+  private pageLoadToken = 0;
+  private favoritePageLoadToken = 0;
 
   imagesPerPageOptions: number[] = [4, 9, 16];
   gridColumns = 2;
@@ -1351,19 +1355,34 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     return pageImages;
   }
 
+  getPlaceholders(count: number): number[] {
+    const safeCount = Math.max(0, Number(count) || 0);
+    return Array.from({ length: safeCount }, (_, i) => i);
+  }
+
   async loadImagePage(pageNumber: number) {
     if (pageNumber < 1 || pageNumber > this.totalPages) return;
+    const token = ++this.pageLoadToken;
+    this.isLoadingAll = true;
     this.currentPageNumber = pageNumber;
-    this.currentPageImages = await this.paginateImages(pageNumber);
     this.editPageNumber = this.currentPageNumber;
+    const nextImages = await this.paginateImages(pageNumber);
+    if (token !== this.pageLoadToken) return;
+    this.currentPageImages = nextImages;
+    this.isLoadingAll = false;
   }
 
   async loadFavoriteImagePage(pageNumber: number) {
     if (pageNumber < 1 || pageNumber > this.favoriteTotalPages) return;
+    const token = ++this.favoritePageLoadToken;
+    this.isLoadingFavorites = true;
     this.favoriteCurrentPageNumber = pageNumber;
-    const favorites = this.favoriteImageHistoryMetadata;
-    this.favoritePageImages = await this.paginateFavoriteImages(favorites, pageNumber);
     this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    const favorites = this.favoriteImageHistoryMetadata;
+    const nextImages = await this.paginateFavoriteImages(favorites, pageNumber);
+    if (token !== this.favoritePageLoadToken) return;
+    this.favoritePageImages = nextImages;
+    this.isLoadingFavorites = false;
   }
 
   async previousPage() {
