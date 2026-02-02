@@ -150,6 +150,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  color: var(--theme-surface-text, #ffffff);
 }
 
 .lora-favorites-toggle:disabled {
@@ -158,14 +162,35 @@
 }
 
 .lora-clear-filters {
-  color: #6c757d;
-  opacity: 0.65;
+  color: var(--theme-surface-text, #ffffff);
+  opacity: 0.9;
   text-decoration: none;
-  padding: 0 4px;
+  padding: 0 8px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
 .lora-clear-filters:hover {
-  opacity: 0.9;
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.lora-favorites-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.lora-favorites-toggle:focus-visible,
+.lora-clear-filters:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6);
+  outline-offset: 2px;
 }
 
 .lora-favorite-btn {
@@ -211,6 +236,16 @@
 .lora-load-more-trigger {
   width: 100%;
   height: 1px;
+}
+
+:host ::ng-deep .lora-tag-filter-panel .p-multiselect-items-wrapper {
+  overflow-x: hidden;
+}
+
+:host ::ng-deep .lora-tag-filter-panel .p-multiselect-item,
+:host ::ng-deep .lora-tag-filter-panel .p-multiselect-item .p-multiselect-item-label {
+  white-space: normal;
+  word-break: break-word;
 }
 
 @media (max-width: 480px) {
