@@ -250,11 +250,39 @@
 
   .lora-filter-row {
     flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lora-tag-filter {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
   }
 
   .lora-filter-controls {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .card-body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .card-body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  :host ::ng-deep .lora-tag-filter-panel .p-multiselect-items-wrapper {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  :host ::ng-deep .lora-tag-filter-panel .p-multiselect-items-wrapper::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 

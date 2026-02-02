@@ -25,7 +25,8 @@
     <div class="lora-filter-row">
       <p-multiSelect [options]="loraTagOptions" [ngModel]="selectedTags" (ngModelChange)="onSelectedTagsChange($event)"
         optionLabel="optionLabel" optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43"
-        placeholder="Filter Loras by tags" styleClass="lora-tag-filter" [style]="{ width: '100%' }">
+        placeholder="Filter Loras by tags" styleClass="lora-tag-filter" panelStyleClass="lora-tag-filter-panel"
+        [style]="{ width: '100%' }">
       </p-multiSelect>
       <div class="lora-filter-controls">
         <button type="button" class="btn btn-outline-secondary btn-sm lora-favorites-toggle"
