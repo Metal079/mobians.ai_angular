@@ -1,4 +1,4 @@
-import { Component, DestroyRef, DoCheck, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, DoCheck, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DialogService } from 'primeng/dynamicdialog';
 import { MessageService } from 'primeng/api';
@@ -8,6 +8,7 @@ import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { AddLorasComponent } from '../../add-loras/add-loras.component';
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
+import { environment } from 'src/environments/environment';
 
 type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
 
@@ -16,7 +17,7 @@ type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
   templateUrl: './loras-panel.component.html',
   styleUrls: ['./loras-panel.component.css'],
 })
-export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
+export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterViewInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
   @Input({ required: true }) generationRequest!: any;
@@ -26,12 +27,16 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
   @Input() resetToken = 0;
   @Output() lorasChanged = new EventEmitter<void>();
 
+  @ViewChild('loadMoreTrigger') loadMoreTrigger?: ElementRef<HTMLDivElement>;
+  @ViewChild('lorasGrid') lorasGrid?: ElementRef<HTMLDivElement>;
+
   showNSFWLoras = false;
   loraTagOptions: { optionLabel: string; optionValue: string; count: number }[] = [];
   selectedTags: string[] = [];
   loras: any[] = [];
   loraSearchQuery = '';
   filteredLoras: any[] = [];
+  displayedLoras: any[] = [];
   selectedLoras: any[] = [];
   loraSortOption: LoraSortOption = 'most-used';
   loraSortOptions: { label: string; value: LoraSortOption }[] = [
@@ -46,6 +51,12 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
   private readonly loraFavoritesOnlyKey = 'mobians:lora-favorites-only';
   private loraPrefsLoadedFromCloud = false;
   private loraPrefsLoading = false;
+
+  // Progressive loading - only render a subset of items initially
+  readonly loraPageSize = 24;
+  private loraDisplayCount = 24;
+  private loraLoadMoreObserver?: IntersectionObserver;
+  private isLoadingMoreLoras = false;
 
   displayModal = false;
   selectedImageUrl: string | null = null;
@@ -81,6 +92,17 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
     this.loraHistoryPromptService.requests$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((image) => this.handleHistoryLoraRequest(image));
+  }
+
+  ngAfterViewInit(): void {
+    this.setupLoadMoreObserver();
+  }
+
+  ngOnDestroy(): void {
+    if (this.loraLoadMoreObserver) {
+      this.loraLoadMoreObserver.disconnect();
+      this.loraLoadMoreObserver = undefined;
+    }
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -241,6 +263,62 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
     }
 
     this.filteredLoras = filtered;
+    // Reset progressive loading when filters change
+    this.loraDisplayCount = this.loraPageSize;
+    this.updateDisplayedLoras();
+  }
+
+  private updateDisplayedLoras() {
+    this.displayedLoras = this.filteredLoras.slice(0, this.loraDisplayCount);
+    // Reconnect observer for seamless loading
+    setTimeout(() => this.setupLoadMoreObserver(), 0);
+  }
+
+  showMoreLoras() {
+    if (!this.hasMoreLoras || this.isLoadingMoreLoras) return;
+    this.isLoadingMoreLoras = true;
+    this.loraDisplayCount += this.loraPageSize;
+    this.updateDisplayedLoras();
+    this.isLoadingMoreLoras = false;
+  }
+
+  private setupLoadMoreObserver() {
+    if (typeof IntersectionObserver === 'undefined') {
+      // Fallback: load all if observer isn't supported
+      this.loraDisplayCount = this.filteredLoras.length;
+      this.displayedLoras = [...this.filteredLoras];
+      return;
+    }
+    if (this.loraLoadMoreObserver) {
+      this.loraLoadMoreObserver.disconnect();
+    }
+    if (!this.hasMoreLoras || !this.loadMoreTrigger?.nativeElement) return;
+
+    this.loraLoadMoreObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          this.showMoreLoras();
+        }
+      },
+      {
+        root: this.lorasGrid?.nativeElement ?? null,
+        rootMargin: '200px',
+        threshold: 0.1,
+      }
+    );
+    this.loraLoadMoreObserver.observe(this.loadMoreTrigger.nativeElement);
+  }
+
+  get hasMoreLoras(): boolean {
+    return this.loraDisplayCount < this.filteredLoras.length;
+  }
+
+  get remainingLorasCount(): number {
+    return Math.max(0, this.filteredLoras.length - this.loraDisplayCount);
+  }
+
+  trackLoraById(_index: number, lora: any): string | number {
+    return lora?.version_id ?? `${lora?.name}::${lora?.version}`;
   }
 
   refreshLoraFiltersList() {
@@ -371,8 +449,49 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck {
   }
 
   openImageModalLoraPreview(imageUrl: string) {
-    this.selectedImageUrl = imageUrl;
+    this.selectedImageUrl = this.resolveImageUrl(imageUrl);
     this.displayModal = true;
+  }
+
+  /**
+   * Generate a thumbnail URL with width constraint for CivitAI images.
+   * CivitAI CDN supports /width=N/ path segment for server-side resizing.
+   */
+  getThumbUrl(imageUrl: string | undefined, width: number): string {
+    if (!imageUrl) return '';
+    imageUrl = this.resolveImageUrl(imageUrl);
+    // Local optimized images
+    if (imageUrl.includes('/lora-image/')) {
+      const separator = imageUrl.includes('?') ? '&' : '?';
+      return `${imageUrl}${separator}w=${width}`;
+    }
+    // CivitAI image URLs - only rewrite known patterns
+    if (imageUrl.includes('image.civitai.com')) {
+      const widthPattern = /(\/)(original=\w+|width=\d+)(\/)/;
+      if (widthPattern.test(imageUrl)) {
+        return imageUrl.replace(widthPattern, `$1width=${width}$3`);
+      }
+      try {
+        const parsed = new URL(imageUrl);
+        if (parsed.searchParams.has('width') || parsed.searchParams.has('w')) {
+          parsed.searchParams.set('width', String(width));
+          parsed.searchParams.delete('w');
+          return parsed.toString();
+        }
+      } catch {
+        return imageUrl;
+      }
+      // Unknown format - keep original to avoid broken URLs
+      return imageUrl;
+    }
+    return imageUrl;
+  }
+
+  private resolveImageUrl(imageUrl: string): string {
+    if (imageUrl.startsWith('/lora-image/')) {
+      return `${environment.apiBaseUrl}${imageUrl}`;
+    }
+    return imageUrl;
   }
 
   onLoraPreviewVisibleChange(visible: boolean) {

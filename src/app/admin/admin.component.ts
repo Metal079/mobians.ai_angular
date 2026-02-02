@@ -4,6 +4,7 @@ import { MessageService, ConfirmationService } from 'primeng/api';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { interval, Subscription } from 'rxjs';
+import { environment } from 'src/environments/environment';
 
 interface DownloaderStatus {
   status: string;
@@ -58,6 +59,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   // Loading states for individual actions
   savingLora: { [key: string]: boolean } = {};
   processingSuggestion: { [key: string]: boolean } = {};
+  uploadingLoraImage: { [key: string]: boolean } = {};
 
   // Suggestions view mode
   showRejectedSuggestions = false;
@@ -348,7 +350,42 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   getPreviewUrl(row: any): string | null {
     const u = row?.image_url || row?.preview || row?.thumbnail || row?.image;
-    return this.isValidImageUrl(u) ? u : null;
+    if (!this.isValidImageUrl(u)) return null;
+    return this.resolveImageUrl(u);
+  }
+
+  getThumbUrl(imageUrl: string | null | undefined, width: number): string | null {
+    if (!imageUrl) return null;
+    imageUrl = this.resolveImageUrl(imageUrl);
+    if (imageUrl.includes('/lora-image/')) {
+      const separator = imageUrl.includes('?') ? '&' : '?';
+      return `${imageUrl}${separator}w=${width}`;
+    }
+    if (imageUrl.includes('image.civitai.com')) {
+      const widthPattern = /(\/)(original=\w+|width=\d+)(\/)/;
+      if (widthPattern.test(imageUrl)) {
+        return imageUrl.replace(widthPattern, `$1width=${width}$3`);
+      }
+      try {
+        const parsed = new URL(imageUrl);
+        if (parsed.searchParams.has('width') || parsed.searchParams.has('w')) {
+          parsed.searchParams.set('width', String(width));
+          parsed.searchParams.delete('w');
+          return parsed.toString();
+        }
+      } catch {
+        return imageUrl;
+      }
+      return imageUrl;
+    }
+    return imageUrl;
+  }
+
+  private resolveImageUrl(imageUrl: string): string {
+    if (imageUrl.startsWith('/lora-image/')) {
+      return `${environment.apiBaseUrl}${imageUrl}`;
+    }
+    return imageUrl;
   }
 
   isLoraExpanded(row: any): boolean {
@@ -366,9 +403,78 @@ export class AdminComponent implements OnInit, OnDestroy {
     return !!this.savingLora[key];
   }
 
+  isLoraImageUploading(row: any): boolean {
+    const key = row?.id ?? row?.name;
+    return !!this.uploadingLoraImage[key];
+  }
+
   isSuggestionProcessing(row: any): boolean {
     const key = row?.id ?? row?.name;
     return !!this.processingSuggestion[key];
+  }
+
+  onLoraImageSelected(event: Event, row: any): void {
+    const input = event.target as HTMLInputElement;
+    const file = input?.files?.[0];
+    if (!file) return;
+    const loraId = row?.id;
+    const loraKey = loraId ?? row?.name;
+    if (loraId == null) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Unable to update LoRA image: missing id.',
+        life: 4000
+      });
+      input.value = '';
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Invalid File',
+        detail: 'Please select an image file.',
+        life: 4000
+      });
+      input.value = '';
+      return;
+    }
+
+    this.uploadingLoraImage[loraKey] = true;
+    this.sdService.uploadLoraImage(loraId, file).subscribe({
+      next: (resp: any) => {
+        const imageUrl = resp?.image_url || resp?.url || resp?.imageUrl;
+        if (imageUrl) {
+          row.image_url = imageUrl;
+          this.updateLoraImageInList(loraId, imageUrl);
+        }
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Updated',
+          detail: 'LoRA image updated successfully.',
+          life: 3000
+        });
+      },
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Upload Failed',
+          detail: err?.error?.detail || 'Failed to upload LoRA image',
+          life: 5000
+        });
+      },
+      complete: () => {
+        this.uploadingLoraImage[loraKey] = false;
+      }
+    });
+    input.value = '';
+  }
+
+  private updateLoraImageInList(loraId: number, imageUrl: string): void {
+    const target = this.allLoras.find((l) => l?.id === loraId);
+    if (target) target.image_url = imageUrl;
+    const filteredTarget = this.filteredAllLoras.find((l) => l?.id === loraId);
+    if (filteredTarget) filteredTarget.image_url = imageUrl;
   }
 
   // Name editing methods

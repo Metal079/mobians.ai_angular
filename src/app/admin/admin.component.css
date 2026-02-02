@@ -597,6 +597,36 @@
   word-break: break-word;
 }
 
+.image-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #333;
+}
+
+.image-upload-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.image-upload-controls input[type="file"] {
+  color: #cbd5f5;
+  font-size: 0.8rem;
+}
+
+.upload-status {
+  color: #f59e0b;
+  font-size: 0.75rem;
+}
+
+.upload-hint {
+  color: #777;
+  font-size: 0.7rem;
+}
+
 .toggle-section {
   display: flex;
   gap: 1.5rem;

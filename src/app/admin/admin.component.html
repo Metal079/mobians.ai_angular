@@ -74,7 +74,7 @@
               <td colspan="9">
                 <div class="expansion-card">
                   <div class="expansion-image">
-                    <img class="preview-img-lg clickable" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
+                    <img class="preview-img-lg clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
                   </div>
                   <div class="expansion-details">
                     <div class="detail-grid">
@@ -107,6 +107,14 @@
                         <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
                           <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
                         </a>
+                      </div>
+                    </div>
+                    <div class="image-upload-section">
+                      <span class="detail-label">Replace Preview</span>
+                      <div class="image-upload-controls">
+                        <input type="file" accept="image/*" [disabled]="isLoraImageUploading(row)" (change)="onLoraImageSelected($event, row)" />
+                        <span class="upload-status" *ngIf="isLoraImageUploading(row)">Uploading...</span>
+                        <small class="upload-hint">PNG/JPG/WebP. Optimized on upload.</small>
                       </div>
                     </div>
                     <div class="toggle-section">
@@ -148,7 +156,7 @@
               </td>
               <td>
                 <span class="p-column-title">Preview</span>
-                <img class="preview-img clickable" [src]="getPreviewUrl(row) || row.image_url" [alt]="row.name" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
+                <img class="preview-img clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
               </td>
               <td>
                 <div class="name-cell" *ngIf="!isEditingName(row)">
@@ -246,7 +254,7 @@
                 <div class="expansion-card">
                   <div class="expansion-image">
                     <ng-container *ngIf="getPreviewUrl(row) as img; else noImgExpansion">
-                      <img class="preview-img-lg clickable" [src]="img" [alt]="row.name" (click)="openImagePreview(img, row.name)" />
+                      <img class="preview-img-lg clickable" [src]="getThumbUrl(img, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
                     </ng-container>
                     <ng-template #noImgExpansion>
                       <div class="no-image-placeholder">
@@ -316,7 +324,7 @@
               <td>
                 <span class="p-column-title">Preview</span>
                 <ng-container *ngIf="getPreviewUrl(row) as img; else noImg">
-                  <img class="preview-img clickable" [src]="img" [alt]="row.name" (click)="openImagePreview(img, row.name)" />
+                  <img class="preview-img clickable" [src]="getThumbUrl(img, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
                 </ng-container>
                 <ng-template #noImg>
                   <div class="no-image-small">

@@ -183,7 +183,29 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (img.url) this.blobUrls.push(img.url);
     });
 
-    this.imageHistoryMetadata.unshift(...generatedImages.map((image: MobiansImage) => {
+    const storedImages: MobiansImage[] = [];
+    const failedImages: MobiansImage[] = [];
+
+    for (const image of generatedImages) {
+      const stored = await this.persistGeneratedImage(image);
+      if (stored) {
+        storedImages.push(image);
+      } else {
+        failedImages.push(image);
+      }
+    }
+
+    if (storedImages.length === 0) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Save Failed',
+        detail: 'Could not save generated images to history. Please download them or retry.',
+        life: 5000
+      });
+      return;
+    }
+
+    this.imageHistoryMetadata.unshift(...storedImages.map((image: MobiansImage) => {
       return {
         UUID: image.UUID,
         prompt: image.prompt!,
@@ -204,24 +226,13 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       } as MobiansImageMetadata;
     }));
 
-    try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const blobStore = transaction.objectStore('blobStore');
-
-      for (const image of generatedImages) {
-        if (image.blob && image.blob.type === 'image/png') {
-          image.blob = await this.blobMigrationService.convertToWebP(image.blob);
-        }
-        const imageMetadata: any = { ...image };
-        delete imageMetadata.blob;
-        delete imageMetadata.url;
-        store.put(imageMetadata);
-        blobStore.put({ UUID: image.UUID, blob: image.blob });
-      }
-    } catch (error) {
-      console.error('Failed to store image data', error);
+    if (failedImages.length > 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Partial Save',
+        detail: `${failedImages.length} image(s) could not be saved to history. Check storage quota or try again.`,
+        life: 6000
+      });
     }
 
     this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
@@ -231,6 +242,46 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.editPageNumber = this.currentPageNumber;
     this.currentPageImages = await this.paginateImages(this.currentPageNumber);
     await this.updateFavoriteImages();
+  }
+
+  private async persistGeneratedImage(image: MobiansImage): Promise<boolean> {
+    if (!image?.UUID || !image.blob) {
+      console.warn('Generated image missing blob or UUID. Skipping history save.', image);
+      return false;
+    }
+
+    let blobToStore = image.blob;
+    if (blobToStore.type === 'image/png') {
+      blobToStore = await this.blobMigrationService.convertToWebP(blobToStore);
+    }
+    image.blob = blobToStore;
+
+    try {
+      const db = await this.getDatabase();
+      return await new Promise<boolean>((resolve) => {
+        const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        const blobStore = transaction.objectStore('blobStore');
+
+        let failed = false;
+        transaction.oncomplete = () => resolve(!failed);
+        transaction.onerror = () => resolve(false);
+        transaction.onabort = () => resolve(false);
+
+        const imageMetadata: any = { ...image };
+        delete imageMetadata.blob;
+        delete imageMetadata.url;
+
+        const metaRequest = store.put(imageMetadata);
+        metaRequest.onerror = () => { failed = true; };
+
+        const blobRequest = blobStore.put({ UUID: image.UUID, blob: blobToStore });
+        blobRequest.onerror = () => { failed = true; };
+      });
+    } catch (error) {
+      console.error('Failed to store generated image data', error);
+      return false;
+    }
   }
 
   async deleteAllImages() {

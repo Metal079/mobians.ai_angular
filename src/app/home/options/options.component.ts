@@ -1091,8 +1091,9 @@ export class OptionsComponent implements OnInit {
             this.sharedService.setImages(this.images);
 
             // Convert to webp if image is png
-            if (generatedImages[0].blob.type == "image/png") {
+            if (generatedImages[0]?.blob?.type === 'image/png') {
               for (let i = 0; i < generatedImages.length; i++) {
+                if (!generatedImages[i].blob) continue;
                 generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob);
               }
             }

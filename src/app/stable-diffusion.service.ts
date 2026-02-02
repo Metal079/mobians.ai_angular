@@ -120,6 +120,13 @@ export class StableDiffusionService {
     return this.http.patch(url, data);
   }
 
+  uploadLoraImage(loraId: number, file: File): Observable<any> {
+    const url = `${this.apiBaseUrl}/admin/lora/${loraId}/image`;
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post(url, formData);
+  }
+
   approveSuggestion(suggestionId: number): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/suggestion/${suggestionId}/approve`;
     return this.http.post(url, {});
