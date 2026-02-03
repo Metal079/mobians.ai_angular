@@ -31,7 +31,7 @@
           <ng-container *ngIf="currentPageImages.length > 0">
             <div *ngFor="let image of currentPageImages" class="history-item">
               <div class="image-container">
-                <img [src]="image.url" alt="Generated Image" (click)="openImageDetails(image)">
+                <img [src]="image.url" alt="Generated Image" loading="lazy" decoding="async" (click)="openImageDetails(image)">
               <div class="top-left-icon">
                 <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                   (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
@@ -195,7 +195,7 @@
             <div *ngFor="let image of favoritePageImages" class="history-item"
               [class.selected]="bulkSelectMode && isImageSelected(image)">
               <div class="image-container">
-                <img [src]="image.url" alt="Generated Image" (click)="onFavoriteImageClick(image, $event)">
+                <img [src]="image.url" alt="Generated Image" loading="lazy" decoding="async" (click)="onFavoriteImageClick(image, $event)">
 
               <!-- Selection checkbox overlay -->
               <div class="selection-checkbox" *ngIf="bulkSelectMode"

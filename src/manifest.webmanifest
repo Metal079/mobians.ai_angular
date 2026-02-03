@@ -1,6 +1,6 @@
 {
-  "name": "angularapp",
-  "short_name": "angularapp",
+  "name": "mobians.ai",
+  "short_name": "mobians.ai",
   "theme_color": "#1976d2",
   "background_color": "#fafafa",
   "display": "standalone",

@@ -12,7 +12,6 @@ import { LoginModalComponent } from './auth/login-modal.component';
 import { ProfileMenuComponent } from './auth/profile-menu.component';
 import { CreditsPurchaseComponent } from './auth/credits-purchase.component';
 import { AuthInterceptor } from './auth/auth.interceptor';
-import { AdminGuard } from './auth/admin.guard';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { environment } from 'src/environments/environment';
 
@@ -21,10 +20,7 @@ const auth0Config = (environment as any).auth0;
 const hasAuth0 = !!(auth0Config?.domain && auth0Config?.clientId);
 
 import { FaqComponent } from './home/faq/faq.component';
-import { TrainComponent } from './train/train.component';
-import { NewLoraComponent } from './train/new-lora/new-lora.component';
 import { HomeComponent } from './home/home.component';
-import { AdminComponent } from './admin/admin.component';
 
 // PrimeNG imports
 import { TableModule } from 'primeng/table';
@@ -54,18 +50,21 @@ import { TagModule } from 'primeng/tag';
 const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'faq', component: FaqComponent },
-  { path: 'train', component: TrainComponent },
-  { path: 'train/new', component: NewLoraComponent },
-  { path: 'admin', component: AdminComponent, canActivate: [AdminGuard] },
+  // Lazy load train and admin modules for better initial bundle size
+  { 
+    path: 'train', 
+    loadChildren: () => import('./train/train.module').then(m => m.TrainModule) 
+  },
+  { 
+    path: 'admin', 
+    loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule) 
+  },
   { path: 'auth/callback', component: AuthCallbackComponent },
 ];
 
 @NgModule({ declarations: [
         AppComponent,
-        TrainComponent,
         HomeComponent,
-        NewLoraComponent, // Add this line
-  AdminComponent,
   AuthCallbackComponent,
   LoginModalComponent,
   ProfileMenuComponent,
