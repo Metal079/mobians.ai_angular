@@ -3,6 +3,84 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
+export interface CreditPackageResponseItem {
+  id: string;
+  name: string;
+  price_usd: number;
+  credits: number;
+  description: string;
+}
+
+export interface CreditPackagesResponse {
+  packages: CreditPackageResponseItem[];
+}
+
+export interface PayPalOrderResponse {
+  order_id: string;
+}
+
+export interface PayPalCaptureResponse {
+  message?: string;
+  credits_added: number;
+  new_balance?: number;
+}
+
+export interface ApiUser {
+  credits?: number;
+  is_banned?: boolean;
+  daily_bonus_streak?: number;
+  last_daily_bonus?: string | null;
+}
+
+export interface CurrentUserResponse {
+  status: string;
+  user?: ApiUser;
+}
+
+export interface UserCreditsResponse {
+  status: string;
+  credits: number;
+  can_claim_daily_bonus: boolean;
+  daily_bonus_streak: number;
+  last_daily_bonus?: string | null;
+  next_daily_bonus?: number;
+  next_daily_bonus_streak?: number;
+}
+
+export interface DailyBonusResponse {
+  status: string;
+  message: string;
+  new_balance: number;
+  streak: number;
+  credits_awarded: number;
+}
+
+export interface SubmitJobResponse {
+  job_id: string;
+  credits_used?: number;
+  credits_remaining?: number;
+}
+
+export interface JobStatusResponse {
+  status?: 'pending' | 'completed' | 'failed' | 'error' | 'cancelled';
+  queue_position?: number;
+  eta?: number;
+  result?: string[];
+  message?: string;
+  refund?: {
+    credits_refunded: number;
+    new_balance: number;
+  };
+}
+
+export interface AuthExchangeResponse {
+  token?: string;
+  credits?: number;
+  daily_bonus_streak?: number;
+  last_daily_bonus?: string | null;
+  [key: string]: any;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -11,35 +89,35 @@ export class StableDiffusionService {
 
   constructor(private http: HttpClient) {}
 
-  submitJob(data: any): Observable<any> {
+  submitJob(data: any): Observable<SubmitJobResponse> {
     const url = `${this.apiBaseUrl}/submit_job/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post<SubmitJobResponse>(url, body, {'headers':headers});
   }
 
-  getJob(data: any): Observable<any> {
+  getJob(data: any): Observable<JobStatusResponse> {
     const url = `${this.apiBaseUrl}/get_job/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post<JobStatusResponse>(url, body, {'headers':headers});
   }
 
   rateImage(data: any): Observable<any> {
     const url = `${this.apiBaseUrl}/rate_image/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post<AuthExchangeResponse>(url, body, {'headers':headers});
   }
 
-  discordLogin(data: any): Observable<any> {
+  discordLogin(data: any): Observable<AuthExchangeResponse> {
     const url = `${this.apiBaseUrl}/discord_auth/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post<AuthExchangeResponse>(url, body, {'headers':headers});
   }
 
-  googleLogin(data: any): Observable<any> {
+  googleLogin(data: any): Observable<AuthExchangeResponse> {
     const url = `${this.apiBaseUrl}/google_auth/`;  // backend endpoint to exchange google code
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
@@ -47,19 +125,19 @@ export class StableDiffusionService {
   }
 
   // Credit system endpoints
-  getUserCredits(): Observable<any> {
+  getUserCredits(): Observable<UserCreditsResponse> {
     const url = `${this.apiBaseUrl}/user/credits`;
-    return this.http.get(url);
+    return this.http.get<UserCreditsResponse>(url);
   }
 
-  claimDailyBonus(): Observable<any> {
+  claimDailyBonus(): Observable<DailyBonusResponse> {
     const url = `${this.apiBaseUrl}/user/credits/daily`;
-    return this.http.post(url, {});
+    return this.http.post<DailyBonusResponse>(url, {});
   }
 
   getCreditCosts(): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/costs`;
-    return this.http.get(url);
+    return this.http.get<CurrentUserResponse>(url);
   }
 
   getModelCreditCost(model: string): Observable<any> {
@@ -67,25 +145,25 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
-  getCurrentUser(): Observable<any> {
+  getCurrentUser(): Observable<CurrentUserResponse> {
     const url = `${this.apiBaseUrl}/user/me`;
-    return this.http.get(url);
+    return this.http.get<CurrentUserResponse>(url);
   }
 
   // PayPal payment endpoints
-  getCreditPackages(): Observable<any> {
+  getCreditPackages(): Observable<CreditPackagesResponse> {
     const url = `${this.apiBaseUrl}/credit-packages`;
-    return this.http.get(url);
+    return this.http.get<CreditPackagesResponse>(url);
   }
 
-  createPayPalOrder(packageId: string): Observable<any> {
+  createPayPalOrder(packageId: string): Observable<PayPalOrderResponse> {
     const url = `${this.apiBaseUrl}/paypal/create-order`;
-    return this.http.post(url, { package_id: packageId });
+    return this.http.post<PayPalOrderResponse>(url, { package_id: packageId });
   }
 
-  capturePayPalOrder(orderId: string): Observable<any> {
+  capturePayPalOrder(orderId: string): Observable<PayPalCaptureResponse> {
     const url = `${this.apiBaseUrl}/paypal/capture-order`;
-    return this.http.post(url, { order_id: orderId });
+    return this.http.post<PayPalCaptureResponse>(url, { order_id: orderId });
   }
 
   //#region Lora API calls

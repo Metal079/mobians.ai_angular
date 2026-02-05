@@ -127,7 +127,7 @@ export class BlobMigrationService {
     const byteArray = this.base64ToUint8Array(cleanedBase64);
 
     // Create and return the Blob
-    return new Blob([byteArray], { type: contentType });
+    return new Blob([byteArray.buffer as ArrayBuffer], { type: contentType });
   }
 
   private base64ToUint8Array(base64: string): Uint8Array {

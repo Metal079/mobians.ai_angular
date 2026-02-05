@@ -1,4 +1,6 @@
-import { AfterViewInit, Component, DestroyRef, DoCheck, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, DoCheck, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DialogService } from 'primeng/dynamicdialog';
 import { MessageService } from 'primeng/api';
@@ -9,13 +11,26 @@ import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { AddLorasComponent } from '../../add-loras/add-loras.component';
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
 import { environment } from 'src/environments/environment';
+import { DialogModule } from 'primeng/dialog';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { TooltipModule } from 'primeng/tooltip';
 
 type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
 
 @Component({
-  selector: 'app-loras-panel',
-  templateUrl: './loras-panel.component.html',
-  styleUrls: ['./loras-panel.component.css'],
+    selector: 'app-loras-panel',
+    templateUrl: './loras-panel.component.html',
+    styleUrls: ['./loras-panel.component.css'],
+    standalone: true,
+    imports: [
+      CommonModule,
+      FormsModule,
+      TooltipModule,
+      ToggleSwitchModule,
+      MultiSelectModule,
+      DialogModule
+    ]
 })
 export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterViewInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
@@ -29,6 +44,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
 
   @ViewChild('loadMoreTrigger') loadMoreTrigger?: ElementRef<HTMLDivElement>;
   @ViewChild('lorasGrid') lorasGrid?: ElementRef<HTMLDivElement>;
+  @ViewChild('lorasDropdown') lorasDropdown?: ElementRef<HTMLDivElement>;
 
   showNSFWLoras = false;
   loraTagOptions: { optionLabel: string; optionValue: string; count: number }[] = [];
@@ -203,6 +219,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
         showNSFWLoras: this.showNSFWLoras,
       },
     });
+    if (!dialogRef) return;
 
     dialogRef.onClose.subscribe((result: any) => {
       const next = result?.showNSFWLoras;
@@ -270,8 +287,11 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
 
   private updateDisplayedLoras() {
     this.displayedLoras = this.filteredLoras.slice(0, this.loraDisplayCount);
-    // Reconnect observer for seamless loading
-    setTimeout(() => this.setupLoadMoreObserver(), 0);
+    // Reconnect observer after Angular updates the DOM
+    // Use double RAF to ensure rendering is complete before observing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.setupLoadMoreObserver());
+    });
   }
 
   showMoreLoras() {
@@ -280,6 +300,29 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.loraDisplayCount += this.loraPageSize;
     this.updateDisplayedLoras();
     this.isLoadingMoreLoras = false;
+  }
+
+  onLorasScroll(event: Event) {
+    if (!this.hasMoreLoras || this.isLoadingMoreLoras) return;
+    const target = event?.target as HTMLElement | null;
+    if (!target) return;
+    const threshold = 200;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - threshold) {
+      this.showMoreLoras();
+    }
+  }
+
+  @HostListener('window:scroll')
+  @HostListener('window:resize')
+  onWindowScroll() {
+    if (!this.hasMoreLoras || this.isLoadingMoreLoras) return;
+    const trigger = this.loadMoreTrigger?.nativeElement;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const threshold = 200;
+    if (rect.top - window.innerHeight <= threshold) {
+      this.showMoreLoras();
+    }
   }
 
   private setupLoadMoreObserver() {
@@ -291,8 +334,16 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     }
     if (this.loraLoadMoreObserver) {
       this.loraLoadMoreObserver.disconnect();
+      this.loraLoadMoreObserver = undefined;
     }
     if (!this.hasMoreLoras || !this.loadMoreTrigger?.nativeElement) return;
+
+    // Prefer dropdown as root since it has max-height constraint
+    const dropdownElement = this.lorasDropdown?.nativeElement ?? null;
+    const gridElement = this.lorasGrid?.nativeElement ?? null;
+    const rootElement = [dropdownElement, gridElement].find(
+      (element) => element && element.scrollHeight > element.clientHeight
+    ) ?? null;
 
     this.loraLoadMoreObserver = new IntersectionObserver(
       (entries) => {
@@ -301,9 +352,9 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
         }
       },
       {
-        root: this.lorasGrid?.nativeElement ?? null,
+        root: rootElement,
         rootMargin: '200px',
-        threshold: 0.1,
+        threshold: 0.01,
       }
     );
     this.loraLoadMoreObserver.observe(this.loadMoreTrigger.nativeElement);

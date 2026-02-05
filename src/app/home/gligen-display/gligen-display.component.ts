@@ -3,9 +3,10 @@ import { GligenService } from 'src/app/gligen.service';
 import { SharedService } from 'src/app/shared.service';
 
 @Component({
-  selector: 'app-gligen-display',
-  templateUrl: './gligen-display.component.html',
-  styleUrls: ['./gligen-display.component.css']
+    selector: 'app-gligen-display',
+    templateUrl: './gligen-display.component.html',
+    styleUrls: ['./gligen-display.component.css'],
+    standalone: true
 })
 export class GligenDisplayComponent {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;

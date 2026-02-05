@@ -3,8 +3,8 @@
 <!-- Queue Type Selector -->
 <div class="queue-selector-container d-flex align-items-center justify-content-center mb-2 flex-wrap gap-2">
   <div class="queue-toggle btn-group" role="group" aria-label="Queue type selection">
-    <button 
-      type="button" 
+    <button
+      type="button"
       class="btn queue-btn"
       [class.btn-outline-secondary]="queueType !== 'free'"
       [class.btn-secondary]="queueType === 'free'"
@@ -13,8 +13,8 @@
       <i class="pi pi-clock me-1"></i>
       Free Queue
     </button>
-    <button 
-      type="button" 
+    <button
+      type="button"
       class="btn queue-btn"
       [class.btn-outline-warning]="queueType !== 'priority'"
       [class.btn-warning]="queueType === 'priority'"
@@ -26,22 +26,26 @@
       <span class="badge bg-dark ms-1">{{hiresEligible ? hiresCreditCost : creditCost}} ⚡</span>
     </button>
   </div>
-  
+
   <!-- Credits display for logged in users -->
-  <div *ngIf="isLoggedIn" class="credits-badge d-flex align-items-center">
-    <span class="badge bg-primary">
-      <i class="pi pi-wallet me-1"></i>
-      {{userCredits}} credits
-    </span>
-  </div>
-  
+  @if (isLoggedIn) {
+    <div class="credits-badge d-flex align-items-center">
+      <span class="badge bg-primary">
+        <i class="pi pi-wallet me-1"></i>
+        {{userCredits}} credits
+      </span>
+    </div>
+  }
+
   <!-- Login prompt for non-logged in users -->
-  <div *ngIf="!isLoggedIn" class="login-prompt">
-    <small class="text-muted">
-      <i class="pi pi-info-circle me-1"></i>
-      Sign in for priority queue & free credits!
-    </small>
-  </div>
+  @if (!isLoggedIn) {
+    <div class="login-prompt">
+      <small class="text-muted">
+        <i class="pi pi-info-circle me-1"></i>
+        Sign in for priority queue & free credits!
+      </small>
+    </div>
+  }
 </div>
 
 <!-- Prompt input box and advanced options button -->
@@ -49,65 +53,68 @@
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1">
     <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
       (ngModelChange)="updateSharedPrompt(); saveSettings()" class="form-control resizable-textarea" placeholder="Enter Prompt"
-      aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
+    aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
 
-    <ng-container *ngIf="!hasPendingJob; else cancelTpl">
+    @if (!hasPendingJob) {
       <button
         [class]="referenceImage ? 'btn btn-success d-flex align-items-center' : 'btn btn-primary d-flex align-items-center'"
         type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!enableGenerationButton">
         {{ referenceImage ? 'Generate w/Ref' : 'Generate!' }}
       </button>
-    </ng-container>
-
-    <ng-template #cancelTpl>
+    } @else {
       <!-- Updated to solid red to match style, same sizing/layout classes -->
       <button class="btn btn-danger d-flex align-items-center" type="button" id="generate-button"
         (click)="cancelPendingJob()" [disabled]="cancelInProgress">
         {{ cancelInProgress ? 'Cancelling...' : 'Cancel' }}
       </button>
-    </ng-template>
+    }
+
   </div>
 
   <!-- buttons that show with reference images expanded -->
-  <div *ngIf="referenceImage" class="inpaint-button">
-    <!-- inpaint switch -->
-    <p-button label="Inpainting" (click)="openImageModal()"></p-button>
-    <span class="ms-1 text-primary"
-      pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
+  @if (referenceImage) {
+    <div class="inpaint-button">
+      <!-- inpaint switch -->
+      <p-button label="Inpainting" (click)="openImageModal()"></p-button>
+      <span class="ms-1 text-primary"
+        pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
       tooltipPosition="top" style="
     background-color: rgba(255, 255, 255, 0.8);
     padding: 2px 4px;
     border-radius: 50%;
     cursor: pointer;
     ">
-      ?
-    </span>
-
-    <!-- Upscale button -->
-    <span class="d-inline-flex align-items-center"
-      *ngIf="this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix'">
-      <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob('upscale')"></p-button>
-      <span class="badge ms-1"
-        [ngClass]="!isLoggedIn ? 'bg-secondary' : (userCredits < upscaleCreditCost ? 'bg-danger' : 'bg-dark')">
-        {{upscaleCreditCost}} ⚡
+        ?
       </span>
-      <span class="ms-1 text-primary"
-        [pTooltip]="getUpscaleTooltip()"
+      <!-- Upscale button -->
+      @if (this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix') {
+        <span class="d-inline-flex align-items-center"
+          >
+          <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob('upscale')"></p-button>
+          <span class="badge ms-1"
+            [ngClass]="!isLoggedIn ? 'bg-secondary' : (userCredits < upscaleCreditCost ? 'bg-danger' : 'bg-dark')">
+            {{upscaleCreditCost}} ⚡
+          </span>
+          <span class="ms-1 text-primary"
+            [pTooltip]="getUpscaleTooltip()"
         tooltipPosition="top" style="
         background-color: rgba(255, 255, 255, 0.8);
         padding: 2px 4px;
         border-radius: 50%;
         cursor: pointer;
         ">
-        ?
-      </span>
-    </span>
-  </div>
+            ?
+          </span>
+        </span>
+      }
+    </div>
+  }
 
   <!-- Denoise strength -->
-  <div *ngIf="referenceImage" id="denoise-strength">
-    <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
-        }}</span>
+  @if (referenceImage) {
+    <div id="denoise-strength">
+      <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
+      }}</span>
       <span class="ms-1 text-primary"
         pTooltip="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
         tooltipPosition="top" style="
@@ -121,14 +128,17 @@
     </label>
     <input type="range" class="form-range" min="0.2" max="1" value="0.8" step="0.05" id="custom-denoise"
       [(ngModel)]="generationRequest.strength" (ngModelChange)="saveSettings()" />
-  </div>
+    </div>
+  }
 
   <!-- Remove reference image button -->
-  <span *ngIf="referenceImage" id="remove-reference-image-button" style="margin-left: 20px;">
-    <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
-      Remove Reference Image
-    </button>
-  </span>
+  @if (referenceImage) {
+    <span id="remove-reference-image-button" style="margin-left: 20px;">
+      <button class="btn btn-danger" type="button" (click)="removeReferenceImage()">
+        Remove Reference Image
+      </button>
+    </span>
+  }
 
   <!-- Buttons for Loras, Options, and Image History -->
   <div class="button-group d-flex align-items-center mt-2 mt-md-0">

@@ -232,14 +232,17 @@
 
 .pagination {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 20px;
 }
 
 .pagination .btn {
-  width: 30%;
-  padding: 10px 0;
+  width: auto;
+  min-width: 120px;
+  padding: 10px 16px;
 }
 
 .page-edit-container {

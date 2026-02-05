@@ -1,15 +1,22 @@
 import { Component, ViewChild, ElementRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { GligenService } from 'src/app/gligen.service';
 import { SharedService } from 'src/app/shared.service';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { HostListener } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { ColorPickerModule } from 'primeng/colorpicker';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
 @Component({
-  selector: 'app-image-modal',
-  templateUrl: './image-modal.component.html',
-  styleUrls: ['./image-modal.component.css']
+    selector: 'app-image-modal',
+    templateUrl: './image-modal.component.html',
+    styleUrls: ['./image-modal.component.css'],
+    standalone: true,
+    imports: [CommonModule, FormsModule, ButtonModule, ColorPickerModule, ToggleSwitchModule]
 })
 export class ImageModalComponent {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;

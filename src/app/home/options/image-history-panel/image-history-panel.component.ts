@@ -1,4 +1,6 @@
-import { Component, DestroyRef, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, Input, NgZone, OnDestroy, OnInit, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
@@ -9,11 +11,16 @@ import { ImageSyncService, SyncStatus } from 'src/app/image-sync.service';
 import { SharedService } from 'src/app/shared.service';
 import { ImageTag, MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { TabsModule } from 'primeng/tabs';
 
 @Component({
-  selector: 'app-image-history-panel',
-  templateUrl: './image-history-panel.component.html',
-  styleUrls: ['./image-history-panel.component.css'],
+    selector: 'app-image-history-panel',
+    templateUrl: './image-history-panel.component.html',
+    styleUrls: ['./image-history-panel.component.css'],
+    standalone: true,
+    imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
@@ -24,6 +31,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private storeName = 'ImageStore';
   private blobStoreName = 'blobStore';
   private db: IDBDatabase | null = null;
+  private readonly imageUrlCache = new Map<string, string>();
+  private readonly imageLoadRetries = new Map<string, number>();
+  private readonly imageLoadInFlight = new Map<string, Promise<void>>();
+  historyTab = 0;
 
   currentPageImages: MobiansImage[] = [];
   nextPageImages: MobiansImage[] = [];
@@ -116,7 +127,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     private readonly sharedService: SharedService,
     private readonly authService: AuthService,
     private readonly imageSyncService: ImageSyncService,
-    private readonly loraHistoryPromptService: LoraHistoryPromptService
+    private readonly loraHistoryPromptService: LoraHistoryPromptService,
+    private readonly ngZone: NgZone
   ) {
     this.debouncedSearch = this.debounce(() => {
       this.searchImages();
@@ -156,6 +168,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       clearInterval(this.cloudSyncInterval);
     }
     this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.imageUrlCache.clear();
+    this.imageLoadInFlight.clear();
     this.prevPageImages = [];
     this.currentPageImages = [];
     this.nextPageImages = [];
@@ -166,7 +180,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     await this.migrateBase64ToBlobStore();
     await this.loadTags();
     await this.searchImages();
-    this.currentPageImages = await this.paginateImages(1);
+    const firstPageImages = await this.paginateImages(1);
+    this.runInAngularZone(() => {
+      this.currentPageImages = firstPageImages;
+    });
     await this.updateTagCounts();
 
     if (this.authService.isLoggedIn()) {
@@ -205,7 +222,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.imageHistoryMetadata.unshift(...storedImages.map((image: MobiansImage) => {
+    const newMetadata = storedImages.map((image: MobiansImage) => {
       return {
         UUID: image.UUID,
         prompt: image.prompt!,
@@ -224,7 +241,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         syncPriority: 0,
         lastModified: image.lastModified
       } as MobiansImageMetadata;
-    }));
+    });
+    this.runInAngularZone(() => {
+      this.imageHistoryMetadata.unshift(...newMetadata);
+    });
 
     if (failedImages.length > 0) {
       this.messageService.add({
@@ -235,12 +255,17 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
     }
 
-    this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
-    if (this.currentPageNumber > this.totalPages) {
-      this.currentPageNumber = this.totalPages;
-    }
-    this.editPageNumber = this.currentPageNumber;
-    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+    this.runInAngularZone(() => {
+      this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
+      if (this.currentPageNumber > this.totalPages) {
+        this.currentPageNumber = this.totalPages;
+      }
+      this.editPageNumber = this.currentPageNumber;
+    });
+    const nextImages = await this.paginateImages(this.currentPageNumber);
+    this.runInAngularZone(() => {
+      this.currentPageImages = nextImages;
+    });
     await this.updateFavoriteImages();
   }
 
@@ -296,21 +321,27 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const blobStore = transaction.objectStore('blobStore');
       store.clear();
       blobStore.clear();
-      this.currentPageImages = [];
-      this.favoritePageImages = [];
-      this.imageHistoryMetadata = [];
-      this.favoriteImageHistoryMetadata = [];
-      this.selectedImages.clear();
-      this.currentPageNumber = 1;
-      this.totalPages = 1;
-      this.favoriteCurrentPageNumber = 1;
-      this.favoriteTotalPages = 1;
-      this.availableTags = [];
-      this.selectedTagFilter = null;
-      this.showTagManager = false;
-      this.showTagAssignDialog = false;
-      this.tagAssignImageUUIDs = [];
-      this.newTagName = '';
+      for (const url of [...this.blobUrls]) {
+        this.safeRevoke(url);
+      }
+      this.imageUrlCache.clear();
+      this.runInAngularZone(() => {
+        this.currentPageImages = [];
+        this.favoritePageImages = [];
+        this.imageHistoryMetadata = [];
+        this.favoriteImageHistoryMetadata = [];
+        this.selectedImages.clear();
+        this.currentPageNumber = 1;
+        this.totalPages = 1;
+        this.favoriteCurrentPageNumber = 1;
+        this.favoriteTotalPages = 1;
+        this.availableTags = [];
+        this.selectedTagFilter = null;
+        this.showTagManager = false;
+        this.showTagAssignDialog = false;
+        this.tagAssignImageUUIDs = [];
+        this.newTagName = '';
+      });
       this.messageService.add({
         severity: 'success',
         summary: 'Images Deleted',
@@ -344,6 +375,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const newUrl = URL.createObjectURL(blob);
     image.url = newUrl;
     this.blobUrls.push(newUrl);
+    if (image.UUID) {
+      this.imageUrlCache.set(image.UUID, newUrl);
+    }
 
     image.blob = blob;
     this.sharedService.setReferenceImage(image);
@@ -399,6 +433,24 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
     } catch (error) {
       console.error('Failed to load image blob from IndexedDB', error);
+      return undefined;
+    }
+  }
+
+  private async getBase64FromImageStore(uuid: string): Promise<string | undefined> {
+    try {
+      const db = await this.getDatabase();
+      return await new Promise<string | undefined>((resolve) => {
+        const transaction = db.transaction(this.storeName, 'readonly');
+        const store = transaction.objectStore(this.storeName);
+        const request = store.get(uuid);
+        request.onsuccess = () => {
+          const base64 = request.result?.base64;
+          resolve(typeof base64 === 'string' && base64.length > 0 ? base64 : undefined);
+        };
+        request.onerror = () => resolve(undefined);
+      });
+    } catch {
       return undefined;
     }
   }
@@ -504,6 +556,33 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     return image.UUID || image.url || null;
   }
 
+  imageTrackKey(image: MobiansImage, index: number): string {
+    const uuid = image?.UUID ? String(image.UUID) : 'missing';
+    return `${uuid}:${index}`;
+  }
+
+  onImageElementLoad(image: MobiansImage) {
+    if (!image?.UUID) return;
+    this.imageLoadRetries.delete(image.UUID);
+  }
+
+  onImageElementError(image: MobiansImage) {
+    if (!image?.UUID) return;
+
+    const retries = this.imageLoadRetries.get(image.UUID) ?? 0;
+    if (retries >= 4) return;
+    this.imageLoadRetries.set(image.UUID, retries + 1);
+
+    this.imageUrlCache.delete(image.UUID);
+    this.safeRevoke(image.url);
+    this.runInAngularZone(() => {
+      image.url = undefined;
+      image.blob = undefined;
+    });
+
+    void this.hydrateImageUrls([image]);
+  }
+
   private updateGridColumns(pageSize: number) {
     if (pageSize <= 4) {
       this.gridColumns = 2;
@@ -535,16 +614,22 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
     if (size === this.imagesPerPage && size === this.favoriteImagesPerPage) return;
 
-    this.imagesPerPage = size;
-    this.favoriteImagesPerPage = size;
-    this.updateGridColumns(size);
+    this.runInAngularZone(() => {
+      this.imagesPerPage = size;
+      this.favoriteImagesPerPage = size;
+      this.updateGridColumns(size);
 
-    this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
-    if (this.currentPageNumber > this.totalPages) {
-      this.currentPageNumber = this.totalPages;
-    }
-    this.editPageNumber = this.currentPageNumber;
-    this.currentPageImages = await this.paginateImages(this.currentPageNumber);
+      this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
+      if (this.currentPageNumber > this.totalPages) {
+        this.currentPageNumber = this.totalPages;
+      }
+      this.editPageNumber = this.currentPageNumber;
+    });
+
+    const nextImages = await this.paginateImages(this.currentPageNumber);
+    this.runInAngularZone(() => {
+      this.currentPageImages = nextImages;
+    });
     await this.updateFavoriteImages();
   }
 
@@ -691,13 +776,17 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       await this.imageSyncService.unsyncImage(image.UUID);
     }
 
-    this.currentPageImages = this.currentPageImages.filter(img => img.UUID !== image.UUID);
-    this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => img.UUID !== image.UUID);
-
-    this.totalPages = Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage);
-    if (this.currentPageNumber > this.totalPages && this.totalPages > 0) {
-      this.currentPageNumber = this.totalPages;
-    }
+    this.safeRevoke(image.url);
+    this.imageUrlCache.delete(image.UUID);
+    this.runInAngularZone(() => {
+      this.currentPageImages = this.currentPageImages.filter(img => img.UUID !== image.UUID);
+      this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => img.UUID !== image.UUID);
+      this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
+      if (this.currentPageNumber > this.totalPages) {
+        this.currentPageNumber = this.totalPages;
+      }
+      this.editPageNumber = this.currentPageNumber;
+    });
 
     try {
       const db = await this.getDatabase();
@@ -711,7 +800,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       console.error('Failed to delete image from IndexedDB', error);
     }
 
-    this.updateFavoriteImages();
+    await this.updateFavoriteImages();
   }
 
   async updateImageInDB(image: MobiansImage) {
@@ -1246,41 +1335,89 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async loadImageData(image: MobiansImage) {
+    if (!image?.UUID) return;
+    const uuid = image.UUID;
+
+    const inFlight = this.imageLoadInFlight.get(uuid);
+    if (inFlight) {
+      await inFlight;
+      const cachedUrl = this.imageUrlCache.get(uuid);
+      if (cachedUrl) {
+        this.runInAngularZone(() => {
+          image.url = cachedUrl;
+        });
+      }
+      if (!image.blob) {
+        const cachedBlob = await this.getBlobFromStore(uuid);
+        if (cachedBlob) {
+          this.runInAngularZone(() => {
+            image.blob = cachedBlob;
+          });
+        }
+      }
+      return;
+    }
+
+    const loadTask = this.loadImageDataInternal(image, uuid);
+    this.imageLoadInFlight.set(uuid, loadTask);
     try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction([this.storeName, 'blobStore'], 'readonly');
-      const store = transaction.objectStore(this.storeName);
-      const blobStore = transaction.objectStore('blobStore');
+      await loadTask;
+    } finally {
+      if (this.imageLoadInFlight.get(uuid) === loadTask) {
+        this.imageLoadInFlight.delete(uuid);
+      }
+    }
+  }
 
-      const request = store.get(image.UUID);
-      request.onsuccess = async () => {
-        const result = request.result as MobiansImage;
-        if (result) {
-          const blobRequest = blobStore.get(image.UUID);
-          blobRequest.onsuccess = () => {
-            const blobResult = blobRequest.result;
-            if (blobResult && blobResult.blob) {
-              image.blob = blobResult.blob;
-            }
-          };
+  private async loadImageDataInternal(image: MobiansImage, uuid: string): Promise<void> {
+    try {
+      const cachedUrl = this.imageUrlCache.get(uuid);
+      if (cachedUrl) {
+        this.runInAngularZone(() => {
+          image.url = cachedUrl;
+        });
+        if (!image.blob) {
+          const cachedBlob = await this.getBlobFromStore(uuid);
+          if (cachedBlob) {
+            this.runInAngularZone(() => {
+              image.blob = cachedBlob;
+            });
+          }
         }
-      };
+        return;
+      }
 
-      const blobRequest = blobStore.get(image.UUID);
-      blobRequest.onsuccess = () => {
-        const result = blobRequest.result;
-        if (result) {
-          const blob = result.blob;
-          image.url = URL.createObjectURL(blob);
-          this.blobUrls.push(image.url);
+      if (image.url?.startsWith('blob:')) {
+        this.imageUrlCache.set(uuid, image.url);
+        if (!image.blob) {
+          const cachedBlob = await this.getBlobFromStore(uuid);
+          if (cachedBlob) {
+            this.runInAngularZone(() => {
+              image.blob = cachedBlob;
+            });
+          }
         }
-      };
+        return;
+      }
 
-      await new Promise((resolve) => {
-        transaction.oncomplete = () => {
-          resolve(undefined);
-        };
+      let blob = image.blob ?? await this.getBlobFromStore(uuid);
+      if (!blob) {
+        blob = await this.getBlobFromLegacyBase64(image);
+      }
+      if (!blob) return;
+
+      const previousUrl = image.url;
+      const objectUrl = URL.createObjectURL(blob);
+      this.runInAngularZone(() => {
+        image.blob = blob;
+        image.url = objectUrl;
+        this.blobUrls.push(objectUrl);
+        this.imageUrlCache.set(uuid, objectUrl);
       });
+
+      if (previousUrl?.startsWith('blob:') && previousUrl !== objectUrl) {
+        this.safeRevoke(previousUrl);
+      }
     } catch (error) {
       console.error('Failed to load image data', error);
     }
@@ -1292,6 +1429,46 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
     try { URL.revokeObjectURL(url); } catch {}
     this.blobUrls = this.blobUrls.filter((tracked) => tracked !== url);
+    for (const [uuid, cachedUrl] of this.imageUrlCache.entries()) {
+      if (cachedUrl === url) {
+        this.imageUrlCache.delete(uuid);
+      }
+    }
+  }
+
+  private async getBlobFromLegacyBase64(image: MobiansImage): Promise<Blob | undefined> {
+    try {
+      const inlineBase64 = (image as MobiansImage & { base64?: string }).base64;
+      const base64 = inlineBase64 || (image.UUID ? await this.getBase64FromImageStore(image.UUID) : undefined);
+      if (!base64 || !image.UUID) return undefined;
+
+      let blob = this.blobMigrationService.base64ToBlob(base64);
+      if (blob.type === 'image/png') {
+        blob = await this.blobMigrationService.convertToWebP(blob);
+      }
+
+      const db = await this.getDatabase();
+      await new Promise<void>((resolve) => {
+        const tx = db.transaction(this.blobStoreName, 'readwrite');
+        const store = tx.objectStore(this.blobStoreName);
+        store.put({ UUID: image.UUID, blob });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      });
+
+      return blob;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private runInAngularZone(action: () => void): void {
+    if (NgZone.isInAngularZone()) {
+      action();
+      return;
+    }
+    this.ngZone.run(action);
   }
 
   debounce(func: Function, wait: number): (...args: any[]) => void {
@@ -1344,7 +1521,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         return bTime - aTime;
       });
 
-      this.imageHistoryMetadata = results.map((image: MobiansImage) => {
+      const nextMetadata = results.map((image: MobiansImage) => {
         return {
           UUID: image.UUID,
           prompt: image.prompt,
@@ -1365,18 +1542,27 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         } as MobiansImageMetadata;
       });
 
-      this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
-      if (preservePage && previousPage <= this.totalPages) {
-        this.currentPageNumber = previousPage;
-      } else {
-        this.currentPageNumber = 1;
-      }
-      this.currentPageImages = await this.paginateImages(this.currentPageNumber);
-      this.updateFavoriteImages();
+      this.runInAngularZone(() => {
+        this.imageHistoryMetadata = nextMetadata;
+        this.totalPages = Math.max(1, Math.ceil(nextMetadata.length / this.imagesPerPage));
+        if (preservePage && previousPage <= this.totalPages) {
+          this.currentPageNumber = previousPage;
+        } else {
+          this.currentPageNumber = 1;
+        }
+      });
+
+      const nextImages = await this.paginateImages(this.currentPageNumber);
+      this.runInAngularZone(() => {
+        this.currentPageImages = nextImages;
+      });
+      await this.updateFavoriteImages();
     } catch (error) {
       console.error('Error searching images:', error);
     } finally {
-      this.isSearching = false;
+      this.runInAngularZone(() => {
+        this.isSearching = false;
+      });
     }
   }
 
@@ -1389,9 +1575,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const endIndex = pageNumber * this.imagesPerPage;
 
     const pageImages = this.imageHistoryMetadata.slice(startIndex, endIndex);
-    for (const image of pageImages) {
-      await this.loadImageData(image);
-    }
+    await this.hydrateImageUrls(pageImages);
     return pageImages;
   }
 
@@ -1400,9 +1584,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const endIndex = pageNumber * this.favoriteImagesPerPage;
 
     const pageImages = images.slice(startIndex, endIndex);
-    for (const image of pageImages) {
-      await this.loadImageData(image);
-    }
+    await this.hydrateImageUrls(pageImages);
     return pageImages;
   }
 
@@ -1411,29 +1593,67 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     return Array.from({ length: safeCount }, (_, i) => i);
   }
 
+  private async hydrateImageUrls(images: MobiansImage[]): Promise<void> {
+    if (!images.length) {
+      return;
+    }
+
+    await Promise.all(images.map((image) => this.loadImageData(image)));
+    let unresolved = images.filter((image) => image?.UUID && !image.url);
+    if (!unresolved.length) {
+      return;
+    }
+
+    await this.wait(30);
+    await Promise.all(unresolved.map((image) => this.loadImageData(image)));
+    unresolved = unresolved.filter((image) => !image.url);
+    if (!unresolved.length) {
+      return;
+    }
+
+    await this.wait(80);
+    await Promise.all(unresolved.map((image) => this.loadImageData(image)));
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async loadImagePage(pageNumber: number) {
     if (pageNumber < 1 || pageNumber > this.totalPages) return;
     const token = ++this.pageLoadToken;
-    this.isLoadingAll = true;
-    this.currentPageNumber = pageNumber;
-    this.editPageNumber = this.currentPageNumber;
+    this.runInAngularZone(() => {
+      this.isLoadingAll = true;
+      this.currentPageNumber = pageNumber;
+      this.editPageNumber = this.currentPageNumber;
+    });
+
     const nextImages = await this.paginateImages(pageNumber);
     if (token !== this.pageLoadToken) return;
-    this.currentPageImages = nextImages;
-    this.isLoadingAll = false;
+
+    this.runInAngularZone(() => {
+      this.currentPageImages = nextImages;
+      this.isLoadingAll = false;
+    });
   }
 
   async loadFavoriteImagePage(pageNumber: number) {
     if (pageNumber < 1 || pageNumber > this.favoriteTotalPages) return;
     const token = ++this.favoritePageLoadToken;
-    this.isLoadingFavorites = true;
-    this.favoriteCurrentPageNumber = pageNumber;
-    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    this.runInAngularZone(() => {
+      this.isLoadingFavorites = true;
+      this.favoriteCurrentPageNumber = pageNumber;
+      this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    });
+
     const favorites = this.favoriteImageHistoryMetadata;
     const nextImages = await this.paginateFavoriteImages(favorites, pageNumber);
     if (token !== this.favoritePageLoadToken) return;
-    this.favoritePageImages = nextImages;
-    this.isLoadingFavorites = false;
+
+    this.runInAngularZone(() => {
+      this.favoritePageImages = nextImages;
+      this.isLoadingFavorites = false;
+    });
   }
 
   async previousPage() {
@@ -1506,14 +1726,20 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       );
     }
 
-    this.favoriteImageHistoryMetadata = filteredFavorites;
-    this.favoriteTotalPages = Math.max(1, Math.ceil(filteredFavorites.length / this.favoriteImagesPerPage));
-    if (!preservePage) {
-      this.favoriteCurrentPageNumber = 1;
-    }
-    this.favoriteCurrentPageNumber = Math.min(this.favoriteCurrentPageNumber, this.favoriteTotalPages);
-    this.favoritePageImages = await this.paginateFavoriteImages(filteredFavorites, this.favoriteCurrentPageNumber);
-    this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    this.runInAngularZone(() => {
+      this.favoriteImageHistoryMetadata = filteredFavorites;
+      this.favoriteTotalPages = Math.max(1, Math.ceil(filteredFavorites.length / this.favoriteImagesPerPage));
+      if (!preservePage) {
+        this.favoriteCurrentPageNumber = 1;
+      }
+      this.favoriteCurrentPageNumber = Math.min(this.favoriteCurrentPageNumber, this.favoriteTotalPages);
+      this.editFavoritePageNumber = this.favoriteCurrentPageNumber;
+    });
+
+    const nextFavoriteImages = await this.paginateFavoriteImages(filteredFavorites, this.favoriteCurrentPageNumber);
+    this.runInAngularZone(() => {
+      this.favoritePageImages = nextFavoriteImages;
+    });
   }
 
   async loadTags() {
@@ -1526,7 +1752,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         request.onsuccess = () => resolve(request.result || []);
         request.onerror = () => reject(request.error);
       });
-      this.availableTags = tags.map(tag => this.normalizeTag(tag));
+      this.runInAngularZone(() => {
+        this.availableTags = tags.map(tag => this.normalizeTag(tag));
+      });
     } catch (error) {
       console.error('Failed to load tags:', error);
     }
@@ -2055,8 +2283,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       if (imagesAdded > 0 || imagesUpdated > 0) {
         await this.searchImages();
-        this.currentPageImages = await this.paginateImages(this.currentPageNumber);
-        this.updateFavoriteImages();
+        const nextImages = await this.paginateImages(this.currentPageNumber);
+        this.runInAngularZone(() => {
+          this.currentPageImages = nextImages;
+        });
+        await this.updateFavoriteImages();
         await this.updateTagCounts();
       }
 

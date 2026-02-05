@@ -1,6 +1,4 @@
-import { CommonModule } from '@angular/common';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { SwPush } from '@angular/service-worker';
@@ -50,10 +48,9 @@ describe('OptionsComponent', () => {
   let component: OptionsComponent;
   let fixture: ComponentFixture<OptionsComponent>;
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      imports: [CommonModule, FormsModule],
-      declarations: [OptionsComponent],
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [OptionsComponent],
       providers: [
         { provide: StableDiffusionService, useClass: StableDiffusionServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
@@ -66,7 +63,10 @@ describe('OptionsComponent', () => {
         { provide: AuthService, useClass: AuthServiceStub },
       ],
       schemas: [NO_ERRORS_SCHEMA],
-    });
+    })
+      .overrideComponent(OptionsComponent, { set: { template: '' } })
+      .compileComponents();
+
     fixture = TestBed.createComponent(OptionsComponent);
     component = fixture.componentInstance;
   });

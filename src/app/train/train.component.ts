@@ -1,5 +1,9 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { CardModule } from 'primeng/card';
+import { TableModule } from 'primeng/table';
+import { ButtonModule } from 'primeng/button';
 
 interface LoraTraining {
     name: string;
@@ -11,7 +15,9 @@ interface LoraTraining {
 @Component({
     selector: 'app-train',
     templateUrl: './train.component.html',
-    styleUrls: ['./train.component.css']
+    styleUrls: ['./train.component.css'],
+    standalone: true,
+    imports: [CommonModule, CardModule, TableModule, ButtonModule]
 })
 export class TrainComponent {
     trainingHistory: LoraTraining[] = [

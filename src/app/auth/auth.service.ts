@@ -1,9 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, firstValueFrom } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SharedService } from '../shared.service';
-import { StableDiffusionService } from '../stable-diffusion.service';
+import {
+  DailyBonusResponse,
+  StableDiffusionService,
+  UserCreditsResponse
+} from '../stable-diffusion.service';
 import { sessionInvalid$ } from './auth.interceptor';
 
 export type AuthProvider = 'discord' | 'google';
@@ -65,7 +69,7 @@ export class AuthService {
     }
     
     try {
-      const response = await this.api.getCurrentUser().toPromise();
+      const response = await firstValueFrom(this.api.getCurrentUser());
       if (response?.status === 'success' && response?.user) {
         // Token is valid - optionally update local user data with fresh info
         const userData = this.shared.getUserDataValue();
@@ -172,7 +176,7 @@ export class AuthService {
     if (!this.isLoggedIn()) return null;
     
     try {
-      const response = await this.api.getUserCredits().toPromise();
+      const response: UserCreditsResponse = await firstValueFrom(this.api.getUserCredits());
       if (response?.status === 'success') {
         const creditsData: UserCredits = {
           credits: response.credits,
@@ -208,7 +212,7 @@ export class AuthService {
     }
     
     try {
-      const response = await this.api.claimDailyBonus().toPromise();
+      const response: DailyBonusResponse = await firstValueFrom(this.api.claimDailyBonus());
       if (response?.status === 'success') {
         // Update credits
         this._credits$.next({

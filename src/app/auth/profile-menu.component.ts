@@ -1,13 +1,19 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SharedService } from '../shared.service';
 import { AuthService, UserCredits } from './auth.service';
 import { MessageService } from 'primeng/api';
+import { ButtonModule } from 'primeng/button';
+import { CreditsPurchaseComponent } from './credits-purchase.component';
 
 @Component({
-  selector: 'app-profile-menu',
-  templateUrl: './profile-menu.component.html',
-  styleUrls: ['./profile-menu.component.css']
+    selector: 'app-profile-menu',
+    templateUrl: './profile-menu.component.html',
+    styleUrls: ['./profile-menu.component.css'],
+    standalone: true,
+    imports: [CommonModule, RouterLink, ButtonModule, CreditsPurchaseComponent]
 })
 export class ProfileMenuComponent implements OnInit, OnDestroy {
   @Output() loginRequest = new EventEmitter<void>();

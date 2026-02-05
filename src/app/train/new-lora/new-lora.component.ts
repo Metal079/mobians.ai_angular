@@ -1,5 +1,10 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { AccordionModule } from 'primeng/accordion';
+import { ButtonModule } from 'primeng/button';
+import { FileUploadModule } from 'primeng/fileupload';
+import { ImageModule } from 'primeng/image';
 
 interface UploadedImage {
     url: string;
@@ -9,7 +14,9 @@ interface UploadedImage {
 @Component({
     selector: 'app-new-lora',
     templateUrl: './new-lora.component.html',
-    styleUrls: ['./new-lora.component.css']
+    styleUrls: ['./new-lora.component.css'],
+    standalone: true,
+    imports: [CommonModule, FileUploadModule, ButtonModule, AccordionModule, ImageModule]
 })
 export class NewLoraComponent {
     uploadedImages: UploadedImage[] = [];

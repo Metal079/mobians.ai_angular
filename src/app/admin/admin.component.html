@@ -34,15 +34,34 @@
   <p-confirmDialog></p-confirmDialog>
 
   <div class="admin-content">
-    <p-tabView styleClass="admin-tabs">
-      <p-tabPanel>
-        <ng-template pTemplate="header">
+    <p-tabs styleClass="admin-tabs" [value]="adminTab" (valueChange)="adminTab = +($event ?? 0)">
+      <p-tablist>
+        <p-tab [value]="0">
           <div class="tab-header">
             <i class="bi bi-card-list"></i>
             <span>All LoRAs</span>
             <span class="tab-badge">{{ filteredAllLoras.length }}</span>
           </div>
-        </ng-template>
+        </p-tab>
+        <p-tab [value]="1">
+          <div class="tab-header">
+            <i class="bi bi-lightbulb"></i>
+            <span>LoRA Suggestions</span>
+            <span class="tab-badge pending">{{ filteredSuggestions.length }}</span>
+          </div>
+        </p-tab>
+        <p-tab [value]="2">
+          <div class="tab-header">
+            <i class="bi bi-cloud-download"></i>
+            <span>Downloader</span>
+            <span class="tab-badge" [ngClass]="{'success': downloaderStatus?.status === 'idle', 'warning': downloaderStatus?.status === 'downloading', 'danger': downloaderStatus?.status === 'error' || downloaderStatus?.status === 'offline'}">
+              {{ downloaderStatus?.status || 'unknown' }}
+            </span>
+          </div>
+        </p-tab>
+      </p-tablist>
+      <p-tabpanels>
+        <p-tabpanel [value]="0">
         <div class="tab-actions">
           <div class="search-filters">
             <span class="p-input-icon-left search-input">
@@ -68,7 +87,7 @@
           [expandedRowKeys]="expandedRowKeysLoras"
           [rowTrackBy]="trackById.bind(this)"
           styleClass="admin-table"
-        >
+          >
           <ng-template pTemplate="rowexpansion" let-row>
             <tr>
               <td colspan="9">
@@ -80,15 +99,19 @@
                     <div class="detail-grid">
                       <div class="detail-item full-width">
                         <span class="detail-label">Name</span>
-                        <div class="name-edit" *ngIf="!isEditingName(row)">
-                          <span class="detail-value">{{ row.name }}</span>
-                          <p-button icon="bi bi-pencil" styleClass="p-button-text p-button-sm" pTooltip="Rename LoRA" tooltipPosition="top" (onClick)="startEditName(row)"></p-button>
-                        </div>
-                        <div class="name-edit-form" *ngIf="isEditingName(row)">
-                          <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" placeholder="Enter name..." />
-                          <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
-                          <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
-                        </div>
+                        @if (!isEditingName(row)) {
+                          <div class="name-edit">
+                            <span class="detail-value">{{ row.name }}</span>
+                            <p-button icon="bi bi-pencil" styleClass="p-button-text p-button-sm" pTooltip="Rename LoRA" tooltipPosition="top" (onClick)="startEditName(row)"></p-button>
+                          </div>
+                        }
+                        @if (isEditingName(row)) {
+                          <div class="name-edit-form">
+                            <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" placeholder="Enter name..." />
+                            <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
+                            <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
+                          </div>
+                        }
                       </div>
                       <div class="detail-item">
                         <span class="detail-label">Version</span>
@@ -102,29 +125,33 @@
                         <span class="detail-label">Uses</span>
                         <span class="detail-value">{{ row.uses }}</span>
                       </div>
-                      <div class="detail-item" *ngIf="row.version_id">
-                        <span class="detail-label">CivitAI</span>
-                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
-                          <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
-                        </a>
-                      </div>
+                      @if (row.version_id) {
+                        <div class="detail-item">
+                          <span class="detail-label">CivitAI</span>
+                          <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
+                            <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
+                          </a>
+                        </div>
+                      }
                     </div>
                     <div class="image-upload-section">
                       <span class="detail-label">Replace Preview</span>
                       <div class="image-upload-controls">
                         <input type="file" accept="image/*" [disabled]="isLoraImageUploading(row)" (change)="onLoraImageSelected($event, row)" />
-                        <span class="upload-status" *ngIf="isLoraImageUploading(row)">Uploading...</span>
+                        @if (isLoraImageUploading(row)) {
+                          <span class="upload-status">Uploading...</span>
+                        }
                         <small class="upload-hint">PNG/JPG/WebP. Optimized on upload.</small>
                       </div>
                     </div>
                     <div class="toggle-section">
                       <div class="toggle-item">
                         <span class="toggle-label">Active</span>
-                        <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
+                        <p-toggleswitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-toggleswitch>
                       </div>
                       <div class="toggle-item">
                         <span class="toggle-label">NSFW</span>
-                        <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
+                        <p-toggleswitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-toggleswitch>
                       </div>
                     </div>
                     <div class="expansion-actions">
@@ -159,15 +186,19 @@
                 <img class="preview-img clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
               </td>
               <td>
-                <div class="name-cell" *ngIf="!isEditingName(row)">
-                  <span class="lora-name">{{ row.name }}</span>
-                  <button type="button" pButton pRipple class="p-button-text p-button-sm edit-name-btn" icon="bi bi-pencil" pTooltip="Rename" tooltipPosition="top" (click)="startEditName(row)"></button>
-                </div>
-                <div class="name-edit-form" *ngIf="isEditingName(row)">
-                  <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" (keyup.enter)="saveName(row)" (keyup.escape)="cancelEditName(row)" placeholder="Enter name..." />
-                  <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
-                  <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
-                </div>
+                @if (!isEditingName(row)) {
+                  <div class="name-cell">
+                    <span class="lora-name">{{ row.name }}</span>
+                    <button type="button" pButton pRipple class="p-button-text p-button-sm edit-name-btn" icon="bi bi-pencil" pTooltip="Rename" tooltipPosition="top" (click)="startEditName(row)"></button>
+                  </div>
+                }
+                @if (isEditingName(row)) {
+                  <div class="name-edit-form">
+                    <input type="text" pInputText [ngModel]="getEditNameValue(row)" (ngModelChange)="setEditNameValue(row, $event)" (keyup.enter)="saveName(row)" (keyup.escape)="cancelEditName(row)" placeholder="Enter name..." />
+                    <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveName(row)"></p-button>
+                    <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
+                  </div>
+                }
               </td>
               <td class="col-hide-sm">
                 <span class="version-text">{{ row.version }}</span>
@@ -179,18 +210,22 @@
                 <span class="uses-badge">{{ row.uses }}</span>
               </td>
               <td class="col-hide-sm">
-                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
-                  <i class="bi bi-box-arrow-up-right"></i>
-                </a>
-                <span *ngIf="!row.version_id" class="no-link">-</span>
+                @if (row.version_id) {
+                  <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                }
+                @if (!row.version_id) {
+                  <span class="no-link">-</span>
+                }
               </td>
               <td class="col-hide-sm">
                 <span class="p-column-title">Active</span>
-                <p-inputSwitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-inputSwitch>
+                <p-toggleswitch [(ngModel)]="row.is_active" (onChange)="toggleActive(row)"></p-toggleswitch>
               </td>
               <td class="col-hide-sm">
                 <span class="p-column-title">NSFW</span>
-                <p-inputSwitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-inputSwitch>
+                <p-toggleswitch [(ngModel)]="row.is_nsfw" (onChange)="toggleNSFW(row)"></p-toggleswitch>
               </td>
               <td class="col-hide-sm">
                 <span class="p-column-title">Actions</span>
@@ -209,16 +244,9 @@
             </tr>
           </ng-template>
         </p-table>
-      </p-tabPanel>
+      </p-tabpanel>
 
-      <p-tabPanel>
-        <ng-template pTemplate="header">
-          <div class="tab-header">
-            <i class="bi bi-lightbulb"></i>
-            <span>LoRA Suggestions</span>
-            <span class="tab-badge pending">{{ filteredSuggestions.length }}</span>
-          </div>
-        </ng-template>
+      <p-tabpanel [value]="1">
         <div class="tab-actions">
           <div class="search-filters">
             <span class="p-input-icon-left search-input">
@@ -247,21 +275,20 @@
           [expandedRowKeys]="expandedRowKeysSuggestions"
           [rowTrackBy]="trackById.bind(this)"
           styleClass="admin-table"
-        >
+          >
           <ng-template pTemplate="rowexpansion" let-row>
             <tr>
               <td colspan="8">
                 <div class="expansion-card">
                   <div class="expansion-image">
-                    <ng-container *ngIf="getPreviewUrl(row) as img; else noImgExpansion">
+                    @if (getPreviewUrl(row); as img) {
                       <img class="preview-img-lg clickable" [src]="getThumbUrl(img, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
-                    </ng-container>
-                    <ng-template #noImgExpansion>
+                    } @else {
                       <div class="no-image-placeholder">
                         <i class="bi bi-image"></i>
                         <span>No preview</span>
                       </div>
-                    </ng-template>
+                    }
                   </div>
                   <div class="expansion-details">
                     <div class="detail-grid">
@@ -281,22 +308,26 @@
                         <span class="detail-label">Submitted By</span>
                         <span class="detail-value">{{ row.submitted_by || row.username || '-' }}</span>
                       </div>
-                      <div class="detail-item" *ngIf="row.version_id">
-                        <span class="detail-label">CivitAI</span>
-                        <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
-                          <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
-                        </a>
-                      </div>
+                      @if (row.version_id) {
+                        <div class="detail-item">
+                          <span class="detail-label">CivitAI</span>
+                          <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
+                            <i class="bi bi-box-arrow-up-right"></i> View on CivitAI
+                          </a>
+                        </div>
+                      }
                     </div>
                     <div class="expansion-actions suggestion-actions">
-                      <p-button label="Approve" icon="bi bi-check-lg" styleClass="p-button-success" 
-                                [loading]="isSuggestionProcessing(row)"
-                                [disabled]="isSuggestionProcessing(row)"
-                                (onClick)="approveSuggestion(row)"></p-button>
-                      <p-button *ngIf="!showRejectedSuggestions" label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger p-button-outlined" 
-                                [loading]="isSuggestionProcessing(row)"
-                                [disabled]="isSuggestionProcessing(row)"
-                                (onClick)="rejectSuggestion(row)"></p-button>
+                      <p-button label="Approve" icon="bi bi-check-lg" styleClass="p-button-success"
+                        [loading]="isSuggestionProcessing(row)"
+                        [disabled]="isSuggestionProcessing(row)"
+                      (onClick)="approveSuggestion(row)"></p-button>
+                      @if (!showRejectedSuggestions) {
+                        <p-button label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger p-button-outlined"
+                          [loading]="isSuggestionProcessing(row)"
+                          [disabled]="isSuggestionProcessing(row)"
+                        (onClick)="rejectSuggestion(row)"></p-button>
+                      }
                       <p-button label="View Details" icon="bi bi-info-circle" styleClass="p-button-outlined p-button-sm" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
                     </div>
                   </div>
@@ -323,14 +354,13 @@
               </td>
               <td>
                 <span class="p-column-title">Preview</span>
-                <ng-container *ngIf="getPreviewUrl(row) as img; else noImg">
+                @if (getPreviewUrl(row); as img) {
                   <img class="preview-img clickable" [src]="getThumbUrl(img, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
-                </ng-container>
-                <ng-template #noImg>
+                } @else {
                   <div class="no-image-small">
                     <i class="bi bi-image"></i>
                   </div>
-                </ng-template>
+                }
               </td>
               <td>
                 <span class="lora-name">{{ row.name }}</span>
@@ -342,10 +372,14 @@
                 <span class="model-badge">{{ row.base_model || 'Unknown' }}</span>
               </td>
               <td class="col-hide-sm">
-                <a *ngIf="row.version_id" [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
-                  <i class="bi bi-box-arrow-up-right"></i>
-                </a>
-                <span *ngIf="!row.version_id" class="no-link">-</span>
+                @if (row.version_id) {
+                  <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                }
+                @if (!row.version_id) {
+                  <span class="no-link">-</span>
+                }
               </td>
               <td class="col-hide-sm">
                 <span class="submitter-text">{{ row.submitted_by || row.username || '-' }}</span>
@@ -354,13 +388,15 @@
                 <span class="p-column-title">Actions</span>
                 <div class="action-buttons">
                   <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-rounded p-button-sm" pTooltip="Approve" tooltipPosition="top"
-                            [loading]="isSuggestionProcessing(row)" 
-                            [disabled]="isSuggestionProcessing(row)"
-                            (onClick)="approveSuggestion(row)"></p-button>
-                  <p-button *ngIf="!showRejectedSuggestions" icon="bi bi-x-lg" styleClass="p-button-danger p-button-rounded p-button-outlined p-button-sm" pTooltip="Reject" tooltipPosition="top"
-                            [loading]="isSuggestionProcessing(row)"
-                            [disabled]="isSuggestionProcessing(row)"
-                            (onClick)="rejectSuggestion(row)"></p-button>
+                    [loading]="isSuggestionProcessing(row)"
+                    [disabled]="isSuggestionProcessing(row)"
+                  (onClick)="approveSuggestion(row)"></p-button>
+                  @if (!showRejectedSuggestions) {
+                    <p-button icon="bi bi-x-lg" styleClass="p-button-danger p-button-rounded p-button-outlined p-button-sm" pTooltip="Reject" tooltipPosition="top"
+                      [loading]="isSuggestionProcessing(row)"
+                      [disabled]="isSuggestionProcessing(row)"
+                    (onClick)="rejectSuggestion(row)"></p-button>
+                  }
                   <p-button icon="bi bi-info-circle" styleClass="p-button-text p-button-rounded p-button-sm" pTooltip="View Details" tooltipPosition="top" (onClick)="openDetailsDialog('Suggestion Details', row)"></p-button>
                 </div>
               </td>
@@ -377,37 +413,27 @@
             </tr>
           </ng-template>
         </p-table>
-      </p-tabPanel>
+      </p-tabpanel>
 
       <!-- Downloader Status Tab -->
-      <p-tabPanel>
-        <ng-template pTemplate="header">
-          <div class="tab-header">
-            <i class="bi bi-cloud-download"></i>
-            <span>Downloader</span>
-            <span class="tab-badge" [ngClass]="{'success': downloaderStatus?.status === 'idle', 'warning': downloaderStatus?.status === 'downloading', 'danger': downloaderStatus?.status === 'error' || downloaderStatus?.status === 'offline'}">
-              {{ downloaderStatus?.status || 'unknown' }}
-            </span>
-          </div>
-        </ng-template>
-
+      <p-tabpanel [value]="2">
         <div class="downloader-section">
           <!-- Status Card -->
           <div class="downloader-status-card">
             <div class="status-header">
               <h3><i class="bi bi-activity"></i> Service Status</h3>
               <div class="status-actions">
-                <p-button 
-                  label="Trigger Download" 
-                  icon="bi bi-play-fill" 
+                <p-button
+                  label="Trigger Download"
+                  icon="bi bi-play-fill"
                   styleClass="p-button-success"
                   [loading]="triggeringDownload"
                   [disabled]="triggeringDownload || downloaderStatus?.status === 'downloading'"
                   (onClick)="triggerDownload()">
                 </p-button>
-                <p-button 
-                  label="Refresh" 
-                  icon="bi bi-arrow-repeat" 
+                <p-button
+                  label="Refresh"
+                  icon="bi bi-arrow-repeat"
                   styleClass="p-button-outlined"
                   [loading]="loadingDownloaderStatus"
                   (onClick)="loadDownloaderStatus(); loadDownloadHistory()">
@@ -415,39 +441,47 @@
               </div>
             </div>
 
-            <div class="status-grid" *ngIf="downloaderStatus">
-              <div class="status-item">
-                <span class="status-label">Status</span>
-                <span class="status-value">
-                  <i [ngClass]="getStatusIcon(downloaderStatus.status)"></i>
-                  <p-tag [value]="downloaderStatus.status" [severity]="getStatusSeverity(downloaderStatus.status)"></p-tag>
-                </span>
+            @if (downloaderStatus) {
+              <div class="status-grid">
+                <div class="status-item">
+                  <span class="status-label">Status</span>
+                  <span class="status-value">
+                    <i [ngClass]="getStatusIcon(downloaderStatus.status)"></i>
+                    <p-tag [value]="downloaderStatus.status" [severity]="getStatusSeverity(downloaderStatus.status)"></p-tag>
+                  </span>
+                </div>
+                @if (downloaderStatus.current_lora) {
+                  <div class="status-item">
+                    <span class="status-label">Currently Downloading</span>
+                    <span class="status-value current-lora">{{ downloaderStatus.current_lora }}</span>
+                  </div>
+                }
+                <div class="status-item">
+                  <span class="status-label">Approved (Pending)</span>
+                  <span class="status-value">{{ downloaderStatus.approved_count || 0 }}</span>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">Last Updated</span>
+                  <span class="status-value">{{ formatDate(downloaderStatus.updated_at) }}</span>
+                </div>
+                @if (downloaderStatus.last_processed?.status === 'failed') {
+                  <div class="status-item error-item">
+                    <span class="status-label">Last Error</span>
+                    <span class="status-value error-text">
+                      <strong>{{ downloaderStatus.last_processed?.name }}</strong>: {{ downloaderStatus.last_processed?.error_message }}
+                    </span>
+                  </div>
+                }
               </div>
-              <div class="status-item" *ngIf="downloaderStatus.current_lora">
-                <span class="status-label">Currently Downloading</span>
-                <span class="status-value current-lora">{{ downloaderStatus.current_lora }}</span>
-              </div>
-              <div class="status-item">
-                <span class="status-label">Approved (Pending)</span>
-                <span class="status-value">{{ downloaderStatus.approved_count || 0 }}</span>
-              </div>
-              <div class="status-item">
-                <span class="status-label">Last Updated</span>
-                <span class="status-value">{{ formatDate(downloaderStatus.updated_at) }}</span>
-              </div>
-              <div class="status-item error-item" *ngIf="downloaderStatus.last_processed?.status === 'failed'">
-                <span class="status-label">Last Error</span>
-                <span class="status-value error-text">
-                  <strong>{{ downloaderStatus.last_processed?.name }}</strong>: {{ downloaderStatus.last_processed?.error_message }}
-                </span>
-              </div>
-            </div>
+            }
 
-            <div class="status-offline" *ngIf="!downloaderStatus || downloaderStatus.status === 'offline'">
-              <i class="bi bi-exclamation-triangle-fill"></i>
-              <p>Downloader service is not running or not reachable.</p>
-              <small>Make sure <code>lora_downloader_service.py</code> is running on the server.</small>
-            </div>
+            @if (!downloaderStatus || downloaderStatus.status === 'offline') {
+              <div class="status-offline">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <p>Downloader service is not running or not reachable.</p>
+                <small>Make sure <code>lora_downloader_service.py</code> is running on the server.</small>
+              </div>
+            }
           </div>
 
           <!-- Download History -->
@@ -456,9 +490,9 @@
               <h3><i class="bi bi-clock-history"></i> Download History</h3>
             </div>
 
-            <p-table 
-              [value]="downloadHistory" 
-              [paginator]="true" 
+            <p-table
+              [value]="downloadHistory"
+              [paginator]="true"
               [rows]="10"
               styleClass="admin-table history-table">
               <ng-template pTemplate="header">
@@ -479,10 +513,14 @@
                   <td>{{ item.version }}</td>
                   <td>{{ formatDate(item.downloaded_at) }}</td>
                   <td class="error-cell">
-                    <span *ngIf="item.error_message" [pTooltip]="item.error_message" tooltipPosition="left" class="error-snippet">
-                      {{ item.error_message | slice:0:50 }}{{ item.error_message?.length > 50 ? '...' : '' }}
-                    </span>
-                    <span *ngIf="!item.error_message">-</span>
+                    @if (item.error_message) {
+                      <span [pTooltip]="item.error_message" tooltipPosition="left" class="error-snippet">
+                        {{ item.error_message | slice:0:50 }}{{ item.error_message?.length > 50 ? '...' : '' }}
+                      </span>
+                    }
+                    @if (!item.error_message) {
+                      <span>-</span>
+                    }
                   </td>
                 </tr>
               </ng-template>
@@ -499,8 +537,9 @@
             </p-table>
           </div>
         </div>
-      </p-tabPanel>
-    </p-tabView>
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
   </div>
 
   <!-- Details Dialog -->

@@ -3,14 +3,19 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService, AuthProvider } from './auth.service';
 
 @Component({
-  selector: 'app-auth-callback',
-  template: `
-    <div class="p-4" *ngIf="!error">Signing you in…</div>
-    <div class="p-4" *ngIf="error" style="color: #ff6b6b;">
-      <p>{{ error }}</p>
-      <button (click)="retry()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">Try Again</button>
-    </div>
-  `
+    selector: 'app-auth-callback',
+    template: `
+    @if (!error) {
+      <div class="p-4">Signing you in…</div>
+    }
+    @if (error) {
+      <div class="p-4" style="color: #ff6b6b;">
+        <p>{{ error }}</p>
+        <button (click)="retry()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">Try Again</button>
+      </div>
+    }
+    `,
+    standalone: true
 })
 export class AuthCallbackComponent implements OnInit {
   error: string | null = null;

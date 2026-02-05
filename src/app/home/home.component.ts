@@ -3,12 +3,23 @@ import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ImageModalComponent } from '../home/image-modal/image-modal.component';
 
 import { SharedService } from 'src/app/shared.service';
-import {Message} from "primeng/api";
+import { MessageModule } from 'primeng/message';
+import { ImageGridComponent } from './image-grid/image-grid.component';
+import { OptionsComponent } from './options/options.component';
+import { FaqComponent } from './faq/faq.component';
+
+interface HeaderMessage {
+  severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
+  summary: string;
+  detail: string;
+}
 
 @Component({
-  selector: 'app-home',
-  templateUrl: './home.component.html',
-  styleUrls: ['./home.component.css']
+    selector: 'app-home',
+    templateUrl: './home.component.html',
+    styleUrls: ['./home.component.css'],
+    standalone: true,
+    imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent]
 })
 export class HomeComponent {
   @ViewChild(ImageModalComponent) imageModal!: ImageModalComponent;
@@ -25,7 +36,7 @@ export class HomeComponent {
   etaSeconds?: number;
   showRatingButtons: boolean = false;
   ratingButtonsEligibility: boolean = false;
-  headerMessage: Message[] = [{
+  headerMessage: HeaderMessage[] = [{
     severity: 'info',
     summary: 'Welcome to Mobians!',
     detail: 'Join the community on Discord and gain fastpasses by participating in our weekly events! <a href="https://discord.gg/mobians" target="_blank">Click here to join.</a>',

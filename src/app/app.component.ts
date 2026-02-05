@@ -3,11 +3,16 @@ import { SharedService } from './shared.service';
 import { SwUpdate } from '@angular/service-worker';
 import { AuthService } from './auth/auth.service';
 import { Subscription } from 'rxjs';
+import { RouterOutlet } from '@angular/router';
+import { LoginModalComponent } from './auth/login-modal.component';
+import { ProfileMenuComponent } from './auth/profile-menu.component';
 
 @Component({
-  selector: 'app-root',
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
+    selector: 'app-root',
+    templateUrl: './app.component.html',
+    styleUrls: ['./app.component.css'],
+    standalone: true,
+    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent]
 })
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;

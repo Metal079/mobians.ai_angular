@@ -1,11 +1,16 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
+import { TooltipModule } from 'primeng/tooltip';
 
 @Component({
-  selector: 'app-generation-options-panel',
-  templateUrl: './generation-options-panel.component.html',
-  styleUrls: ['./generation-options-panel.component.css'],
+    selector: 'app-generation-options-panel',
+    templateUrl: './generation-options-panel.component.html',
+    styleUrls: ['./generation-options-panel.component.css'],
+    standalone: true,
+    imports: [CommonModule, FormsModule, TooltipModule]
 })
 export class GenerationOptionsPanelComponent {
   @Input({ required: true }) generationRequest!: any;

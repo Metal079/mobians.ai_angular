@@ -117,11 +117,11 @@
 }
 
 /* Tabs */
-:host ::ng-deep .admin-tabs .p-tabview-nav-container {
+:host ::ng-deep .admin-tabs .p-tablist-content {
   background: transparent;
 }
 
-:host ::ng-deep .admin-tabs .p-tabview-nav {
+:host ::ng-deep .admin-tabs .p-tablist {
   background: #1a1f2e;
   border: 1px solid #2a3040;
   border-radius: 8px;
@@ -131,7 +131,7 @@
   margin-bottom: 1rem;
 }
 
-:host ::ng-deep .admin-tabs .p-tabview-nav li .p-tabview-nav-link {
+:host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab {
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -139,17 +139,17 @@
   color: #888;
 }
 
-:host ::ng-deep .admin-tabs .p-tabview-nav li .p-tabview-nav-link:hover {
+:host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab:hover {
   background: #252a3a;
   color: #fff;
 }
 
-:host ::ng-deep .admin-tabs .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+:host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab.p-tab-active {
   background: #6366f1;
   color: #fff;
 }
 
-:host ::ng-deep .admin-tabs .p-tabview-panels {
+:host ::ng-deep .admin-tabs .p-tabpanels {
   background: transparent;
   padding: 0;
 }
@@ -875,12 +875,12 @@
   
   .admin-content { padding: 1rem; }
   
-  :host ::ng-deep .admin-tabs .p-tabview-nav {
+  :host ::ng-deep .admin-tabs .p-tablist {
     width: 100%;
     display: flex;
   }
   
-  :host ::ng-deep .admin-tabs .p-tabview-nav li {
+  :host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab {
     flex: 1;
   }
   

@@ -1,13 +1,15 @@
-<p-messages *ngIf="!loginInfo"
-  [value]="headerMessage"
-  [closable]="true"
-  [key]="'msgKey'"
-  [escape]="false"
-></p-messages>
+@if (!loginInfo) {
+  @for (message of headerMessage; track message.summary) {
+    <p-message [severity]="message.severity" [closable]="true" styleClass="mb-2">
+      <strong>{{ message.summary }}</strong>
+      <span [innerHTML]="message.detail"></span>
+    </p-message>
+  }
+}
 
 <app-image-modal></app-image-modal>
 <div id="generation-space">
-    <div id="image-rating-section">
+  <div id="image-rating-section">
     <app-image-grid
       [showLoading]="showLoading"
       [aspectRatio]="aspectRatio"

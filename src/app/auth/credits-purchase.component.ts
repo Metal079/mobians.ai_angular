@@ -1,8 +1,11 @@
 import { Component, EventEmitter, Input, Output, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { MessageService } from 'primeng/api';
 import { StableDiffusionService } from '../stable-diffusion.service';
 import { AuthService } from './auth.service';
 import { environment } from 'src/environments/environment';
+import { firstValueFrom } from 'rxjs';
+import { DialogModule } from 'primeng/dialog';
 
 declare var paypal: any;
 
@@ -15,9 +18,11 @@ export interface CreditPackage {
 }
 
 @Component({
-  selector: 'app-credits-purchase',
-  templateUrl: './credits-purchase.component.html',
-  styleUrls: ['./credits-purchase.component.css']
+    selector: 'app-credits-purchase',
+    templateUrl: './credits-purchase.component.html',
+    styleUrls: ['./credits-purchase.component.css'],
+    standalone: true,
+    imports: [CommonModule, DialogModule]
 })
 export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() visible = false;
@@ -158,7 +163,7 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
         console.log('PayPal createOrder called for package:', packageId);
         
         try {
-          const response = await this.api.createPayPalOrder(packageId).toPromise();
+          const response = await firstValueFrom(this.api.createPayPalOrder(packageId));
           console.log('PayPal order created:', response);
           return response.order_id;
         } catch (err: any) {
@@ -179,7 +184,7 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
         this.cdr.detectChanges();
         
         try {
-          const response = await this.api.capturePayPalOrder(data.orderID).toPromise();
+          const response = await firstValueFrom(this.api.capturePayPalOrder(data.orderID));
           this.processing = false;
           
           // Update credits in auth service

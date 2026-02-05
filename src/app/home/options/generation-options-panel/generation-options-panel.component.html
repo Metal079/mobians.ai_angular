@@ -38,7 +38,7 @@
         </span>
       </label>
       <textarea class="form-control" id="negative-prompt-input" rows="3"
-        [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings.emit()"></textarea>
+      [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings.emit()"></textarea>
     </div>
 
     <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
@@ -55,108 +55,109 @@
         </label>
         <input type="number" class="form-control" id="seedInput1" placeholder="-1"
           [(ngModel)]="generationRequest.seed" />
-      </div>
+        </div>
 
-      <!-- Selected Image Seed -->
-      <div style="width: 49%; flex-basis: calc(49%);">
-        <label for="seedInput2" class="form-label">
-          Current Seed
-          <span class="ms-1 text-primary"
-            pTooltip="The current seed of the currently generated images. This can be used to regenerate the same/or very similar image."
-            tooltipPosition="top"
-            style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
-            ?
-          </span>
-        </label>
-        <input type="number" class="form-control" id="seedInput2" placeholder="Generate to see seed."
-          [(ngModel)]="currentSeed" disabled="true" [value]="currentSeed" />
-      </div>
-    </div>
+        <!-- Selected Image Seed -->
+        <div style="width: 49%; flex-basis: calc(49%);">
+          <label for="seedInput2" class="form-label">
+            Current Seed
+            <span class="ms-1 text-primary"
+              pTooltip="The current seed of the currently generated images. This can be used to regenerate the same/or very similar image."
+              tooltipPosition="top"
+              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
+              ?
+            </span>
+          </label>
+          <input type="number" class="form-control" id="seedInput2" placeholder="Generate to see seed."
+            [(ngModel)]="currentSeed" disabled="true" [value]="currentSeed" />
+          </div>
+        </div>
 
-    <!-- CFG -->
-    <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
+        <!-- CFG -->
+        <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
         }}</span>
-      <span class="ms-1 text-primary"
-        pTooltip="CFG refers to how closely a image tries follow to a prompt, too high values may fry images, while too low of a value will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."
+        <span class="ms-1 text-primary"
+          pTooltip="CFG refers to how closely a image tries follow to a prompt, too high values may fry images, while too low of a value will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."
         tooltipPosition="top" style="
           background-color: rgba(255, 255, 255, 0.8);
           padding: 2px 4px;
           border-radius: 50%;
           cursor: pointer;
         ">
-        ?
-      </span>
-    </label>
-    <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
-      [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
-
-    <!-- FastPass Code -->
-    <div class="mb-3">
-      <label for="fastPassCode" class="form-label">
-        FastPass Code
-        <span class="ms-1 text-primary"
-          pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
-          tooltipPosition="top"
-          style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
           ?
         </span>
       </label>
-      <input type="password" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
-        [(ngModel)]="generationRequest.fast_pass_code" (input)="fastPassCodeChange.emit($event)" />
-    </div>
+      <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
+        [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
 
-    <!-- Hi-Res (Generate + Upscale) -->
-    <div
-      *ngIf="generationRequest.job_type == 'txt2img' && !referenceImage && generationRequest.model != 'sonicDiffusionXL' && generationRequest.model != 'autismMix'"
-      class="d-flex justify-content-start mb-3">
-      <div class="form-check me-3">
-        <input class="form-check-input" type="checkbox" [ngModel]="hiresEnabled"
-          (ngModelChange)="onHiresEnabledChange($event)" id="hiresToggle" [disabled]="!isLoggedIn">
-        <label class="form-check-label" for="hiresToggle">
-          Enhanced Quality (Generate + Upscale)
-          <span class="ms-1 text-primary"
-            [pTooltip]="hiresTooltip"
+        <!-- FastPass Code -->
+        <div class="mb-3">
+          <label for="fastPassCode" class="form-label">
+            FastPass Code
+            <span class="ms-1 text-primary"
+              pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
+              tooltipPosition="top"
+              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
+              ?
+            </span>
+          </label>
+          <input type="password" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
+            [(ngModel)]="generationRequest.fast_pass_code" (input)="fastPassCodeChange.emit($event)" />
+          </div>
+
+          <!-- Hi-Res (Generate + Upscale) -->
+          @if (generationRequest.job_type == 'txt2img' && !referenceImage && generationRequest.model != 'sonicDiffusionXL' && generationRequest.model != 'autismMix') {
+            <div
+              class="d-flex justify-content-start mb-3">
+              <div class="form-check me-3">
+                <input class="form-check-input" type="checkbox" [ngModel]="hiresEnabled"
+                  (ngModelChange)="onHiresEnabledChange($event)" id="hiresToggle" [disabled]="!isLoggedIn">
+                  <label class="form-check-label" for="hiresToggle">
+                    Enhanced Quality (Generate + Upscale)
+                    <span class="ms-1 text-primary"
+                      [pTooltip]="hiresTooltip"
             tooltipPosition="top" style="
             background-color: rgba(255, 255, 255, 0.8);
             padding: 2px 4px;
             border-radius: 50%;
             cursor: pointer;
             ">
-            ?
-          </span>
-        </label>
-      </div>
-    </div>
+                      ?
+                    </span>
+                  </label>
+                </div>
+              </div>
+            }
 
-    <!-- Notifications -->
-    <div class="d-flex justify-content-start mb-3">
-      <div class="form-check me-3">
-        <input class="form-check-input" type="checkbox" [ngModel]="enableNotifications"
-          (ngModelChange)="onEnableNotificationsChange($event)" id="notification">
-        <label class="form-check-label" for="notification">Send Notification When Image Completes</label>
-      </div>
-    </div>
+            <!-- Notifications -->
+            <div class="d-flex justify-content-start mb-3">
+              <div class="form-check me-3">
+                <input class="form-check-input" type="checkbox" [ngModel]="enableNotifications"
+                  (ngModelChange)="onEnableNotificationsChange($event)" id="notification">
+                  <label class="form-check-label" for="notification">Send Notification When Image Completes</label>
+                </div>
+              </div>
 
-    <!-- Toggle to return webp images isntead of png, (much smaller image sizes!) -->
-    <div class="d-flex justify-content-start mb-3">
-      <div class="form-check me-3">
-        <input class="form-check-input" type="checkbox" [(ngModel)]="generationRequest.lossy_images" id="returnWebp"
-          (ngModelChange)="saveSettings.emit()">
-        <label class="form-check-label" for="returnWebp">WebP Images (Much smaller image size. Disable to save images as
-          png when downloading!)</label>
-      </div>
-    </div>
+              <!-- Toggle to return webp images isntead of png, (much smaller image sizes!) -->
+              <div class="d-flex justify-content-start mb-3">
+                <div class="form-check me-3">
+                  <input class="form-check-input" type="checkbox" [(ngModel)]="generationRequest.lossy_images" id="returnWebp"
+                    (ngModelChange)="saveSettings.emit()">
+                    <label class="form-check-label" for="returnWebp">WebP Images (Much smaller image size. Disable to save images as
+                    png when downloading!)</label>
+                  </div>
+                </div>
 
-    <!-- Reset session storage and view -->
-    <button class="btn btn-danger" type="button" (click)="resetSessionStorage.emit()" id="reset-session-storage-button">
-      Reset Saved Options
-    </button>
+                <!-- Reset session storage and view -->
+                <button class="btn btn-danger" type="button" (click)="resetSessionStorage.emit()" id="reset-session-storage-button">
+                  Reset Saved Options
+                </button>
 
-    <!-- Delete all images -->
-    <button class="btn btn-danger" type="button" (click)="deleteAllImages.emit()" id="delete-all-images-button"
-      [ngStyle]="{'margin-top': '20px'}">
-      Delete Image History
-    </button>
-  </div>
-</div>
+                <!-- Delete all images -->
+                <button class="btn btn-danger" type="button" (click)="deleteAllImages.emit()" id="delete-all-images-button"
+                  [ngStyle]="{'margin-top': '20px'}">
+                  Delete Image History
+                </button>
+              </div>
+            </div>
 

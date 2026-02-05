@@ -8,8 +8,8 @@ describe('InpaintingDisplayComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [InpaintingDisplayComponent]
-    });
+    imports: [InpaintingDisplayComponent]
+});
     fixture = TestBed.createComponent(InpaintingDisplayComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

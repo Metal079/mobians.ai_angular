@@ -1,4 +1,6 @@
 import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { DynamicDialogRef } from 'primeng/dynamicdialog';
 import { DynamicDialogConfig } from 'primeng/dynamicdialog';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
@@ -6,12 +8,29 @@ import { MessageService } from 'primeng/api';
 import { SharedService } from 'src/app/shared.service';
 import { forkJoin, of } from 'rxjs';
 import { catchError, finalize } from 'rxjs/operators';
+import { ButtonModule } from 'primeng/button';
+import { ChipModule } from 'primeng/chip';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
 
 @Component({
-  selector: 'app-add-loras',
-  templateUrl: './add-loras.component.html',
-  styleUrls: ['./add-loras.component.css']
+    selector: 'app-add-loras',
+    templateUrl: './add-loras.component.html',
+    styleUrls: ['./add-loras.component.css'],
+    standalone: true,
+    imports: [
+      CommonModule,
+      FormsModule,
+      ButtonModule,
+      InputTextModule,
+      ToggleSwitchModule,
+      ProgressSpinnerModule,
+      ChipModule,
+      DialogModule
+    ]
 })
 export class AddLorasComponent {
   selectedSearchOption: string | null = 'lora_name'; // Default to Search by Name

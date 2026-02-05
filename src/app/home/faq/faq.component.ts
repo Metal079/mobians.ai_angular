@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { SharedService } from 'src/app/shared.service';
 import { ActivatedRoute } from '@angular/router';
@@ -7,9 +8,11 @@ import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { environment } from 'src/environments/environment';
 
 @Component({
-  selector: 'app-faq',
-  templateUrl: './faq.component.html',
-  styleUrls: ['./faq.component.css']
+    selector: 'app-faq',
+    templateUrl: './faq.component.html',
+    styleUrls: ['./faq.component.css'],
+    standalone: true,
+    imports: [CommonModule]
 })
 export class FaqComponent implements OnInit, OnDestroy {
   private clientId = '1186062405168549949';

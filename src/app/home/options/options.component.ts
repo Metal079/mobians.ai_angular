@@ -1,5 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterOutlet } from '@angular/router';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
@@ -19,12 +22,31 @@ import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
 import { AuthService } from 'src/app/auth/auth.service';
 import { ImageHistoryPanelComponent } from './image-history-panel/image-history-panel.component';
+import { GenerationOptionsPanelComponent } from './generation-options-panel/generation-options-panel.component';
+import { LorasPanelComponent } from './loras-panel/loras-panel.component';
+import { ButtonModule } from 'primeng/button';
+import { ToastModule } from 'primeng/toast';
+import { TooltipModule } from 'primeng/tooltip';
+import { TextareaModule } from 'primeng/textarea';
 
 
 @Component({
-  selector: 'app-options',
-  templateUrl: './options.component.html',
-  styleUrls: ['./options.component.css'],
+    selector: 'app-options',
+    templateUrl: './options.component.html',
+    styleUrls: ['./options.component.css'],
+    standalone: true,
+    imports: [
+      CommonModule,
+      FormsModule,
+      RouterOutlet,
+      ToastModule,
+      ButtonModule,
+      TooltipModule,
+      TextareaModule,
+      GenerationOptionsPanelComponent,
+      ImageHistoryPanelComponent,
+      LorasPanelComponent
+    ]
 })
 export class OptionsComponent implements OnInit {
   private subscription!: Subscription;

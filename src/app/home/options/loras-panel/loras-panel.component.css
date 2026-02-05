@@ -10,7 +10,7 @@
   overflow-y: auto;
   transition: height 0.5s ease-in-out;
   max-width: 600px;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* Menu dropdown */
@@ -235,7 +235,8 @@
 
 .lora-load-more-trigger {
   width: 100%;
-  height: 1px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 :host ::ng-deep .lora-tag-filter-panel .p-multiselect-items-wrapper {

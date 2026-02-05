@@ -119,51 +119,43 @@ body.theme-navy .badge.bg-primary {
 
 
 /* Make each tab item take equal space */
-.p-tabview .p-tabview-nav li {
+.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
   flex: 1;
-  text-align: center; /* Center the tab text */
+  justify-content: center;
+  text-align: center;
 }
 
-/* Ensure the anchor fills the entire tab */
-.p-tabview .p-tabview-nav li a {
-  display: block;
-  width: 100%;
-  padding: 1em 0; /* Adjust padding for vertical spacing */
-  color: white; /* Optional: Change text color for better contrast */
-}
-
-/* Image History Panel Tabs */
-.p-tabview .p-tabview-nav {
+/* Image History/Admin Tabs */
+.p-tabs .p-tablist {
   background-color: var(--theme-surface-bg);
   margin-bottom: 0;
   padding-left: 0;
   border: 1px solid var(--theme-border);
   border-width: 0 0 2px 0;
-  display: flex;
 }
 
-.p-tabview .p-tabview-nav li a {
+.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
   background-color: var(--theme-surface-alt-bg);
-  color: #fff; /* Optional: Change text color for better contrast */
+  color: #fff;
 }
 
-.p-tabview .p-tabview-nav li .p-tabview-nav-link {
+.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
   border: solid var(--theme-border);
   border-width: 0 0 2px 0;
 }
 
-.p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+.p-tabs .p-tablist .p-tablist-tab-list .p-tab.p-tab-active {
   border: solid var(--theme-border-strong);
   border-width: 0 0 2px 0;
   background: var(--theme-surface-bg);
 }
 
-.p-tabview .p-tabview-panels {
+.p-tabs .p-tabpanels {
   background-color: var(--theme-surface-bg);
   color: var(--theme-surface-text);
 }
 
-.p-tabview .p-tabview-panel {
+.p-tabs .p-tabs-panel {
   background-color: var(--theme-surface-bg);
 }
 

@@ -1,0 +1,502 @@
+
+> angularapp@0.0.0 start
+> ng serve --host 127.0.0.1 --port 4302
+
+[33m>[39m Building...
+[32m√[39m Building...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m                         [2m | [22m[2mstyles[22m                 [2m | [22m[36m542.19 kB[39m[2m | [22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+[32mchunk-3ZH3GPBR.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m13.30 kB[39m[2m | [22m
+[32mchunk-EV2IMKRY.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m11.54 kB[39m[2m | [22m
+[32mchunk-EVSPGG2W.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.64 kB[39m[2m | [22m
+[32mpolyfills.js[39m                       [2m | [22m[2mpolyfills[22m              [2m | [22m [36m95 bytes[39m[2m | [22m
+
+[1m [22m                                  [2m | [22m[1mInitial total[22m          [2m | [22m[1m657.69 kB[22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-VUGPCWKU.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m499.44 kB[39m[2m | [22m
+[32madmin.component-L5DVRGP3.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mchunk-IYIMEROS.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m43.38 kB[39m[2m | [22m
+[32mnew-lora.component-WNCYDJYW.js[39m     [2m | [22m[2mnew-lora-component[22m     [2m | [22m [36m16.00 kB[39m[2m | [22m
+[32mtrain.component-AOG6B7LH.js[39m        [2m | [22m[2mtrain-component[22m        [2m | [22m [36m11.88 kB[39m[2m | [22m
+[32mauth-callback.component-PF73OOWR.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+[32mfaq.component-VOA6NZ5S.js[39m          [2m | [22m[2mfaq-component[22m          [2m | [22m[36m192 bytes[39m[2m | [22m
+
+Application bundle generation complete. [3.604 seconds] - 2026-02-05T04:51:33.045Z
+
+Watch mode enabled. Watching for file changes...
+NOTE: Raw file sizes do not reflect development server per-request transformations.
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4302[22m/[39m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [1.737 seconds] - 2026-02-05T05:18:23.360Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unexpected closing block. The block may have been closed earlier. If you meant to write the } character, you should use the "&#125;" HTML entity instead.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/loras-panel/loras-panel.component.html:98:8:
+[37m      98 │         [32m}[37m
+         ╵         [32m^[0m
+
+  Error occurs in the template of component LorasPanelComponent.
+
+    src/app/home/options/loras-panel/loras-panel.component.ts:23:17:
+[37m      23 │     templateUrl: [32m'./loras-panel.component.html'[37m,
+         ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m                         [2m | [22m[2mstyles[22m                 [2m | [22m[36m542.19 kB[39m[2m | [22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+[32mchunk-3ZH3GPBR.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m13.30 kB[39m[2m | [22m
+[32mchunk-EV2IMKRY.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m11.54 kB[39m[2m | [22m
+[32mchunk-EVSPGG2W.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.64 kB[39m[2m | [22m
+[32mpolyfills.js[39m                       [2m | [22m[2mpolyfills[22m              [2m | [22m [36m95 bytes[39m[2m | [22m
+
+[1m [22m                                  [2m | [22m[1mInitial total[22m          [2m | [22m[1m657.69 kB[22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-6GH64FU3.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m499.42 kB[39m[2m | [22m
+[32madmin.component-L5DVRGP3.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mchunk-IYIMEROS.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m43.38 kB[39m[2m | [22m
+[32mnew-lora.component-WNCYDJYW.js[39m     [2m | [22m[2mnew-lora-component[22m     [2m | [22m [36m16.00 kB[39m[2m | [22m
+[32mtrain.component-AOG6B7LH.js[39m        [2m | [22m[2mtrain-component[22m        [2m | [22m [36m11.88 kB[39m[2m | [22m
+[32mauth-callback.component-PF73OOWR.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+[32mfaq.component-VOA6NZ5S.js[39m          [2m | [22m[2mfaq-component[22m          [2m | [22m[36m192 bytes[39m[2m | [22m
+
+Application bundle generation complete. [0.621 seconds] - 2026-02-05T05:19:09.425Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-JITDCCC3.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m499.57 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.706 seconds] - 2026-02-05T05:19:17.758Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.642 seconds] - 2026-02-05T05:21:21.030Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'onLorasScroll' does not exist on type 'LorasPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/loras-panel/loras-panel.component.html:3:74:
+[37m      3 │ ...id="lorasDropdown" #lorasDropdown (scroll)="[32monLorasScroll[37m($event)">
+        ╵                                                [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component LorasPanelComponent.
+
+    src/app/home/options/loras-panel/loras-panel.component.ts:23:17:
+[37m      23 │     templateUrl: [32m'./loras-panel.component.html'[37m,
+         ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'onLorasScroll' does not exist on type 'LorasPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/loras-panel/loras-panel.component.html:68:51:
+[37m      68 │ ...iv class="loras-grid" #lorasGrid (scroll)="[32monLorasScroll[37m($event)">
+         ╵                                               [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component LorasPanelComponent.
+
+    src/app/home/options/loras-panel/loras-panel.component.ts:23:17:
+[37m      23 │     templateUrl: [32m'./loras-panel.component.html'[37m,
+         ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m                         [2m | [22m[2mstyles[22m                 [2m | [22m[36m542.19 kB[39m[2m | [22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+[32mchunk-3ZH3GPBR.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m13.30 kB[39m[2m | [22m
+[32mchunk-EV2IMKRY.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m11.54 kB[39m[2m | [22m
+[32mchunk-EVSPGG2W.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.64 kB[39m[2m | [22m
+[32mpolyfills.js[39m                       [2m | [22m[2mpolyfills[22m              [2m | [22m [36m95 bytes[39m[2m | [22m
+
+[1m [22m                                  [2m | [22m[1mInitial total[22m          [2m | [22m[1m657.69 kB[22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-ZNUTYEQW.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m500.90 kB[39m[2m | [22m
+[32madmin.component-L5DVRGP3.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mchunk-IYIMEROS.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m43.38 kB[39m[2m | [22m
+[32mnew-lora.component-WNCYDJYW.js[39m     [2m | [22m[2mnew-lora-component[22m     [2m | [22m [36m16.00 kB[39m[2m | [22m
+[32mtrain.component-AOG6B7LH.js[39m        [2m | [22m[2mtrain-component[22m        [2m | [22m [36m11.88 kB[39m[2m | [22m
+[32mauth-callback.component-PF73OOWR.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+[32mfaq.component-VOA6NZ5S.js[39m          [2m | [22m[2mfaq-component[22m          [2m | [22m[36m192 bytes[39m[2m | [22m
+
+Application bundle generation complete. [0.967 seconds] - 2026-02-05T05:21:28.667Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-YC5CITU4.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m501.87 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.659 seconds] - 2026-02-05T05:21:47.676Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-ZVKKFDAJ.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m501.87 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.688 seconds] - 2026-02-05T05:24:50.323Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-JQF2BWLC.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m501.90 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.493 seconds] - 2026-02-05T05:29:40.475Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-VEG554U5.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m501.95 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.690 seconds] - 2026-02-05T05:29:56.089Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-JRH5NELQ.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m501.99 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.436 seconds] - 2026-02-05T05:30:22.526Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [1.048 seconds] - 2026-02-05T18:25:18.829Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.937 seconds] - 2026-02-05T18:37:58.146Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-3FUKN6FO.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m502.38 kB[39m[2m | [22m
+
+Application bundle generation complete. [1.066 seconds] - 2026-02-05T18:46:30.447Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-4ETT3OCG.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m502.46 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.683 seconds] - 2026-02-05T18:46:34.202Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-VYGWXWVS.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m503.37 kB[39m[2m | [22m
+
+Application bundle generation complete. [1.149 seconds] - 2026-02-05T18:55:11.619Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-N4K7VKEG.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m504.85 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.916 seconds] - 2026-02-05T18:55:19.063Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.875 seconds] - 2026-02-05T19:16:33.310Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'runInAngularZone' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:580:9:
+[37m      580 │     this.[32mrunInAngularZone[37m(() => {
+          ╵          [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'runInAngularZone' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:593:9:
+[37m      593 │     this.[32mrunInAngularZone[37m(() => {
+          ╵          [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cdr' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1398:13:
+[37m      1398 │         this.[32mcdr[37m.detectChanges();
+           ╵              [32m~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.798 seconds] - 2026-02-05T19:17:10.600Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1470:11:
+[37m      1470 │       this.[32mrefreshUi[37m();
+           ╵            [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1511:9:
+[37m      1511 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1525:9:
+[37m      1525 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1606:9:
+[37m      1606 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.684 seconds] - 2026-02-05T19:17:22.620Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1519:9:
+[37m      1519 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1533:9:
+[37m      1533 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'refreshUi' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:1614:9:
+[37m      1614 │     this.[32mrefreshUi[37m();
+           ╵          [32m~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m                         [2m | [22m[2mstyles[22m                 [2m | [22m[36m542.19 kB[39m[2m | [22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+[32mchunk-3ZH3GPBR.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m13.30 kB[39m[2m | [22m
+[32mchunk-EV2IMKRY.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m11.54 kB[39m[2m | [22m
+[32mchunk-EVSPGG2W.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.64 kB[39m[2m | [22m
+[32mpolyfills.js[39m                       [2m | [22m[2mpolyfills[22m              [2m | [22m [36m95 bytes[39m[2m | [22m
+
+[1m [22m                                  [2m | [22m[1mInitial total[22m          [2m | [22m[1m657.69 kB[22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-VUMC27ZV.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m505.10 kB[39m[2m | [22m
+[32madmin.component-L5DVRGP3.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mchunk-IYIMEROS.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m43.38 kB[39m[2m | [22m
+[32mnew-lora.component-WNCYDJYW.js[39m     [2m | [22m[2mnew-lora-component[22m     [2m | [22m [36m16.00 kB[39m[2m | [22m
+[32mtrain.component-AOG6B7LH.js[39m        [2m | [22m[2mtrain-component[22m        [2m | [22m [36m11.88 kB[39m[2m | [22m
+[32mauth-callback.component-PF73OOWR.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+[32mfaq.component-VOA6NZ5S.js[39m          [2m | [22m[2mfaq-component[22m          [2m | [22m[36m192 bytes[39m[2m | [22m
+
+Application bundle generation complete. [0.722 seconds] - 2026-02-05T19:17:35.912Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-G32DXPUT.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m505.20 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.833 seconds] - 2026-02-05T19:29:36.695Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-QCNPCQOX.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m505.43 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.692 seconds] - 2026-02-05T19:29:48.904Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-FNPAFWNJ.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m505.53 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.660 seconds] - 2026-02-05T19:29:57.977Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.589 seconds] - 2026-02-05T19:30:04.398Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hydrateImageUrls' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:563:14:
+[37m      563 │     void this.[32mhydrateImageUrls[37m([image]);
+          ╵               [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.728 seconds] - 2026-02-05T19:30:12.348Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hydrateImageUrls' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:563:14:
+[37m      563 │     void this.[32mhydrateImageUrls[37m([image]);
+          ╵               [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.800 seconds] - 2026-02-05T19:30:24.276Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hydrateImageUrls' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:581:14:
+[37m      581 │     void this.[32mhydrateImageUrls[37m([image]);
+          ╵               [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [0.666 seconds] - 2026-02-05T19:30:30.012Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hydrateImageUrls' does not exist on type 'ImageHistoryPanelComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/home/options/image-history-panel/image-history-panel.component.ts:581:14:
+[37m      581 │     void this.[32mhydrateImageUrls[37m([image]);
+          ╵               [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mstyles.css[39m                         [2m | [22m[2mstyles[22m                 [2m | [22m[36m542.19 kB[39m[2m | [22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+[32mchunk-3ZH3GPBR.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m13.30 kB[39m[2m | [22m
+[32mchunk-EV2IMKRY.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m11.54 kB[39m[2m | [22m
+[32mchunk-EVSPGG2W.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.64 kB[39m[2m | [22m
+[32mpolyfills.js[39m                       [2m | [22m[2mpolyfills[22m              [2m | [22m [36m95 bytes[39m[2m | [22m
+
+[1m [22m                                  [2m | [22m[1mInitial total[22m          [2m | [22m[1m657.69 kB[22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-SN7AQZAR.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m507.18 kB[39m[2m | [22m
+[32madmin.component-L5DVRGP3.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mchunk-IYIMEROS.js[39m                  [2m | [22m[2m-[22m                      [2m | [22m [36m43.38 kB[39m[2m | [22m
+[32mnew-lora.component-WNCYDJYW.js[39m     [2m | [22m[2mnew-lora-component[22m     [2m | [22m [36m16.00 kB[39m[2m | [22m
+[32mtrain.component-AOG6B7LH.js[39m        [2m | [22m[2mtrain-component[22m        [2m | [22m [36m11.88 kB[39m[2m | [22m
+[32mauth-callback.component-PF73OOWR.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+[32mfaq.component-VOA6NZ5S.js[39m          [2m | [22m[2mfaq-component[22m          [2m | [22m[36m192 bytes[39m[2m | [22m
+
+Application bundle generation complete. [0.802 seconds] - 2026-02-05T19:30:49.197Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-IEQP3MVH.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m507.24 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.729 seconds] - 2026-02-05T19:31:05.270Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-DK3QKGN7.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m507.34 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.732 seconds] - 2026-02-05T19:31:13.284Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-Y7IAM75P.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m508.78 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.922 seconds] - 2026-02-05T19:38:56.359Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                   [2m | [22m[2mmain[22m          [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mhome.component-W65K4E4L.js[39m[2m | [22m[2mhome-component[22m[2m | [22m[36m508.81 kB[39m[2m | [22m
+
+Application bundle generation complete. [1.001 seconds] - 2026-02-05T19:39:00.979Z
+
+Page reload sent to client(s).

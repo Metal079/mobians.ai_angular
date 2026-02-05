@@ -1,140 +1,163 @@
 <div class="p-fluid">
   <!-- Option to choose between Name or Model ID using PrimeNG buttons -->
   <div class="p-field d-flex justify-content-center" id="search-options">
-    <p-button label="Search by Name" icon="pi pi-search" 
-      [class]="selectedSearchOption === 'lora_name' ? 'p-button-primary' : 'p-button-outlined'" 
-      (click)="selectOption('lora_name')" class="mr-2"></p-button>
-      
-    <p-button label="Search by Model ID" icon="pi pi-id-card" 
-      [class]="selectedSearchOption === 'model_id' ? 'p-button-primary' : 'p-button-outlined'" 
-      (click)="selectOption('model_id')" class="mr-2"></p-button>
+    <p-button label="Search by Name" icon="pi pi-search"
+      [class]="selectedSearchOption === 'lora_name' ? 'p-button-primary' : 'p-button-outlined'"
+    (click)="selectOption('lora_name')" class="mr-2"></p-button>
 
-    <p-button label="Search by creator" icon="pi pi-user" 
-      [class]="selectedSearchOption === 'username' ? 'p-button-primary' : 'p-button-outlined'" 
-      (click)="selectOption('username')"></p-button>
+    <p-button label="Search by Model ID" icon="pi pi-id-card"
+      [class]="selectedSearchOption === 'model_id' ? 'p-button-primary' : 'p-button-outlined'"
+    (click)="selectOption('model_id')" class="mr-2"></p-button>
+
+    <p-button label="Search by creator" icon="pi pi-user"
+      [class]="selectedSearchOption === 'username' ? 'p-button-primary' : 'p-button-outlined'"
+    (click)="selectOption('username')"></p-button>
   </div>
 
   <!-- Search Input Field (Conditionally show based on option) -->
   <div class="p-field d-flex align-items-center" id="lora-search-field">
-    <input 
-      *ngIf="selectedSearchOption === 'lora_name'" 
-      type="text" 
-      pInputText 
-      [(ngModel)]="searchField" 
-      placeholder="Search LoRA by Name" 
-      (keyup.enter)="search()"
-    />
-    
-    <input 
-      *ngIf="selectedSearchOption === 'model_id'" 
-      type="text" 
-      pInputText 
-      [(ngModel)]="searchField" 
-      placeholder="Enter LoRA Model ID" 
-      (keyup.enter)="search()"
-    />
+    @if (selectedSearchOption === 'lora_name') {
+      <input
+        type="text"
+        pInputText
+        [(ngModel)]="searchField"
+        placeholder="Search LoRA by Name"
+        (keyup.enter)="search()"
+        />
+    }
 
-    <input 
-      *ngIf="selectedSearchOption === 'username'" 
-      type="text" 
-      pInputText 
-      [(ngModel)]="searchField" 
-      placeholder="Enter LoRA Creator's CivitAI Username"
-      (keyup.enter)="search()"
-    />
+    @if (selectedSearchOption === 'model_id') {
+      <input
+        type="text"
+        pInputText
+        [(ngModel)]="searchField"
+        placeholder="Enter LoRA Model ID"
+        (keyup.enter)="search()"
+        />
+    }
+
+    @if (selectedSearchOption === 'username') {
+      <input
+        type="text"
+        pInputText
+        [(ngModel)]="searchField"
+        placeholder="Enter LoRA Creator's CivitAI Username"
+        (keyup.enter)="search()"
+        />
+    }
   </div>
 
   <div class="p-field d-flex justify-content-end align-items-center" style="margin-top: 8px;">
     <span class="d-flex align-items-center">
       Show NSFW results?
-      <p-inputSwitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="onShowNsfwChanged()"></p-inputSwitch>
+      <p-toggleswitch [(ngModel)]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="onShowNsfwChanged()"></p-toggleswitch>
     </span>
   </div>
   <div>
-    <button 
-    pButton 
-    type="button" 
-    label="Search" 
-    (click)="search()" 
-    class="p-button-primary mt-2 ml-2" 
-    [disabled]="isLoading || (!searchField)">
-  </button>
-
-  <!-- Loading Spinner -->
-  <p-progressSpinner *ngIf="isLoading" styleClass="ml-2" strokeWidth="4" animationDuration=".5s"></p-progressSpinner>
-  </div>
-
-  <!-- User pending requests (hidden by default) -->
-  <div *ngIf="userPendingSuggestions.length > 0" class="p-field pending-toggle">
     <button
       pButton
       type="button"
-      [label]="showPendingRequests ? 'Hide my pending requests' : 'Show my pending requests'"
-      [icon]="showPendingRequests ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
-      class="p-button-outlined pending-toggle-btn"
-      (click)="togglePendingRequests()"
-    ></button>
-    <span class="pending-count">({{ userPendingSuggestions.length }})</span>
-    <p-progressSpinner *ngIf="loadingStatuses" styleClass="ml-2" strokeWidth="3" animationDuration=".5s"></p-progressSpinner>
+      label="Search"
+      (click)="search()"
+      class="p-button-primary mt-2 ml-2"
+      [disabled]="isLoading || (!searchField)">
+    </button>
+
+    <!-- Loading Spinner -->
+    @if (isLoading) {
+      <p-progressSpinner styleClass="ml-2" strokeWidth="4" animationDuration=".5s"></p-progressSpinner>
+    }
   </div>
 
-  <div *ngIf="userPendingSuggestions.length > 0 && showPendingRequests" class="p-field pending-requests">
-    <div class="pending-header">
-      <div class="pending-title">
-        Your pending requests
-      </div>
+  <!-- User pending requests (hidden by default) -->
+  @if (userPendingSuggestions.length > 0) {
+    <div class="p-field pending-toggle">
+      <button
+        pButton
+        type="button"
+        [label]="showPendingRequests ? 'Hide my pending requests' : 'Show my pending requests'"
+        [icon]="showPendingRequests ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+        class="p-button-outlined pending-toggle-btn"
+        (click)="togglePendingRequests()"
+      ></button>
+      <span class="pending-count">({{ userPendingSuggestions.length }})</span>
+      @if (loadingStatuses) {
+        <p-progressSpinner styleClass="ml-2" strokeWidth="3" animationDuration=".5s"></p-progressSpinner>
+      }
     </div>
-    <div class="pending-list">
-      <div *ngFor="let item of userPendingSuggestions" class="pending-item">
-        <div class="pending-info">
-          <div class="pending-name">{{ item.name }}</div>
-          <div class="pending-meta">
-            {{ item.version || 'Unknown version' }} • {{ item.base_model || 'Unknown base model' }}
-          </div>
+  }
+
+  @if (userPendingSuggestions.length > 0 && showPendingRequests) {
+    <div class="p-field pending-requests">
+      <div class="pending-header">
+        <div class="pending-title">
+          Your pending requests
         </div>
-        <button pButton type="button" label="Cancel" icon="pi pi-times" class="p-button-danger pending-cancel-btn" (click)="cancelSuggestion(item)"></button>
+      </div>
+      <div class="pending-list">
+        @for (item of userPendingSuggestions; track item) {
+          <div class="pending-item">
+            <div class="pending-info">
+              <div class="pending-name">{{ item.name }}</div>
+              <div class="pending-meta">
+                {{ item.version || 'Unknown version' }} • {{ item.base_model || 'Unknown base model' }}
+              </div>
+            </div>
+            <button pButton type="button" label="Cancel" icon="pi pi-times" class="p-button-danger pending-cancel-btn" (click)="cancelSuggestion(item)"></button>
+          </div>
+        }
       </div>
     </div>
-  </div>
+  }
 
   <!-- Mobile View: Card layout for LoRA results -->
-  <div *ngIf="!isLoading && searchResults && searchResults.length > 0" class="p-field mobile-results">
-    <div *ngFor="let lora of searchResults" class="lora-card" 
-      [ngClass]="[getLoraStatusClass(lora), lora === selectedLoRA ? 'selected' : '']"
-      (click)="selectLora(lora)">
-      <div class="lora-card-header">
-        <!-- Image click triggers the image expansion dialog -->
-        <img *ngIf="lora.images && lora.images.length > 0" [src]="lora.images[0].url" alt="LoRA Preview" class="preview-image" (click)="openImageDialog(lora.images[0].url)" />
-        <div class="lora-card-title">{{ lora.name }}</div>
-        <ng-container *ngIf="getLoraStatus(lora) as status">
-          <span class="status-pill" [ngClass]="'status-' + status">{{ statusLabels[status] }}</span>
-        </ng-container>
-      </div>
-      <div class="lora-card-body">
-        <div class="lora-creator">
-          <span><strong>Creator:</strong> {{ lora.creator.username }}</span>
+  @if (!isLoading && searchResults && searchResults.length > 0) {
+    <div class="p-field mobile-results">
+      @for (lora of searchResults; track lora) {
+        <div class="lora-card"
+          [ngClass]="[getLoraStatusClass(lora), lora === selectedLoRA ? 'selected' : '']"
+          (click)="selectLora(lora)">
+          <div class="lora-card-header">
+            <!-- Image click triggers the image expansion dialog -->
+            @if (lora.images && lora.images.length > 0) {
+              <img [src]="lora.images[0].url" alt="LoRA Preview" class="preview-image" (click)="openImageDialog(lora.images[0].url)" />
+            }
+            <div class="lora-card-title">{{ lora.name }}</div>
+            @if (getLoraStatus(lora); as status) {
+              <span class="status-pill" [ngClass]="'status-' + status">{{ statusLabels[status] }}</span>
+            }
+          </div>
+          <div class="lora-card-body">
+            <div class="lora-creator">
+              <span><strong>Creator:</strong> {{ lora.creator.username }}</span>
+            </div>
+            <div class="lora-stats">
+              <div><strong>Downloads:</strong> {{ lora.stats.downloadCount }}</div>
+              <div><strong>Rating:</strong> <i class="pi pi-thumbs-up"></i> {{ lora.stats.thumbsUpCount }} <i class="pi pi-thumbs-down"></i> {{ lora.stats.thumbsDownCount }}</div>
+              <div><strong>Base Model:</strong> {{lora.base_model}}</div>
+            </div>
+            <div class="lora-tags">
+              <strong>Tags:</strong>
+              @for (tag of lora.tags; track tag) {
+                <p-chip label="{{ tag }}"></p-chip>
+              }
+            </div>
+            <!-- Show link to civitAi page on right corner -->
+            <div class="lora-model-link">
+              <a [href]="'https://civitai.com/models/' + lora.model_page_id" target="_blank">View Model Page</a>
+            </div>
+          </div>
         </div>
-        <div class="lora-stats">
-          <div><strong>Downloads:</strong> {{ lora.stats.downloadCount }}</div>
-          <div><strong>Rating:</strong> <i class="pi pi-thumbs-up"></i> {{ lora.stats.thumbsUpCount }} <i class="pi pi-thumbs-down"></i> {{ lora.stats.thumbsDownCount }}</div>
-          <div><strong>Base Model:</strong> {{lora.base_model}}</div>
-        </div>
-        <div class="lora-tags">
-          <strong>Tags:</strong>
-          <p-chip *ngFor="let tag of lora.tags" label="{{ tag }}"></p-chip>
-        </div>
-        <!-- Show link to civitAi page on right corner -->
-        <div class="lora-model-link">
-          <a [href]="'https://civitai.com/models/' + lora.model_page_id" target="_blank">View Model Page</a>
-        </div>
-      </div>
+      }
     </div>
-  </div>
+  }
 
   <!-- Button to select the chosen LoRA -->
-  <div *ngIf="selectedLoRA" class="p-field mt-3 lora-request-button">
-    <button pButton type="button" label="Request Selected LoRA" (click)="requestSelectedLoRA()" class="p-button-primary"></button>
-  </div>
+  @if (selectedLoRA) {
+    <div class="p-field mt-3 lora-request-button">
+      <button pButton type="button" label="Request Selected LoRA" (click)="requestSelectedLoRA()" class="p-button-primary"></button>
+    </div>
+  }
 
   <!-- Dialog to show full-size image -->
   <p-dialog header="Preview Image" [(visible)]="showImageDialog" [draggable]="false" (onHide)="showImageDialog = false">

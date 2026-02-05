@@ -1,5 +1,6 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,9 +11,11 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
 
 
 @Component({
-  selector: 'app-image-grid',
-  templateUrl: './image-grid.component.html',
-  styleUrls: ['./image-grid.component.css']
+    selector: 'app-image-grid',
+    templateUrl: './image-grid.component.html',
+    styleUrls: ['./image-grid.component.css'],
+    standalone: true,
+    imports: [CommonModule]
 })
 export class ImageGridComponent implements OnDestroy {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;

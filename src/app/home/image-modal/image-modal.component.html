@@ -1,39 +1,39 @@
-<div *ngIf="showModal" class="modal">
+@if (showModal) {
+  <div class="modal">
     <p-button class="close-button" (click)="closeModal()">Close</p-button>
-
     <div class="content-container">
-        <div class="image-container">
-            <img [src]="expandedImageSrc" alt="Expanded Image" />
-            <canvas #imageCanvas></canvas>
-            <canvas #overlayCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)"
-                (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (touchstart)="onTouchStart($event)"
-                (touchmove)="onTouchMove($event)" (touchend)="onTouchEnd()"
-                (contextmenu)="preventContextMenu($event)"></canvas>
+      <div class="image-container">
+        <img [src]="expandedImageSrc" alt="Expanded Image" />
+        <canvas #imageCanvas></canvas>
+        <canvas #overlayCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)"
+          (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()" (touchstart)="onTouchStart($event)"
+          (touchmove)="onTouchMove($event)" (touchend)="onTouchEnd()"
+        (contextmenu)="preventContextMenu($event)"></canvas>
+      </div>
+      <div class="options-container">
+        <div class="col">
+          <p-button label="Undo" icon="fa fa-rotate-left" (click)="undo()"></p-button>
         </div>
-
-        <div class="options-container">
-            <div class="col">
-                <p-button label="Undo" icon="fa fa-rotate-left" (click)="undo()"></p-button>
-            </div>
-            <div class="col">
-                <p-button (click)="enableDrawingMode()" label="Draw" icon="fa fa-pencil"></p-button>
-            </div>
-            <div class="col">
-                <p-button (click)="enableErasingMode()" label="Erase" icon="fa fa-eraser"></p-button>
-            </div>
-            <div class="col inpaint-row">
-                <!-- <p-button  label="Color" icon="fa fa-palette"></p-button> -->
-                <p-toggleButton [(ngModel)]="colorInpaintMode" onLabel="Color Inpaint" offLabel="Normal Inpaint"
-                    onIcon="fa fa-palette" offIcon="fa fa-spray-can"
-                    (click)="toggleColorInpaintMode()"></p-toggleButton>
-                <p-colorPicker *ngIf="colorInpaintMode" [(ngModel)]="color"></p-colorPicker>
-            </div>
-            <div class="col brush-size-col">
-                <label for="brushSize" style="color: white;">Brush Size: {{brushSize}}</label>
-                <input id="brushSize" type="range" [(ngModel)]="brushSize" min="1" max="100">
-            </div>
-
+        <div class="col">
+          <p-button (click)="enableDrawingMode()" label="Draw" icon="fa fa-pencil"></p-button>
         </div>
-
+        <div class="col">
+          <p-button (click)="enableErasingMode()" label="Erase" icon="fa fa-eraser"></p-button>
+        </div>
+        <div class="col inpaint-row">
+          <label style="color: white; margin-right: .5rem;">
+            {{ colorInpaintMode ? 'Color Inpaint' : 'Normal Inpaint' }}
+          </label>
+          <p-toggleswitch [(ngModel)]="colorInpaintMode" (onChange)="toggleColorInpaintMode()"></p-toggleswitch>
+          @if (colorInpaintMode) {
+            <p-colorPicker [(ngModel)]="color"></p-colorPicker>
+          }
+        </div>
+        <div class="col brush-size-col">
+          <label for="brushSize" style="color: white;">Brush Size: {{brushSize}}</label>
+          <input id="brushSize" type="range" [(ngModel)]="brushSize" min="1" max="100">
+        </div>
+      </div>
     </div>
-</div>
+  </div>
+}

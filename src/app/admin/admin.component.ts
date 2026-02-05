@@ -1,10 +1,27 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { StableDiffusionService } from '../stable-diffusion.service';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { interval, Subscription } from 'rxjs';
 import { environment } from 'src/environments/environment';
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { PanelModule } from 'primeng/panel';
+import { RippleModule } from 'primeng/ripple';
+import { SelectButtonModule } from 'primeng/selectbutton';
+import { TableModule } from 'primeng/table';
+import { TabsModule } from 'primeng/tabs';
+import { TagModule } from 'primeng/tag';
+import { ToastModule } from 'primeng/toast';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { TooltipModule } from 'primeng/tooltip';
 
 interface DownloaderStatus {
   status: string;
@@ -29,9 +46,29 @@ interface DownloadHistoryItem {
 }
 
 @Component({
-  selector: 'app-admin',
-  templateUrl: './admin.component.html',
-  styleUrls: ['./admin.component.css']
+    selector: 'app-admin',
+    templateUrl: './admin.component.html',
+    styleUrls: ['./admin.component.css'],
+    standalone: true,
+    imports: [
+      CommonModule,
+      FormsModule,
+      RouterLink,
+      ButtonModule,
+      ConfirmDialogModule,
+      DialogModule,
+      InputTextModule,
+      MultiSelectModule,
+      PanelModule,
+      RippleModule,
+      SelectButtonModule,
+      TableModule,
+      TabsModule,
+      TagModule,
+      ToastModule,
+      ToggleSwitchModule,
+      TooltipModule
+    ]
 })
 export class AdminComponent implements OnInit, OnDestroy {
   // Data
@@ -43,6 +80,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   // UI State
   loadingLoras = false;
   loadingSuggestions = false;
+  adminTab = 0;
   detailsDialogVisible = false;
   detailsDialogTitle = '';
   detailsJson = '';
@@ -769,13 +807,13 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
 
-  getStatusSeverity(status: string): 'success' | 'warning' | 'danger' | 'secondary' | 'info' | 'contrast' | undefined {
+  getStatusSeverity(status: string): 'success' | 'warn' | 'danger' | 'secondary' | 'info' | 'contrast' | undefined {
     switch (status?.toLowerCase()) {
       case 'idle': return 'success';
       case 'downloading': return 'info';
       case 'checking': return 'info';
       case 'error': return 'danger';
-      case 'stopped': return 'warning';
+      case 'stopped': return 'warn';
       case 'offline': return 'danger';
       default: return 'secondary';
     }
