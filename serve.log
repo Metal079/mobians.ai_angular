@@ -566,3 +566,16 @@ Page reload sent to client(s).
 Application bundle generation complete. [0.912 seconds] - 2026-02-05T19:39:00.889Z
 
 Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m                [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m                            [2m | [22m[2mmain[22m                   [2m | [22m [36m88.93 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m                   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mhome.component-F3R7PPUM.js[39m         [2m | [22m[2mhome-component[22m         [2m | [22m[36m508.81 kB[39m[2m | [22m
+[32madmin.component-DZCLDEST.js[39m        [2m | [22m[2madmin-component[22m        [2m | [22m[36m160.21 kB[39m[2m | [22m
+[32mauth-callback.component-FEJNJFI3.js[39m[2m | [22m[2mauth-callback-component[22m[2m | [22m  [36m6.16 kB[39m[2m | [22m
+
+Application bundle generation complete. [1.683 seconds] - 2026-02-05T19:45:08.938Z
+
+Page reload sent to client(s).
