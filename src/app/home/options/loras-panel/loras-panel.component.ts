@@ -207,14 +207,19 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     }
 
     const screenWidth = window.innerWidth;
-    let dialogWidth = '50%';
-    if (screenWidth <= 600) {
-      dialogWidth = '90%';
-    }
+    const dialogWidth = screenWidth <= 700 ? '92vw' : '50vw';
 
     const dialogRef = this.dialogService.open(AddLorasComponent, {
       header: 'Request Loras To Be Added!',
       width: dialogWidth,
+      breakpoints: {
+        '1100px': '72vw',
+        '700px': '92vw',
+      },
+      closable: true,
+      closeOnEscape: true,
+      dismissableMask: true,
+      styleClass: 'request-loras-dialog',
       data: {
         showNSFWLoras: this.showNSFWLoras,
       },

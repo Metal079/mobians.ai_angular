@@ -302,6 +302,7 @@ export class OptionsComponent implements OnInit {
         this.generationRequest.job_type = "txt2img";
         this.generationRequest.image = undefined;
         this.generationRequest.mask_image = undefined;
+        this.generationRequest.color_inpaint = undefined;
         this.referenceImage = undefined;
         // If the user re-enters txt2img, validate auth/credit constraints.
         this.enforceHiresConstraints();
@@ -361,6 +362,7 @@ export class OptionsComponent implements OnInit {
       this.inpaintMask = changes['inpaintMask'].currentValue;
       if (this.inpaintMask == undefined) {
         this.generationRequest.mask_image = undefined;
+        this.generationRequest.color_inpaint = undefined;
         this.generationRequest.job_type = this.referenceImage ? "img2img" : "txt2img";
       }
       else {
@@ -873,6 +875,12 @@ export class OptionsComponent implements OnInit {
       }
     }
 
+    // Clear color_inpaint if there's no mask - prevents backend crash when
+    // filter_image tries to process a null mask with color_inpaint=true
+    if (this.generationRequest.color_inpaint && !this.generationRequest.mask_image) {
+      this.generationRequest.color_inpaint = undefined;
+    }
+
     // CRITICAL: Validate that img2img/inpainting jobs have image data before sending
     // This prevents the bug where job_type is img2img but no image is attached
     if ((this.generationRequest.job_type === 'img2img' || this.generationRequest.job_type === 'inpainting') 
@@ -1319,6 +1327,10 @@ export class OptionsComponent implements OnInit {
 
   async deleteAllImages() {
     await this.historyPanel?.deleteAllImages();
+  }
+
+  async downloadAllImages() {
+    await this.historyPanel?.downloadAllImages();
   }
 
   // Example function after successful Discord login (no localStorage persistence)

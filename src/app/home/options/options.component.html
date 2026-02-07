@@ -29,10 +29,11 @@
 
   <!-- Credits display for logged in users -->
   @if (isLoggedIn) {
-    <div class="credits-badge d-flex align-items-center">
-      <span class="badge bg-primary">
+    <div class="credits-badge">
+      <span class="credits-pill">
         <i class="pi pi-wallet me-1"></i>
-        {{userCredits}} credits
+        <span class="credits-count">{{userCredits | number}}</span>
+        <span class="credits-label">credits</span>
       </span>
     </div>
   }
@@ -177,6 +178,7 @@
   (enableNotificationsChange)="enableNotifications = $event"
   (enableNotification)="enableNotification()"
   (resetSessionStorage)="resetSessionStorage()"
+  (downloadAllImages)="downloadAllImages()"
   (deleteAllImages)="deleteAllImages()"
 ></app-generation-options-panel>
 

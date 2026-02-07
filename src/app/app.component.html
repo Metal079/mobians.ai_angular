@@ -2,6 +2,8 @@
 <app-login-modal [visible]="loginPromptVisible" (visibleChange)="onLoginModalVisibleChange($event)"></app-login-modal>
 
 <!-- Floating user menu (always available) -->
-<div class="floating-menu" style="position: fixed; right: .5rem; bottom: .5rem; z-index: 1000;">
-	<app-profile-menu (loginRequest)="loginPromptVisible = true"></app-profile-menu>
-</div>
+@if (!hideFloatingMenu) {
+  <div class="floating-menu" style="position: fixed; right: .5rem; bottom: .5rem; z-index: 1000;">
+    <app-profile-menu (loginRequest)="loginPromptVisible = true"></app-profile-menu>
+  </div>
+}

@@ -1,15 +1,39 @@
 /* ===== Admin Panel - Simplified ===== */
 
+:host {
+  --admin-text: #ffffff;
+  --admin-muted-text: rgba(255, 255, 255, 0.92);
+  --admin-subtle-text: rgba(255, 255, 255, 0.78);
+  --admin-card-bg: #2b86e9;
+  --admin-panel-bg: #249de8;
+  --admin-border: #2286d3;
+  --admin-expand-bg: rgba(7, 26, 51, 0.35);
+  --admin-expand-icon: #f3f9ff;
+}
+
+:host-context(body.theme-navy) {
+  --admin-text: var(--theme-surface-text, #e6eef8);
+  --admin-muted-text: rgba(230, 238, 248, 0.72);
+  --admin-subtle-text: rgba(230, 238, 248, 0.56);
+  --admin-card-bg: var(--theme-surface-bg, #112a4d);
+  --admin-panel-bg: var(--theme-surface-alt-bg, #0d2344);
+  --admin-border: var(--theme-border, #1c3a60);
+  --admin-expand-bg: var(--admin-card-bg);
+  --admin-expand-icon: var(--theme-primary, #3c78c9);
+}
+
 .admin-wrapper {
   min-height: 100vh;
-  background: #0f1419;
+  background: var(--theme-page-bg, #0f1419);
   padding: 0;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 /* Header */
 .admin-header {
-  background: #1a1f2e;
-  border-bottom: 1px solid #2a3040;
+  background: var(--admin-panel-bg);
+  border-bottom: 1px solid var(--admin-border);
   padding: 1rem 1.5rem;
   position: sticky;
   top: 0;
@@ -37,30 +61,30 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #6366f1;
+  background: var(--theme-primary, #6366f1);
   border-radius: 8px;
-  color: #fff;
+  color: var(--theme-primary-text, #fff);
   text-decoration: none;
 }
 
 .home-btn:hover {
-  background: #4f46e5;
+  background: var(--theme-primary-hover, #4f46e5);
 }
 
 .home-btn i {
   font-size: 1.25rem;
-  color: #fff !important;
+  color: var(--theme-primary-text, #fff) !important;
 }
 
 .header-text h1 {
   margin: 0;
-  color: #fff;
+  color: var(--admin-text);
   font-size: 1.25rem;
 }
 
 .header-text p {
   margin: 0.25rem 0 0;
-  color: #888;
+  color: var(--admin-muted-text);
   font-size: 0.75rem;
 }
 
@@ -78,7 +102,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #252a3a;
+  background: var(--admin-card-bg);
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
 }
@@ -100,53 +124,69 @@
 .stat-value {
   font-size: 1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--admin-text);
 }
 
 .stat-label {
   font-size: 0.65rem;
-  color: #888;
+  color: var(--admin-muted-text);
   text-transform: uppercase;
 }
 
 /* Content */
 .admin-content {
+  width: min(1600px, 100%);
   max-width: 1600px;
   margin: 0 auto;
   padding: 1.5rem;
+  box-sizing: border-box;
 }
 
 /* Tabs */
 :host ::ng-deep .admin-tabs .p-tablist-content {
   background: transparent;
+  max-width: 100%;
 }
 
 :host ::ng-deep .admin-tabs .p-tablist {
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
+  background: var(--admin-panel-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 4px;
   gap: 4px;
   display: inline-flex;
   margin-bottom: 1rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+:host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+:host ::ng-deep .admin-tabs .p-tablist .p-tablist-active-bar {
+  display: none;
 }
 
 :host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab {
+  flex: 0 0 auto;
   background: transparent;
   border: none;
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  color: #888;
+  color: var(--admin-muted-text);
 }
 
 :host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab:hover {
-  background: #252a3a;
-  color: #fff;
+  background: var(--admin-card-bg);
+  color: var(--admin-text);
 }
 
 :host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab.p-tab-active {
-  background: #6366f1;
-  color: #fff;
+  background: var(--theme-primary, #6366f1);
+  color: var(--theme-primary-text, #fff);
 }
 
 :host ::ng-deep .admin-tabs .p-tabpanels {
@@ -165,7 +205,8 @@
 }
 
 .tab-badge {
-  background: #333;
+  background: rgba(11, 18, 32, 0.2);
+  color: var(--admin-text);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -185,8 +226,8 @@
   gap: 1rem;
   margin-bottom: 1rem;
   padding: 0.75rem;
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
+  background: var(--admin-panel-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
 }
 
@@ -208,54 +249,72 @@
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: #666 !important;
+  color: var(--admin-subtle-text) !important;
 }
 
 .search-input input {
-  background: #252a3a;
-  border: 1px solid #333;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
   padding: 0.5rem 0.75rem 0.5rem 2rem;
-  color: #fff;
+  color: var(--admin-text);
   width: 100%;
 }
 
 .search-input input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: var(--theme-primary, #6366f1);
+  box-shadow: 0 0 0 0.12rem rgba(255, 255, 255, 0.35);
+}
+
+.search-input input::placeholder {
+  color: var(--admin-subtle-text);
+  opacity: 1;
 }
 
 :host ::ng-deep .filter-multiselect .p-multiselect {
-  background: #252a3a;
-  border: 1px solid #333;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
 }
 
 :host ::ng-deep .filter-btn-group .p-button {
-  background: #252a3a;
-  border: 1px solid #333;
-  color: #888;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-muted-text);
   padding: 0.5rem 0.75rem;
 }
 
 :host ::ng-deep .filter-btn-group .p-button.p-highlight {
-  background: #6366f1;
-  border-color: #6366f1;
-  color: #fff;
+  background: var(--theme-primary, #6366f1);
+  border-color: var(--theme-primary, #6366f1);
+  color: var(--theme-primary-text, #fff);
 }
 
 /* Tables */
 :host ::ng-deep .admin-table {
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
+  background: var(--admin-panel-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   overflow: hidden;
 }
 
+:host ::ng-deep .admin-table .p-datatable-wrapper {
+  overflow: auto;
+}
+
+:host ::ng-deep .admin-table .p-datatable-table {
+  min-width: 1050px;
+}
+
+:host ::ng-deep .admin-table .p-column-title {
+  display: none;
+}
+
 :host ::ng-deep .admin-table .p-datatable-thead > tr > th {
-  background: #252a3a;
-  border-color: #2a3040;
-  color: #888;
+  background: var(--admin-card-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
   font-weight: 600;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -267,28 +326,28 @@
 }
 
 :host ::ng-deep .admin-table .p-datatable-tbody > tr:hover {
-  background: #252a3a;
+  background: var(--admin-card-bg);
 }
 
 :host ::ng-deep .admin-table .p-datatable-tbody > tr > td {
-  border-color: #2a3040;
-  color: #ddd;
+  border-color: var(--admin-border);
+  color: var(--admin-text);
   padding: 0.75rem 1rem;
 }
 
 :host ::ng-deep .admin-table .p-paginator {
-  background: #1a1f2e;
-  border-color: #2a3040;
+  background: var(--admin-panel-bg);
+  border-color: var(--admin-border);
   padding: 0.5rem;
 }
 
 :host ::ng-deep .admin-table .p-paginator .p-paginator-element {
-  color: #888;
+  color: var(--admin-text);
 }
 
 :host ::ng-deep .admin-table .p-paginator .p-highlight {
-  background: #6366f1;
-  color: #fff;
+  background: var(--theme-primary, #6366f1);
+  color: var(--theme-primary-text, #fff);
 }
 
 /* Buttons */
@@ -315,23 +374,23 @@
 
 :host ::ng-deep .p-button.p-button-outlined {
   background: transparent;
-  border: 1px solid #555;
-  color: #fff !important;
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text) !important;
 }
 
 :host ::ng-deep .p-button.p-button-text {
   background: transparent;
-  color: #a5b4fc !important;
+  color: var(--admin-text) !important;
 }
 
 :host ::ng-deep .p-button.p-button-text:hover {
-  background: #252a3a;
+  background: var(--admin-card-bg);
 }
 
 :host ::ng-deep .expand-btn,
 :host ::ng-deep button[pRowToggler] {
-  background: #252a3a !important;
-  border: none !important;
+  background: var(--admin-expand-bg) !important;
+  border: 1px solid var(--admin-border) !important;
   width: 32px !important;
   height: 32px !important;
   border-radius: 6px !important;
@@ -339,7 +398,7 @@
 
 :host ::ng-deep .expand-btn i,
 :host ::ng-deep button[pRowToggler] i {
-  color: #a5b4fc !important;
+  color: var(--admin-expand-icon) !important;
 }
 
 /* Images */
@@ -348,7 +407,7 @@
   height: 48px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid #333;
+  border: 1px solid var(--admin-border);
 }
 
 .preview-img.clickable {
@@ -356,7 +415,7 @@
 }
 
 .preview-img.clickable:hover {
-  border-color: #6366f1;
+  border-color: var(--theme-primary, #6366f1);
 }
 
 .preview-img-lg {
@@ -364,7 +423,7 @@
   height: 100px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #333;
+  border: 1px solid var(--admin-border);
 }
 
 .preview-img-lg.clickable {
@@ -378,16 +437,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #252a3a;
-  border: 1px dashed #444;
+  background: var(--admin-card-bg);
+  border: 1px dashed var(--admin-border);
   border-radius: 8px;
-  color: #666;
+  color: var(--admin-subtle-text);
   gap: 4px;
 }
 
 .no-image-placeholder i {
   font-size: 1.5rem;
-  color: #666 !important;
+  color: var(--admin-subtle-text) !important;
 }
 
 .no-image-small {
@@ -396,23 +455,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #252a3a;
-  border: 1px dashed #444;
+  background: var(--admin-card-bg);
+  border: 1px dashed var(--admin-border);
   border-radius: 6px;
 }
 
 .no-image-small i {
-  color: #555 !important;
+  color: var(--admin-subtle-text) !important;
 }
 
 /* Cell Elements */
 .lora-name {
+  display: block;
   font-weight: 600;
-  color: #fff;
+  color: var(--admin-text);
+  word-break: break-word;
 }
 
 .version-text {
-  color: #888;
+  color: var(--admin-text);
   font-family: monospace;
   font-size: 0.8rem;
 }
@@ -440,13 +501,13 @@
 }
 
 .submitter-text {
-  color: #aaa;
+  color: var(--admin-text);
 }
 
 .internal-name {
   display: block;
   font-size: 0.7rem;
-  color: #666;
+  color: var(--admin-muted-text);
   font-family: monospace;
 }
 
@@ -493,7 +554,7 @@
 }
 
 .no-link {
-  color: #555;
+  color: var(--admin-subtle-text);
 }
 
 /* Name Editing */
@@ -534,17 +595,17 @@
 }
 
 .name-edit-form input {
-  background: #252a3a;
-  border: 1px solid #444;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 4px;
   padding: 6px 10px;
-  color: #fff;
+  color: var(--admin-text);
   width: 200px;
 }
 
 .name-edit-form input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: var(--theme-primary, #6366f1);
 }
 
 .detail-item.full-width {
@@ -556,8 +617,8 @@
   display: flex;
   gap: 1rem;
   padding: 1rem;
-  background: #252a3a;
-  border: 1px solid #333;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   margin: 0.5rem 0;
 }
@@ -588,12 +649,12 @@
 .detail-label {
   font-size: 0.65rem;
   text-transform: uppercase;
-  color: #666;
+  color: var(--admin-subtle-text);
 }
 
 .detail-value {
   font-size: 0.875rem;
-  color: #fff;
+  color: var(--admin-text);
   word-break: break-word;
 }
 
@@ -602,7 +663,7 @@
   flex-direction: column;
   gap: 0.35rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--admin-border);
 }
 
 .image-upload-controls {
@@ -631,7 +692,7 @@
   display: flex;
   gap: 1.5rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--admin-border);
 }
 
 .toggle-item {
@@ -641,7 +702,7 @@
 }
 
 .toggle-label {
-  color: #aaa;
+  color: var(--admin-text);
   font-size: 0.8rem;
 }
 
@@ -653,7 +714,7 @@
 
 .suggestion-actions {
   padding-top: 0.75rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--admin-border);
 }
 
 .action-buttons {
@@ -669,13 +730,13 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  color: #666;
+  color: var(--admin-subtle-text);
   gap: 0.5rem;
 }
 
 .empty-state i {
   font-size: 2rem;
-  color: #555 !important;
+  color: var(--admin-subtle-text) !important;
 }
 
 .empty-state.success i {
@@ -684,20 +745,20 @@
 
 /* Dialogs */
 :host ::ng-deep .details-dialog .p-dialog-header {
-  background: #1a1f2e;
-  border-bottom: 1px solid #333;
+  background: var(--admin-panel-bg);
+  border-bottom: 1px solid var(--admin-border);
 }
 
 :host ::ng-deep .details-dialog .p-dialog-content {
-  background: #1a1f2e;
+  background: var(--admin-panel-bg);
 }
 
 .details-json {
-  background: #0f1419;
-  border: 1px solid #333;
+  background: var(--theme-page-bg, #0f1419);
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
   padding: 1rem;
-  color: #a5b4fc;
+  color: #ffffff;
   font-family: monospace;
   font-size: 0.75rem;
   white-space: pre-wrap;
@@ -740,8 +801,8 @@
 
 .downloader-status-card,
 .download-history-card {
-  background: #1a1f2e;
-  border: 1px solid #2a3040;
+  background: var(--admin-panel-bg);
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -754,13 +815,13 @@
   gap: 1rem;
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #2a3040;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .status-header h3,
 .history-header h3 {
   margin: 0;
-  color: #fff;
+  color: var(--admin-text);
   font-size: 1rem;
   display: flex;
   align-items: center;
@@ -769,7 +830,7 @@
 
 .status-header h3 i,
 .history-header h3 i {
-  color: #a5b4fc !important;
+  color: var(--theme-primary, #6366f1) !important;
 }
 
 .status-actions {
@@ -788,7 +849,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 0.75rem;
-  background: #252a3a;
+  background: var(--admin-card-bg);
   border-radius: 6px;
 }
 
@@ -801,12 +862,12 @@
 .status-label {
   font-size: 0.65rem;
   text-transform: uppercase;
-  color: #666;
+  color: var(--admin-subtle-text);
 }
 
 .status-value {
   font-size: 0.875rem;
-  color: #fff;
+  color: var(--admin-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -829,7 +890,7 @@
   align-items: center;
   padding: 2rem;
   text-align: center;
-  color: #888;
+  color: var(--admin-muted-text);
   gap: 0.5rem;
 }
 
@@ -840,11 +901,11 @@
 
 .status-offline p {
   margin: 0;
-  color: #ddd;
+  color: var(--admin-text);
 }
 
 .status-offline code {
-  background: #252a3a;
+  background: var(--admin-card-bg);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -869,6 +930,49 @@
   cursor: help;
 }
 
+/* Ensure admin fully follows navy palette when theme is navy */
+:host-context(body.theme-navy) .admin-wrapper {
+  background: var(--theme-page-bg);
+}
+
+:host-context(body.theme-navy) .admin-header,
+:host-context(body.theme-navy) ::ng-deep .admin-tabs .p-tablist,
+:host-context(body.theme-navy) .tab-actions,
+:host-context(body.theme-navy) ::ng-deep .admin-table,
+:host-context(body.theme-navy) ::ng-deep .admin-table .p-paginator,
+:host-context(body.theme-navy) .downloader-status-card,
+:host-context(body.theme-navy) .download-history-card {
+  background: var(--theme-surface-alt-bg);
+  border-color: var(--theme-border);
+}
+
+:host-context(body.theme-navy) .home-btn,
+:host-context(body.theme-navy) ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab.p-tab-active,
+:host-context(body.theme-navy) ::ng-deep .filter-btn-group .p-button.p-highlight,
+:host-context(body.theme-navy) ::ng-deep .admin-table .p-paginator .p-highlight {
+  background: var(--theme-primary);
+  border-color: var(--theme-primary);
+  color: var(--theme-primary-text);
+}
+
+:host-context(body.theme-navy) ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab:hover,
+:host-context(body.theme-navy) .search-input input,
+:host-context(body.theme-navy) ::ng-deep .filter-multiselect .p-multiselect,
+:host-context(body.theme-navy) ::ng-deep .filter-btn-group .p-button,
+:host-context(body.theme-navy) ::ng-deep .admin-table .p-datatable-thead > tr > th,
+:host-context(body.theme-navy) ::ng-deep .admin-table .p-datatable-tbody > tr:hover,
+:host-context(body.theme-navy) .status-item {
+  background: var(--theme-surface-bg);
+  border-color: var(--theme-border);
+}
+
+:host-context(body.theme-navy) .search-input input:focus,
+:host-context(body.theme-navy) .name-edit-form input:focus,
+:host-context(body.theme-navy) .preview-img.clickable:hover,
+:host-context(body.theme-navy) .preview-img-lg.clickable:hover {
+  border-color: var(--theme-primary);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .stats-cards { display: none; }
@@ -882,6 +986,16 @@
   
   :host ::ng-deep .admin-tabs .p-tablist .p-tablist-tab-list .p-tab {
     flex: 1;
+  }
+
+  :host ::ng-deep .admin-table .p-column-title {
+    display: inline-block;
+    min-width: 74px;
+    margin-right: 0.5rem;
+    color: var(--admin-text);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
   }
   
   .tab-header span:not(.tab-badge) { display: none; }
@@ -905,9 +1019,9 @@
     flex-wrap: wrap;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
-    background: #1a1f2e;
+    background: var(--admin-panel-bg);
     border-radius: 8px;
-    border: 1px solid #2a3040;
+    border: 1px solid var(--admin-border);
   }
   
   :host ::ng-deep .admin-table .p-datatable-tbody > tr > td {

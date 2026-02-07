@@ -18,6 +18,14 @@
   margin-left: 20px;
 }
 
+.history-maintenance-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 480px) {
   .card-body {
     min-height: 70vh;
@@ -28,5 +36,13 @@
   #collapseExample {
     margin-left: 0;
   }
-}
 
+  .history-maintenance-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .history-maintenance-actions .btn {
+    flex: 1 1 auto;
+  }
+}

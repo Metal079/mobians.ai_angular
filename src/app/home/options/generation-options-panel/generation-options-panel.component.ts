@@ -40,6 +40,7 @@ export class GenerationOptionsPanelComponent {
   @Output() enableNotification = new EventEmitter<void>();
   @Output() resetSessionStorage = new EventEmitter<void>();
   @Output() deleteAllImages = new EventEmitter<void>();
+  @Output() downloadAllImages = new EventEmitter<void>();
 
   onPanelThemeChange(nextTheme: 'sonic' | 'navy') {
     this.panelThemeChange.emit(nextTheme);

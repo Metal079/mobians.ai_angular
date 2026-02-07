@@ -85,7 +85,7 @@ export class AuthService {
             const current = this._credits$.value;
             this._credits$.next({
               credits: response.user.credits,
-              canClaimDailyBonus: current?.canClaimDailyBonus ?? false,
+              canClaimDailyBonus: this.normalizeCanClaimDailyBonus(current?.canClaimDailyBonus),
               dailyBonusStreak: response.user.daily_bonus_streak ?? current?.dailyBonusStreak ?? 0,
               lastDailyBonus: response.user.last_daily_bonus ?? current?.lastDailyBonus ?? null,
               nextDailyBonus: current?.nextDailyBonus,
@@ -145,6 +145,20 @@ export class AuthService {
     return lastDailyBonus !== todayUTC;
   }
 
+  private normalizeCanClaimDailyBonus(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value > 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1';
+    }
+    return false;
+  }
+
   getToken(): string | null {
     const userData = this.shared.getUserDataValue();
     return userData?.token || null;
@@ -180,7 +194,7 @@ export class AuthService {
       if (response?.status === 'success') {
         const creditsData: UserCredits = {
           credits: response.credits,
-          canClaimDailyBonus: response.can_claim_daily_bonus,
+          canClaimDailyBonus: this.normalizeCanClaimDailyBonus(response.can_claim_daily_bonus),
           dailyBonusStreak: response.daily_bonus_streak,
           lastDailyBonus: response.last_daily_bonus,
           nextDailyBonus: response.next_daily_bonus,

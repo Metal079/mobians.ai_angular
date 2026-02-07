@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, NgZone, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DynamicDialogRef } from 'primeng/dynamicdialog';
@@ -6,7 +7,7 @@ import { DynamicDialogConfig } from 'primeng/dynamicdialog';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MessageService } from 'primeng/api';
 import { SharedService } from 'src/app/shared.service';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import { catchError, finalize } from 'rxjs/operators';
 import { ButtonModule } from 'primeng/button';
 import { ChipModule } from 'primeng/chip';
@@ -15,6 +16,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
+type SearchOption = 'lora_name' | 'model_id' | 'username';
 
 @Component({
     selector: 'app-add-loras',
@@ -33,7 +35,16 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
     ]
 })
 export class AddLorasComponent {
-  selectedSearchOption: string | null = 'lora_name'; // Default to Search by Name
+  private readonly destroyRef = inject(DestroyRef);
+  private isComponentDestroyed = false;
+
+  searchOptions: { value: SearchOption; label: string; icon: string }[] = [
+    { value: 'lora_name', label: 'Search by Name', icon: 'pi pi-search' },
+    { value: 'model_id', label: 'Search by Model ID', icon: 'pi pi-id-card' },
+    { value: 'username', label: 'Search by Creator', icon: 'pi pi-user' }
+  ];
+
+  selectedSearchOption: SearchOption = 'lora_name';
   loraSha256: string = '';
   loraFile: File | null = null;
   searchField: string = ''; // New field for search field
@@ -48,6 +59,7 @@ export class AddLorasComponent {
   isLoading: boolean = false;
   loadingStatuses: boolean = false;
   showPendingRequests: boolean = false;
+  hasSearched: boolean = false;
 
   approvedVersionIds: Set<string> = new Set();
   pendingVersionIds: Set<string> = new Set();
@@ -69,7 +81,13 @@ export class AddLorasComponent {
     , private stableDiffusionService: StableDiffusionService
     , private messageService: MessageService
     , private sharedService: SharedService
-  ) { }
+    , private cdr: ChangeDetectorRef
+    , private ngZone: NgZone
+  ) {
+    this.destroyRef.onDestroy(() => {
+      this.isComponentDestroyed = true;
+    });
+  }
 
   ngOnInit(): void {
     const fromParent = this.config?.data?.showNSFWLoras;
@@ -88,10 +106,11 @@ export class AddLorasComponent {
     localStorage.setItem('showNSFWLoras', this.showNSFWLoras.toString());
   }
 
-  selectOption(option: string) {
+  selectOption(option: SearchOption) {
     this.selectedSearchOption = option;
     this.searchResults = [];
     this.selectedLoRA = null;
+    this.hasSearched = false;
 
     // Reset the form fields
     this.loraFile = null;
@@ -103,81 +122,33 @@ export class AddLorasComponent {
   }
 
   search() {
-    if (this.isLoading || !this.searchField) return;
+    if (this.isLoading) return;
+    const query = this.searchField.trim();
+    if (!query) return;
+
+    this.searchField = query;
+    this.hasSearched = true;
 
     if (this.selectedSearchOption === 'username') {
-      this.searchByUsername();
+      this.searchByUsername(query);
     } else if (this.selectedSearchOption === 'lora_name') {
-      this.searchByLoRAName();
+      this.searchByLoRAName(query);
     } else if (this.selectedSearchOption === 'model_id') {
-      this.searchByModelId();
+      this.searchByModelId(query);
     }
   }
 
-  searchByUsername() {
-    this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByUser(this.searchField, this.showNSFWLoras).subscribe({
-      next: (response: any) => {
-        console.log('civitAi user search done');
-        this.searchResults = response;
-
-        // Append version name to each result
-        this.searchResults.forEach((result: any) => {
-          result['name'] += ' - ' + result['model_name'];
-        });
-
-        this.isLoading = false;
-      },
-      error: (error: any) => {
-        console.log('error', error);
-        this.showError(error);
-        this.isLoading = false;
-      }
-    });
+  searchByUsername(query: string) {
+    this.executeSearch(this.stableDiffusionService.searchByUser(query, this.showNSFWLoras), 'civitAi user search done');
   }
 
-  searchByLoRAName() {
-    this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByQuery(this.searchField, this.showNSFWLoras).subscribe({
-      next: (response: any) => {
-        console.log('civitAi query search done');
-        this.searchResults = response;
-
-        // Append version name to each result
-        this.searchResults.forEach((result: any) => {
-          result['name'] += ' - ' + result['model_name'];
-        });
-
-        this.isLoading = false;
-      },
-      error: (error: any) => {
-        console.log('error', error);
-        this.showError(error);
-        this.isLoading = false;
-      }
-    });
+  searchByLoRAName(query: string) {
+    this.executeSearch(this.stableDiffusionService.searchByQuery(query, this.showNSFWLoras), 'civitAi query search done');
   }
 
   // New method to search by Model ID
-  searchByModelId() {
-    this.isLoading = true; // Start loading
-    this.stableDiffusionService.searchByID(this.searchField, this.showNSFWLoras).subscribe({
-      next: (response: any) => {
-        this.searchResults = response;
-
-        // Append version name to each result
-        this.searchResults.forEach((result: any) => {
-          result['name'] += ' - ' + result['model_name'];
-        });
-
-        this.isLoading = false;
-      },
-      error: (error: any) => {
-        console.log('error', error);
-        this.showError(error);
-        this.isLoading = false;
-      }
-    });
+  searchByModelId(query: string) {
+    this.executeSearch(this.stableDiffusionService.searchByID(query, this.showNSFWLoras), 'civitAi model ID search done');
   }
 
   requestSelectedLoRA() {
@@ -211,6 +182,7 @@ export class AddLorasComponent {
             life: 5000  // Here is the addition.
           });
           this.loadSuggestionStatuses();
+          this.close();
         },
         error: (error: any) => {
           console.log('error', error);
@@ -218,7 +190,6 @@ export class AddLorasComponent {
         }
       });
     }
-    this.ref.close({ showNSFWLoras: this.showNSFWLoras });
   }
 
   selectLora(lora: any) {
@@ -231,19 +202,39 @@ export class AddLorasComponent {
     this.showImageDialog = true;
   }
 
+  previewImage(event: Event, imageUrl: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.openImageDialog(imageUrl);
+  }
+
+  getSearchPlaceholder(): string {
+    if (this.selectedSearchOption === 'model_id') {
+      return 'Enter LoRA Model ID';
+    }
+    if (this.selectedSearchOption === 'username') {
+      return "Enter creator's CivitAI username";
+    }
+    return 'Search LoRA by name';
+  }
+
 
   close() {
     this.ref.close({ showNSFWLoras: this.showNSFWLoras });
   }
 
   loadApprovedLoras() {
-    this.stableDiffusionService.getLoras('active').subscribe({
+    this.stableDiffusionService.getLoras('active').pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (rows: any[]) => {
-        this.approvedVersionIds.clear();
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
-          if (row?.is_active === false) return;
-          const id = this.getVersionId(row);
-          if (id) this.approvedVersionIds.add(id);
+        this.applyAsyncState(() => {
+          this.approvedVersionIds.clear();
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            if (row?.is_active === false) return;
+            const id = this.getVersionId(row);
+            if (id) this.approvedVersionIds.add(id);
+          });
         });
       },
       error: (error: any) => {
@@ -253,30 +244,42 @@ export class AddLorasComponent {
   }
 
   loadSuggestionStatuses() {
-    this.loadingStatuses = true;
+    this.applyAsyncState(() => {
+      this.loadingStatuses = true;
+    });
+
     forkJoin({
       pending: this.stableDiffusionService.getMyLoraSuggestions('pending').pipe(catchError(() => of([]))),
       rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([])))
     })
-      .pipe(finalize(() => (this.loadingStatuses = false)))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          this.applyAsyncState(() => {
+            this.loadingStatuses = false;
+          });
+        })
+      )
       .subscribe(({ pending, rejected }) => {
-        this.pendingSuggestions = Array.isArray(pending) ? pending : [];
-        this.rejectedSuggestions = Array.isArray(rejected) ? rejected : [];
+        this.applyAsyncState(() => {
+          this.pendingSuggestions = Array.isArray(pending) ? pending : [];
+          this.rejectedSuggestions = Array.isArray(rejected) ? rejected : [];
 
-        this.pendingVersionIds.clear();
-        this.rejectedVersionIds.clear();
+          this.pendingVersionIds.clear();
+          this.rejectedVersionIds.clear();
 
-        this.pendingSuggestions.forEach((row) => {
-          const id = this.getVersionId(row);
-          if (id) this.pendingVersionIds.add(id);
+          this.pendingSuggestions.forEach((row) => {
+            const id = this.getVersionId(row);
+            if (id) this.pendingVersionIds.add(id);
+          });
+
+          this.rejectedSuggestions.forEach((row) => {
+            const id = this.getVersionId(row);
+            if (id) this.rejectedVersionIds.add(id);
+          });
+
+          this.updateUserPendingSuggestions();
         });
-
-        this.rejectedSuggestions.forEach((row) => {
-          const id = this.getVersionId(row);
-          if (id) this.rejectedVersionIds.add(id);
-        });
-
-        this.updateUserPendingSuggestions();
       });
   }
 
@@ -303,7 +306,9 @@ export class AddLorasComponent {
       return;
     }
 
-    this.stableDiffusionService.cancelLoraSuggestion(suggestionId).subscribe({
+    this.stableDiffusionService.cancelLoraSuggestion(suggestionId).pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: (response: any) => {
         this.messageService.add({
           severity: 'success',
@@ -364,6 +369,64 @@ export class AddLorasComponent {
       detail: errorMessage,
       life: 500000  // Here is the addition.
     });
+  }
+
+  private executeSearch(request$: Observable<any>, successLog: string): void {
+    this.applyAsyncState(() => {
+      this.isLoading = true;
+    });
+
+    request$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response: any) => {
+          console.log(successLog);
+          const mappedResults = this.mapSearchResults(response);
+
+          this.applyAsyncState(() => {
+            this.searchResults = mappedResults;
+            this.selectedLoRA = null;
+            this.isLoading = false;
+          });
+        },
+        error: (error: any) => {
+          console.log('error', error);
+          this.showError(error);
+
+          this.applyAsyncState(() => {
+            this.isLoading = false;
+          });
+        }
+      });
+  }
+
+  private mapSearchResults(response: any): any[] {
+    const rawResults = Array.isArray(response) ? response : (response ? [response] : []);
+    return rawResults.map((result: any) => {
+      const baseName = result?.name ?? 'Unnamed LoRA';
+      const versionName = result?.model_name ? ` - ${result.model_name}` : '';
+      return {
+        ...result,
+        name: `${baseName}${versionName}`
+      };
+    });
+  }
+
+  private applyAsyncState(update: () => void): void {
+    const commit = () => {
+      if (this.isComponentDestroyed) {
+        return;
+      }
+      update();
+      this.cdr.markForCheck();
+    };
+
+    if (NgZone.isInAngularZone()) {
+      commit();
+      return;
+    }
+
+    this.ngZone.run(commit);
   }
 
 }

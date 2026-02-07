@@ -1,304 +1,487 @@
-/* Card layout for LoRA search results on mobile */
-.mobile-results {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+.request-loras-shell {
+  --request-card-bg: color-mix(in srgb, var(--theme-surface-bg, #ffffff) 96%, #ffffff);
+  --request-card-raised: color-mix(in srgb, var(--request-card-bg) 94%, #eef4ff);
+  --request-border: color-mix(in srgb, var(--theme-border, #cbd5e1) 75%, transparent);
+  --request-text: color-mix(in srgb, var(--theme-surface-text, #0f172a) 92%, #0f172a);
+  --request-muted: color-mix(in srgb, var(--request-text) 80%, #64748b);
+  --request-primary: var(--theme-primary, #2f6fd6);
+  --request-primary-strong: var(--theme-primary-hover, #285db3);
+  --request-tag-bg: color-mix(in srgb, var(--request-card-bg) 78%, #ffffff);
+  --request-tag-border: color-mix(in srgb, var(--request-border) 78%, #9ebfe8);
+  --request-tag-text: color-mix(in srgb, var(--request-text) 94%, #0f172a);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--request-text);
 }
 
-#lora-search-field {
-    margin-top: 15px;
+:host ::ng-deep .request-loras-dialog.p-dialog {
+  border-radius: 14px;
+  overflow: hidden;
 }
 
-.lora-card-body {
-    position: relative;
-  }
-  
-  .lora-model-link {
-    position: absolute;
-    right: 10px;
-    bottom: 10px;
-    font-size: 0.8rem; /* Smaller font size */
-    color: #666; /* Light grey color */
-  }
-  
-  .lora-model-link a {
-    text-decoration: none;
-    color: #666;
-  }
-  
-  .lora-model-link a:hover {
-    text-decoration: underline;
-    color: #000; /* Darker color on hover */
-  }
-
-/* Card style */
-.lora-card {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 15px;
-    /* Add margin for spacing between cards */
-    border: 1px solid #ddd;
-    /* Add a subtle border for visual separation */
+:host ::ng-deep .request-loras-dialog .p-dialog-header {
+  background: color-mix(in srgb, var(--theme-primary, #2f6fd6) 12%, #f1f6ff);
+  color: color-mix(in srgb, var(--theme-surface-text, #1e293b) 92%, #0f172a);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border, #cbd5e1) 70%, transparent);
 }
 
-/* Header part of the card with LoRA name and preview */
-.lora-card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
-    /* Add spacing between header and body */
+:host ::ng-deep .request-loras-dialog .p-dialog-content {
+  background: color-mix(in srgb, var(--theme-primary, #2f6fd6) 8%, #eef5ff);
+  color: color-mix(in srgb, var(--theme-surface-text, #1e293b) 92%, #0f172a);
 }
 
-.preview-image {
-    width: 50px;
-    height: 50px;
-    object-fit: cover;
-    border-radius: 5px;
+:host-context(body.theme-navy) ::ng-deep .request-loras-dialog .p-dialog-header {
+  background: color-mix(in srgb, #34517a 88%, #223550);
+  color: #eef4ff;
+  border-bottom-color: #5b779b;
 }
 
-.lora-card-title {
-    font-size: 1.1rem;
-    font-weight: bold;
-    flex: 1 1 auto;
+:host-context(body.theme-navy) ::ng-deep .request-loras-dialog .p-dialog-content {
+  background: color-mix(in srgb, #2f4a70 92%, #253a57);
+  color: #eef4ff;
 }
 
-/* Body part with creator and stats */
-.lora-card-body {
-    margin-top: 10px;
+:host-context(body.theme-navy) .request-loras-shell {
+  --request-card-bg: #314b6f;
+  --request-card-raised: #456189;
+  --request-border: #6380a4;
+  --request-text: #eef4ff;
+  --request-muted: #d5e2f6;
+  --request-tag-bg: color-mix(in srgb, #8ca8cf 32%, #304a6d);
+  --request-tag-border: #8faed8;
+  --request-tag-text: #f4f8ff;
 }
 
-.lora-creator {
-    margin-bottom: 10px;
+.request-loras-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--request-border);
+  background: var(--request-card-raised);
 }
 
-.lora-stats {
-    margin-bottom: 10px;
+.hero-copy h4 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
 }
 
-.lora-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    width: 85%;
+.hero-copy p {
+  margin: 4px 0 0;
+  color: var(--request-muted);
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 
-/* Button at the bottom of the card */
-.lora-button {
-    margin-top: 15px;
-    text-align: center;
+.search-mode-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
-/* Add a subtle divider between cards */
-.lora-card:not(:last-child) {
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 15px;
+:host ::ng-deep .search-mode-btn.p-button {
+  border-radius: 10px;
+  justify-content: center;
+  font-weight: 600;
 }
 
-/* Card style */
-.lora-card {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    cursor: pointer;
-    /* Make it clear that the card is clickable */
-    transition: background-color 0.3s ease;
+:host ::ng-deep .search-mode-btn.p-button.p-button-outlined {
+  background-color: color-mix(in srgb, var(--request-card-bg) 90%, transparent);
+  border-color: var(--request-border);
+  color: var(--request-text);
 }
 
-/* Highlight the selected card */
-.lora-card.selected {
-    border-color: #00796b;
-    box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.35);
+.search-panel {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--request-border);
+  background: color-mix(in srgb, var(--request-card-bg) 97%, #ffffff);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--theme-page-bg, #0b1d3a) 18%, transparent);
 }
 
-.lora-card:hover {
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+.search-label {
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--request-muted);
+  margin-bottom: 6px;
 }
 
-.preview-image {
-    cursor: pointer;
+.search-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
 }
 
-/* Target PrimeNG buttons */
-:host ::ng-deep .p-button {
-    border-radius: 5px !important; /* Increased curvature */
-    transition: all 0.3s ease;
-    overflow: hidden; /* Ensures content doesn't overflow rounded corners */
+:host ::ng-deep .search-input-row .p-inputtext {
+  border-radius: 10px;
+  border-color: var(--request-border);
+  background: color-mix(in srgb, var(--request-card-bg) 88%, #ffffff);
+  color: var(--request-text);
+  width: 100%;
 }
 
-/* Hover effect for better interactivity */
-:host ::ng-deep .p-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+:host ::ng-deep .search-input-row .p-inputtext::placeholder {
+  color: color-mix(in srgb, var(--request-muted) 82%, #64748b);
 }
 
-/* Specific styling for primary buttons */
-:host ::ng-deep .p-button.p-button-primary {
-    background: linear-gradient(45deg, #4a90e2, #63b3ed);
-    border: none;
+:host ::ng-deep .search-submit-btn.p-button {
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
-
-.lora-request-button {
-    /* we want this to be always showing at the botomn of the window */
-    position: sticky;
-    bottom: 10px; 
+.search-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
 }
 
-/* Status highlighting */
-.lora-card.status-approved {
-    border-color: #2e7d32;
-    background-color: #e8f5e9;
+.nsfw-toggle {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--request-text);
 }
 
-.lora-card.status-pending {
-    border-color: #f9a825;
-    background-color: #fff8e1;
+.inline-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--request-muted);
+  font-size: 0.85rem;
 }
 
-.lora-card.status-rejected {
-    border-color: #ef9a9a;
-    background-color: #ffebee;
+:host ::ng-deep .inline-loading .p-progress-spinner {
+  width: 24px;
+  height: 24px;
 }
 
-.status-pill {
-    margin-left: auto;
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-
-.status-pill.status-approved {
-    background-color: #2e7d32;
-    color: #fff;
-}
-
-.status-pill.status-pending {
-    background-color: #f9a825;
-    color: #fff;
-}
-
-.status-pill.status-rejected {
-    background-color: #ef5350;
-    color: #fff;
-}
-
-/* Pending requests section */
-.pending-requests {
-    margin-top: 12px;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #f5d76e;
-    background-color: #fffde7;
+.pending-card {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--request-border));
+  background: color-mix(in srgb, #fef3c7 35%, var(--request-card-bg));
 }
 
 .pending-toggle {
-    margin-top: 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .pending-count {
-    font-weight: 600;
-    color: #7a6b24;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  background: color-mix(in srgb, #f59e0b 20%, white);
+  color: #7a5200;
 }
 
-.pending-toggle-btn {
-    border-color: #f5d76e !important;
-    color: #7a6b24 !important;
+:host ::ng-deep .pending-toggle .p-progress-spinner {
+  width: 20px;
+  height: 20px;
 }
 
-.pending-toggle-btn:hover {
-    background-color: #fff8d6 !important;
-}
-
-.pending-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
+.pending-requests {
+  margin-top: 10px;
 }
 
 .pending-title {
-    font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin-bottom: 4px;
 }
 
 .pending-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .pending-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px dashed #f0e7b3;
-}
-
-.pending-item:last-child {
-    border-bottom: none;
-}
-
-.pending-cancel-btn {
-    width: 110px;
-    justify-content: center;
-}
-
-:host ::ng-deep .pending-cancel-btn.p-button {
-    background-color: #e53935;
-    border-color: #e53935;
-    color: #fff;
-}
-
-:host ::ng-deep .pending-cancel-btn.p-button:enabled:hover {
-    background-color: #c62828;
-    border-color: #c62828;
-}
-
-.pending-cancel-btn .pi {
-    margin-right: 6px;
-}
-
-.pending-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--request-border) 80%, transparent);
+  background: color-mix(in srgb, var(--request-card-bg) 88%, white);
+  border-radius: 10px;
+  padding: 9px 10px;
 }
 
 .pending-name {
-    font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .pending-meta {
-    font-size: 0.85rem;
-    color: #666;
+  font-size: 0.82rem;
+  color: var(--request-muted);
 }
 
-@media screen and (max-width: 600px) {
-    .p-field.mobile-results {
-        padding: 10px;
-    }
+:host ::ng-deep .pending-cancel-btn.p-button {
+  min-width: 100px;
+}
 
-    .p-dialog {
-        width: 100%;
-        height: 100%;
-        border-radius: 0;
-    }
+.empty-results {
+  border: 1px dashed var(--request-border);
+  border-radius: 12px;
+  padding: 20px 14px;
+  text-align: center;
+  background: color-mix(in srgb, var(--request-card-bg) 92%, white);
+  color: var(--request-muted);
+}
 
-    #search-options {
-        font-size: 0.7rem;
-    }
+.empty-results i {
+  font-size: 1.25rem;
+  color: var(--request-primary);
+}
+
+.empty-results h6 {
+  margin: 8px 0 4px;
+  font-weight: 700;
+  color: var(--request-text);
+}
+
+.empty-results p {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.results-header h6 {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.results-count {
+  min-width: 32px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--request-primary) 20%, white);
+  color: color-mix(in srgb, var(--request-primary) 72%, #0f172a);
+}
+
+.mobile-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lora-card {
+  border-radius: 13px;
+  border: 1px solid var(--request-border);
+  padding: 12px;
+  background: color-mix(in srgb, var(--request-card-bg) 92%, white);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--theme-page-bg, #0b1d3a) 16%, transparent);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.lora-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--theme-page-bg, #0b1d3a) 20%, transparent);
+}
+
+.lora-card.selected {
+  border-color: color-mix(in srgb, var(--request-primary) 72%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--request-primary) 34%, transparent), 0 14px 28px color-mix(in srgb, var(--theme-page-bg, #0b1d3a) 25%, transparent);
+}
+
+.lora-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.preview-image {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--request-border) 80%, transparent);
+  background-color: color-mix(in srgb, var(--request-card-bg) 84%, black);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.preview-image.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--request-muted);
+}
+
+.lora-card-title-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lora-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.lora-card-subtitle {
+  margin-top: 3px;
+  color: var(--request-muted);
+  font-size: 0.8rem;
+}
+
+.status-pill {
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.status-pill.status-approved {
+  background-color: #1f8a4c;
+  color: #ffffff;
+}
+
+.status-pill.status-pending {
+  background-color: #ca8a04;
+  color: #ffffff;
+}
+
+.status-pill.status-rejected {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.lora-card.status-approved {
+  border-color: color-mix(in srgb, #1f8a4c 55%, var(--request-border));
+}
+
+.lora-card.status-pending {
+  border-color: color-mix(in srgb, #ca8a04 55%, var(--request-border));
+}
+
+.lora-card.status-rejected {
+  border-color: color-mix(in srgb, #dc2626 45%, var(--request-border));
+}
+
+.lora-card-body {
+  position: relative;
+}
+
+.lora-stats {
+  display: grid;
+  gap: 3px;
+  font-size: 0.86rem;
+}
+
+.lora-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+  padding-right: 130px;
+}
+
+:host ::ng-deep .lora-tags .p-chip {
+  border-radius: 999px;
+  background-color: var(--request-tag-bg);
+  color: var(--request-tag-text);
+  border: 1px solid var(--request-tag-border);
+  font-weight: 600;
+  opacity: 1;
+}
+
+:host ::ng-deep .lora-tags .p-chip .p-chip-text {
+  color: inherit;
+  opacity: 1;
+}
+
+.lora-model-link {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--request-primary);
+}
+
+.lora-model-link:hover {
+  text-decoration: underline;
+  color: var(--request-primary-strong);
+}
+
+.lora-request-button {
+  position: sticky;
+  bottom: 8px;
+  z-index: 3;
+  padding-top: 2px;
+}
+
+:host ::ng-deep .lora-request-button .p-button {
+  width: 100%;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+@media screen and (max-width: 700px) {
+  .search-mode-group {
+    grid-template-columns: 1fr;
+  }
+
+  .search-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .search-submit-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .search-actions-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pending-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  :host ::ng-deep .pending-cancel-btn.p-button {
+    width: 100%;
+  }
+
+  .lora-tags {
+    padding-right: 0;
+    margin-bottom: 26px;
+  }
 }

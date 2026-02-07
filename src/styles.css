@@ -118,15 +118,15 @@ body.theme-navy .badge.bg-primary {
 }
 
 
-/* Make each tab item take equal space */
-.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
+/* Make each tab item take equal space (non-admin tabs) */
+.p-tabs:not(.admin-tabs) .p-tablist .p-tablist-tab-list .p-tab {
   flex: 1;
   justify-content: center;
   text-align: center;
 }
 
-/* Image History/Admin Tabs */
-.p-tabs .p-tablist {
+/* Shared tabs (non-admin) */
+.p-tabs:not(.admin-tabs) .p-tablist {
   background-color: var(--theme-surface-bg);
   margin-bottom: 0;
   padding-left: 0;
@@ -134,29 +134,66 @@ body.theme-navy .badge.bg-primary {
   border-width: 0 0 2px 0;
 }
 
-.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
+.p-tabs:not(.admin-tabs) .p-tablist .p-tablist-tab-list .p-tab {
   background-color: var(--theme-surface-alt-bg);
   color: #fff;
 }
 
-.p-tabs .p-tablist .p-tablist-tab-list .p-tab {
+.p-tabs:not(.admin-tabs) .p-tablist .p-tablist-tab-list .p-tab {
   border: solid var(--theme-border);
   border-width: 0 0 2px 0;
 }
 
-.p-tabs .p-tablist .p-tablist-tab-list .p-tab.p-tab-active {
+.p-tabs:not(.admin-tabs) .p-tablist .p-tablist-tab-list .p-tab.p-tab-active {
   border: solid var(--theme-border-strong);
   border-width: 0 0 2px 0;
   background: var(--theme-surface-bg);
 }
 
-.p-tabs .p-tabpanels {
+.p-tabs:not(.admin-tabs) .p-tabpanels {
   background-color: var(--theme-surface-bg);
   color: var(--theme-surface-text);
 }
 
-.p-tabs .p-tabs-panel {
+.p-tabs:not(.admin-tabs) .p-tabs-panel {
   background-color: var(--theme-surface-bg);
+}
+
+/* Request LoRA dynamic dialog is rendered outside component host, so style globally. */
+.request-loras-dialog.p-dialog {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--theme-border, #8cb7f0) 72%, #b8d2f5);
+  background: color-mix(in srgb, var(--theme-surface-bg, #3880ec) 24%, #e3eeff);
+  box-shadow: 0 14px 36px rgba(8, 28, 58, 0.28);
+}
+
+.request-loras-dialog .p-dialog-header {
+  background: color-mix(in srgb, var(--theme-surface-bg, #3880ec) 26%, #e5f0ff);
+  color: color-mix(in srgb, var(--theme-surface-text, #243a58) 90%, #243a58);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-border, #9fc3f2) 68%, #b5d0f4);
+}
+
+.request-loras-dialog .p-dialog-content {
+  background: color-mix(in srgb, var(--theme-surface-bg, #3880ec) 18%, #eef5ff);
+  color: color-mix(in srgb, var(--theme-surface-text, #243a58) 92%, #243a58);
+}
+
+body.theme-navy .request-loras-dialog.p-dialog {
+  border-color: #5e7ea4;
+  background: #2f486c;
+  box-shadow: 0 16px 38px rgba(3, 9, 20, 0.48);
+}
+
+body.theme-navy .request-loras-dialog .p-dialog-header {
+  background: #2f486c;
+  color: #ecf3ff;
+  border-bottom-color: #59759b;
+}
+
+body.theme-navy .request-loras-dialog .p-dialog-content {
+  background: #355178;
+  color: #ecf3ff;
 }
 
 

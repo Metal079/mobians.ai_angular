@@ -28,8 +28,8 @@
             ],
             "styles": [
               "src/styles.css",
-              "node_modules/primeflex/primeflex.css",
-              "node_modules/bootstrap-icons/font/bootstrap-icons.css"
+              "primeflex/primeflex.css",
+              "bootstrap-icons/font/bootstrap-icons.css"
             ],
             "scripts": [],
             "serviceWorker": "ngsw-config.json",
@@ -136,8 +136,8 @@
             ],
             "styles": [
               "src/styles.css",
-              "node_modules/primeflex/primeflex.css",
-              "node_modules/bootstrap-icons/font/bootstrap-icons.css"
+              "primeflex/primeflex.css",
+              "bootstrap-icons/font/bootstrap-icons.css"
             ],
             "scripts": []
           }

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -50,6 +50,7 @@ interface DownloadHistoryItem {
     templateUrl: './admin.component.html',
     styleUrls: ['./admin.component.css'],
     standalone: true,
+    providers: [MessageService, ConfirmationService],
     imports: [
       CommonModule,
       FormsModule,
@@ -112,13 +113,16 @@ export class AdminComponent implements OnInit, OnDestroy {
   loadingDownloaderStatus = false;
   triggeringDownload = false;
   private statusPollingSubscription: Subscription | null = null;
+  private initialRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private sdService: StableDiffusionService,
     private messageService: MessageService,
     private confirmationService: ConfirmationService,
     private router: Router,
-    private authService: AuthService
+    private authService: AuthService,
+    private zone: NgZone,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -136,6 +140,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.reloadAll();
     this.loadDownloaderStatus();
     this.loadDownloadHistory();
+    this.scheduleInitialLoadRecovery();
     // Poll downloader status every 10 seconds
     this.statusPollingSubscription = interval(10000).subscribe(() => {
       this.loadDownloaderStatus(true);
@@ -145,6 +150,10 @@ export class AdminComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.statusPollingSubscription) {
       this.statusPollingSubscription.unsubscribe();
+    }
+    if (this.initialRecoveryTimer) {
+      clearTimeout(this.initialRecoveryTimer);
+      this.initialRecoveryTimer = null;
     }
   }
 
@@ -157,15 +166,22 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.loadingLoras = true;
     this.sdService.getLoras('all').subscribe({
       next: (rows: any[]) => {
-        this.allLoras = Array.isArray(rows) ? rows : [];
-  this.expandedRowKeysLoras = {}; // reset
-  this.buildLoraBaseModelOptions();
-  this.filterAllLoras();
+        this.runInView(() => {
+          this.allLoras = Array.isArray(rows) ? rows : [];
+          this.expandedRowKeysLoras = {}; // reset
+          this.buildLoraBaseModelOptions();
+          this.filterAllLoras();
+        });
       },
       error: (err) => {
-        console.error('Failed to load all LoRAs', err);
-      },
-      complete: () => (this.loadingLoras = false),
+        this.runInView(() => {
+          console.error('Failed to load all LoRAs', err);
+        });
+      }
+    }).add(() => {
+      this.runInView(() => {
+        this.loadingLoras = false;
+      });
     });
   }
 
@@ -174,15 +190,22 @@ export class AdminComponent implements OnInit, OnDestroy {
     const status = this.showRejectedSuggestions ? 'rejected' : 'pending';
     this.sdService.getLoraSuggestions(status).subscribe({
       next: (rows: any[]) => {
-        this.loraSuggestions = Array.isArray(rows) ? rows : [];
-  this.expandedRowKeysSuggestions = {}; // reset
-  this.buildSuggestionBaseModelOptions();
-  this.filterSuggestions();
+        this.runInView(() => {
+          this.loraSuggestions = Array.isArray(rows) ? rows : [];
+          this.expandedRowKeysSuggestions = {}; // reset
+          this.buildSuggestionBaseModelOptions();
+          this.filterSuggestions();
+        });
       },
       error: (err) => {
-        console.error('Failed to load LoRA suggestions', err);
-      },
-      complete: () => (this.loadingSuggestions = false),
+        this.runInView(() => {
+          console.error('Failed to load LoRA suggestions', err);
+        });
+      }
+    }).add(() => {
+      this.runInView(() => {
+        this.loadingSuggestions = false;
+      });
     });
   }
 
@@ -736,34 +759,43 @@ export class AdminComponent implements OnInit, OnDestroy {
     if (!silent) this.loadingDownloaderStatus = true;
     this.sdService.getDownloaderStatus().subscribe({
       next: (status: DownloaderStatus) => {
-        this.downloaderStatus = status;
+        this.runInView(() => {
+          this.downloaderStatus = status;
+        });
       },
       error: (err) => {
-        if (!silent) {
-          console.error('Failed to load downloader status', err);
-        }
-        // Set a default status indicating the service may be offline
-        this.downloaderStatus = {
-          status: 'offline',
-          current_lora: null,
-          approved_count: 0,
-          updated_at: null,
-          last_processed: null
-        };
-      },
-      complete: () => {
-        if (!silent) this.loadingDownloaderStatus = false;
+        this.runInView(() => {
+          if (!silent) {
+            console.error('Failed to load downloader status', err);
+          }
+          // Set a default status indicating the service may be offline
+          this.downloaderStatus = {
+            status: 'offline',
+            current_lora: null,
+            approved_count: 0,
+            updated_at: null,
+            last_processed: null
+          };
+        });
       }
+    }).add(() => {
+      this.runInView(() => {
+        if (!silent) this.loadingDownloaderStatus = false;
+      });
     });
   }
 
   loadDownloadHistory(): void {
     this.sdService.getDownloadHistory(20).subscribe({
       next: (history: DownloadHistoryItem[]) => {
-        this.downloadHistory = history || [];
+        this.runInView(() => {
+          this.downloadHistory = history || [];
+        });
       },
       error: (err) => {
-        console.error('Failed to load download history', err);
+        this.runInView(() => {
+          console.error('Failed to load download history', err);
+        });
       }
     });
   }
@@ -800,11 +832,85 @@ export class AdminComponent implements OnInit, OnDestroy {
           detail: err?.error?.detail || 'Failed to trigger download. Make sure the downloader service is running.',
           life: 5000
         });
-      },
-      complete: () => {
-        this.triggeringDownload = false;
       }
+    }).add(() => {
+      this.triggeringDownload = false;
     });
+  }
+
+  onAdminTabChange(event: unknown): void {
+    const nextTab = this.parseTabValue(event);
+    this.adminTab = nextTab;
+
+    if (nextTab === 0 && !this.loadingLoras && this.allLoras.length === 0) {
+      this.loadAllLoras();
+      return;
+    }
+
+    if (nextTab === 1 && !this.loadingSuggestions && this.loraSuggestions.length === 0) {
+      this.loadSuggestions();
+      return;
+    }
+
+    if (nextTab === 2) {
+      if (!this.loadingDownloaderStatus && !this.downloaderStatus) {
+        this.loadDownloaderStatus();
+      }
+      if (this.downloadHistory.length === 0) {
+        this.loadDownloadHistory();
+      }
+    }
+  }
+
+  private parseTabValue(event: unknown): number {
+    if (typeof event === 'number' && Number.isFinite(event)) return event;
+    if (typeof event === 'string') {
+      const parsed = Number(event);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (event && typeof event === 'object' && 'value' in (event as Record<string, unknown>)) {
+      return this.parseTabValue((event as Record<string, unknown>)['value']);
+    }
+    return 0;
+  }
+
+  private scheduleInitialLoadRecovery(): void {
+    if (this.initialRecoveryTimer) {
+      clearTimeout(this.initialRecoveryTimer);
+    }
+
+    this.initialRecoveryTimer = setTimeout(() => {
+      if (!this.loadingLoras && this.allLoras.length === 0) {
+        this.loadAllLoras();
+      }
+      if (!this.loadingSuggestions && this.loraSuggestions.length === 0) {
+        this.loadSuggestions();
+      }
+      if (!this.loadingDownloaderStatus && !this.downloaderStatus) {
+        this.loadDownloaderStatus();
+      }
+      if (this.downloadHistory.length === 0) {
+        this.loadDownloadHistory();
+      }
+    }, 1200);
+  }
+
+  private runInView(fn: () => void): void {
+    const apply = () => {
+      fn();
+      try {
+        this.cdr.detectChanges();
+      } catch {
+        // Ignore if detection runs after destroy.
+      }
+    };
+
+    if (NgZone.isInAngularZone()) {
+      apply();
+      return;
+    }
+
+    this.zone.run(apply);
   }
 
   getStatusSeverity(status: string): 'success' | 'warn' | 'danger' | 'secondary' | 'info' | 'contrast' | undefined {

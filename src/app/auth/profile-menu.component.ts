@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { asyncScheduler, observeOn, Subscription } from 'rxjs';
 import { SharedService } from '../shared.service';
 import { AuthService, UserCredits } from './auth.service';
 import { MessageService } from 'primeng/api';
@@ -40,10 +40,8 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
 
   // Responsive panel styles
   panelStyles = {
-    padding: '.75rem',
-    borderRadius: '.5rem',
-    background: 'var(--surface-card)',
-    boxShadow: 'var(--card-shadow, 0 2px 8px rgba(0,0,0,.15))'
+    padding: '.85rem',
+    borderRadius: '.75rem'
   };
 
   constructor(
@@ -54,7 +52,7 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     // Subscribe to user data changes
-    const userSub = this.shared.getUserData().subscribe(user => {
+    const userSub = this.shared.getUserData().pipe(observeOn(asyncScheduler)).subscribe(user => {
       this.isLoggedIn = !!user && (!!user.discord_user_id || !!user.google_user_id || !!user.user_id);
       this.hasDiscord = !!user?.discord_user_id;
       this.hasGoogle = !!user?.google_user_id;
@@ -64,12 +62,12 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     this.subscriptions.push(userSub);
 
     // Subscribe to credits changes
-    const creditsSub = this.auth.credits$.subscribe(creditsData => {
+    const creditsSub = this.auth.credits$.pipe(observeOn(asyncScheduler)).subscribe(creditsData => {
       if (creditsData) {
         this.credits = creditsData.credits;
-        this.canClaimDailyBonus = creditsData.canClaimDailyBonus;
-        this.dailyStreak = creditsData.dailyBonusStreak;
-        this.nextDailyBonusFromServer = creditsData.nextDailyBonus ?? null;
+        this.canClaimDailyBonus = this.coerceBoolean(creditsData.canClaimDailyBonus);
+        this.dailyStreak = Math.max(creditsData.dailyBonusStreak || 0, 0);
+        this.nextDailyBonusFromServer = this.normalizeServerBonus(creditsData.nextDailyBonus);
       } else {
         this.credits = 0;
         this.canClaimDailyBonus = false;
@@ -81,7 +79,9 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
 
     // Refresh credits on init if logged in
     if (this.auth.isLoggedIn()) {
-      this.auth.refreshCredits();
+      setTimeout(() => {
+        void this.auth.refreshCredits();
+      }, 0);
     }
   }
 
@@ -183,5 +183,26 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     }
     const previousStreak = Math.max(streak - 1, 0);
     return this.calculateDailyBonus(previousStreak);
+  }
+
+  private normalizeServerBonus(value: number | null | undefined): number | null {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+    return Math.round(value);
+  }
+
+  private coerceBoolean(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value > 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1';
+    }
+    return !!value;
   }
 }

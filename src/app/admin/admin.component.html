@@ -34,7 +34,7 @@
   <p-confirmDialog></p-confirmDialog>
 
   <div class="admin-content">
-    <p-tabs styleClass="admin-tabs" [value]="adminTab" (valueChange)="adminTab = +($event ?? 0)">
+    <p-tabs styleClass="admin-tabs" [value]="adminTab" (valueChange)="onAdminTabChange($event)">
       <p-tablist>
         <p-tab [value]="0">
           <div class="tab-header">
@@ -88,9 +88,9 @@
           [rowTrackBy]="trackById.bind(this)"
           styleClass="admin-table"
           >
-          <ng-template pTemplate="rowexpansion" let-row>
+          <ng-template pTemplate="expandedrow" let-row>
             <tr>
-              <td colspan="9">
+              <td colspan="10">
                 <div class="expansion-card">
                   <div class="expansion-image">
                     <img class="preview-img-lg clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
@@ -235,7 +235,7 @@
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="9">
+              <td colspan="10">
                 <div class="empty-state">
                   <i class="bi bi-inbox"></i>
                   <p>No LoRAs found matching your criteria</p>
@@ -276,7 +276,7 @@
           [rowTrackBy]="trackById.bind(this)"
           styleClass="admin-table"
           >
-          <ng-template pTemplate="rowexpansion" let-row>
+          <ng-template pTemplate="expandedrow" let-row>
             <tr>
               <td colspan="8">
                 <div class="expansion-card">

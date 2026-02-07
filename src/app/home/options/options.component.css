@@ -29,18 +29,20 @@
   .button-group {
     flex-direction: row;
     width: 100%;
+    gap: 8px;
   }
 
   .button-group .btn {
-    width: 95%;
-    margin-bottom: 10px;
-    padding: 12px 0;
-    font-size: 16px;
-    margin-left: 0;
+    flex: 1 1 0;
+    width: auto;
+    margin-bottom: 0;
+    padding: 10px 0;
+    font-size: 15px;
+    margin-left: 0 !important;
   }
 
   .button-group .btn:last-child {
-    margin-right: 8px;
+    margin-right: 0;
   }
 }
 
@@ -119,9 +121,37 @@
   cursor: not-allowed;
 }
 
-.credits-badge .badge {
-  font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
+.credits-badge {
+  display: flex;
+  align-items: center;
+}
+
+.credits-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  box-shadow: 0 6px 14px rgba(2, 132, 199, 0.18), 0 1px 3px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+  line-height: 1;
+}
+
+.credits-pill .pi-wallet {
+  color: #0369a1;
+}
+
+.credits-count {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.credits-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
 }
 
 .login-prompt {
@@ -149,5 +179,9 @@
   .login-prompt {
     text-align: center;
   }
-}
 
+  .credits-pill {
+    justify-content: center;
+    width: 100%;
+  }
+}

@@ -41,8 +41,8 @@
               @for (image of currentPageImages; track imageTrackKey(image, $index)) {
                 <div class="history-item">
                   <div class="image-container">
-                    <img [src]="image.url" alt="Generated Image" loading="eager" decoding="async"
-                      (load)="onImageElementLoad(image)" (error)="onImageElementError(image)"
+                    <img [attr.src]="image.url || null" alt="Generated Image" loading="eager" decoding="sync"
+                      (load)="onImageElementLoad(image, $event)" (error)="onImageElementError(image, $event)"
                       (click)="openImageDetails(image)">
                     <div class="top-left-icon">
                       <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
@@ -227,8 +227,8 @@
                     <div class="history-item"
                       [class.selected]="bulkSelectMode && isImageSelected(image)">
                       <div class="image-container">
-                        <img [src]="image.url" alt="Generated Image" loading="eager" decoding="async"
-                          (load)="onImageElementLoad(image)" (error)="onImageElementError(image)"
+                        <img [attr.src]="image.url || null" alt="Generated Image" loading="eager" decoding="sync"
+                          (load)="onImageElementLoad(image, $event)" (error)="onImageElementError(image, $event)"
                           (click)="onFavoriteImageClick(image, $event)">
                         <!-- Selection checkbox overlay -->
                         @if (bulkSelectMode) {

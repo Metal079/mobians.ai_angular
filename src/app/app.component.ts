@@ -3,7 +3,7 @@ import { SharedService } from './shared.service';
 import { SwUpdate } from '@angular/service-worker';
 import { AuthService } from './auth/auth.service';
 import { Subscription } from 'rxjs';
-import { RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { LoginModalComponent } from './auth/login-modal.component';
 import { ProfileMenuComponent } from './auth/profile-menu.component';
 
@@ -17,7 +17,9 @@ import { ProfileMenuComponent } from './auth/profile-menu.component';
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;
   isLoggedIn = false;
+  hideFloatingMenu = true;
   private sessionInvalidSub: Subscription | null = null;
+  private routeSub: Subscription | null = null;
   private swVersionSub: Subscription | null = null;
   private swUnrecoverableSub: Subscription | null = null;
   private updateCheckIntervalId: any = null;
@@ -38,8 +40,10 @@ export class AppComponent implements OnInit, OnDestroy {
   constructor(
     private swUpdate: SwUpdate,
     private shared: SharedService,
-    private authService: AuthService
+    private authService: AuthService,
+    private router: Router
   ) {
+    this.updateRouteFlags(this.router.url);
     this.checkForUpdates();
     
     // Subscribe reactively to user data changes - handles both initial load from localStorage and OAuth callbacks
@@ -52,6 +56,12 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.applyStoredTheme();
+    this.updateRouteFlags(this.router.url);
+    this.routeSub = this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.updateRouteFlags(event.urlAfterRedirects || event.url);
+      }
+    });
     // Validate session token on app startup
     this.validateSessionOnStartup();
     
@@ -65,6 +75,9 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.sessionInvalidSub) {
       this.sessionInvalidSub.unsubscribe();
+    }
+    if (this.routeSub) {
+      this.routeSub.unsubscribe();
     }
     if (this.swVersionSub) {
       this.swVersionSub.unsubscribe();
@@ -225,5 +238,9 @@ export class AppComponent implements OnInit, OnDestroy {
 
   onLoginModalVisibleChange(visible: boolean) {
     this.loginPromptVisible = visible;
+  }
+
+  private updateRouteFlags(url: string): void {
+    this.hideFloatingMenu = /^\/admin(?:\/|$)/.test(url || '');
   }
 }

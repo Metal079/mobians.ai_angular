@@ -6,8 +6,8 @@
 
 .card-body {
   min-height: 0;
-  max-height: 85vh;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   overflow-x: hidden;
   max-width: 600px;
   width: 100%;
@@ -66,6 +66,7 @@
 }
 
 .history-item img {
+  display: block;
   width: 100%;
   height: auto;
   border-radius: 6px;
@@ -423,31 +424,66 @@
   .sorting-options {
     flex-direction: column;
     align-items: stretch;
+    gap: 6px;
   }
 
   .density-controls {
     width: 100%;
     justify-content: space-between;
+    align-items: center;
+    gap: 8px;
   }
 
   .density-controls select {
     flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .density-label {
+    white-space: nowrap;
+    margin-bottom: 0;
+    font-size: 0.8rem;
   }
 
   .card-body {
-    max-height: 82vh;
+    max-height: none;
+    overflow-y: visible;
     padding-top: 0.25rem;
     padding-bottom: 0.5rem;
   }
 
   .search-bar {
     flex: 1 1 0px;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
 
   .history-grid {
-    margin-top: 4px;
-    gap: 10px;
+    margin-top: 2px;
+    gap: 8px;
+  }
+
+  .pagination {
+    width: 100%;
+    margin-top: 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .pagination .btn {
+    min-width: 0;
+    width: 100%;
+    padding: 8px 10px;
+  }
+
+  .pagination .btn:first-of-type {
+    grid-column: 1;
+  }
+
+  .pagination .btn:last-of-type {
+    grid-column: 3;
   }
 
   .top-left-icon,
@@ -473,15 +509,19 @@
   }
 
   .page-edit-container {
-    padding: 8px 10px;
-    gap: 6px;
-    font-size: 14px;
+    grid-column: 2;
+    justify-self: center;
+    padding: 0;
+    gap: 4px;
+    font-size: 13px;
+    white-space: nowrap;
+    background-color: transparent;
   }
 
   .page-input {
-    width: 50px;
-    padding: 6px;
-    font-size: 14px;
+    width: 44px;
+    padding: 4px;
+    font-size: 13px;
   }
 
   .bulk-controls {

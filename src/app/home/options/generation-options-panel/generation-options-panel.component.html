@@ -148,16 +148,25 @@
                   </div>
                 </div>
 
-                <!-- Reset session storage and view -->
-                <button class="btn btn-danger" type="button" (click)="resetSessionStorage.emit()" id="reset-session-storage-button">
-                  Reset Saved Options
-                </button>
+                <!-- Reset session storage and image history actions -->
+                <div class="history-maintenance-actions">
+                  <button class="btn btn-danger btn-sm" type="button" (click)="resetSessionStorage.emit()" id="reset-session-storage-button">
+                    Reset Saved Options
+                  </button>
 
-                <!-- Delete all images -->
-                <button class="btn btn-danger" type="button" (click)="deleteAllImages.emit()" id="delete-all-images-button"
-                  [ngStyle]="{'margin-top': '20px'}">
-                  Delete Image History
-                </button>
+                  <button
+                    class="btn btn-success btn-sm"
+                    type="button"
+                    (click)="downloadAllImages.emit()"
+                    id="download-all-images-button"
+                    title="Download all image history as ZIP"
+                    aria-label="Download all image history">
+                    Download Image History
+                  </button>
+
+                  <button class="btn btn-danger btn-sm" type="button" (click)="deleteAllImages.emit()" id="delete-all-images-button">
+                    Delete Image History
+                  </button>
+                </div>
               </div>
             </div>
-

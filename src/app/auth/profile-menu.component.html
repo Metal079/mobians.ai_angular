@@ -24,8 +24,9 @@
       <button type="button" class="minimize-btn"
         (click)="toggleMinimize()"
         (touchend)="toggleMinimize(); $event.preventDefault()"
-        title="Minimize">
-        <span class="pi pi-minus"></span>
+        title="Collapse panel"
+        aria-label="Collapse panel">
+        <span class="minimize-symbol" aria-hidden="true">-</span>
       </button>
     </div>
     <!-- Credits Section (only when logged in) -->

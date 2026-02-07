@@ -121,9 +121,11 @@
           </div>
         }
       </div>
+    </div>
 
       <!-- Load LoRAs Prompt -->
       <p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"
+        [appendTo]="'body'"
         [style]="{width: 'min(90vw, 420px)'}" (onHide)="declineLoadHistoryLoras()">
         <ng-template pTemplate="header">
           <h5>Load LoRAs?</h5>
