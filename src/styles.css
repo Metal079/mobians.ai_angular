@@ -16,6 +16,11 @@
   --theme-primary-border: #2a63c2;
   --theme-primary-outline: #2f6fd6;
   --theme-primary-outline-hover: rgba(47, 111, 214, 0.18);
+  --theme-input-bg: #ffffff;
+  --theme-input-text: #0f172a;
+  --theme-input-border: #9db7db;
+  --theme-input-placeholder: #5f6f85;
+  --theme-input-focus-ring: rgba(47, 111, 214, 0.25);
 }
 
 body.theme-navy {
@@ -33,11 +38,71 @@ body.theme-navy {
   --theme-primary-border: #25538f;
   --theme-primary-outline: #3c78c9;
   --theme-primary-outline-hover: rgba(60, 120, 201, 0.2);
+  --theme-input-bg: #f3f8ff;
+  --theme-input-text: #101b2f;
+  --theme-input-border: #6a8db8;
+  --theme-input-placeholder: #4d6484;
+  --theme-input-focus-ring: rgba(94, 141, 199, 0.35);
+}
+
+body.dark-input-fields {
+  --theme-input-bg: #05070d;
+  --theme-input-text: #f4f7ff;
+  --theme-input-border: #2f4469;
+  --theme-input-placeholder: #9fb3d6;
+  --theme-input-focus-ring: rgba(80, 122, 196, 0.45);
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
   background-color: var(--theme-page-bg);
   color: var(--theme-surface-text);
+}
+
+textarea.form-control,
+input.form-control,
+select.form-select,
+.p-inputtext,
+.p-inputtextarea,
+.page-input {
+  background-color: var(--theme-input-bg) !important;
+  color: var(--theme-input-text) !important;
+  border-color: var(--theme-input-border);
+}
+
+textarea.form-control:focus,
+input.form-control:focus,
+select.form-select:focus,
+.p-inputtext:focus,
+.p-inputtextarea:focus,
+.page-input:focus {
+  background-color: var(--theme-input-bg) !important;
+  color: var(--theme-input-text) !important;
+  border-color: var(--theme-input-border);
+  box-shadow: 0 0 0 0.2rem var(--theme-input-focus-ring) !important;
+}
+
+textarea.form-control::placeholder,
+input.form-control::placeholder,
+select.form-select::placeholder,
+.p-inputtext::placeholder,
+.p-inputtextarea::placeholder,
+.page-input::placeholder {
+  color: var(--theme-input-placeholder) !important;
+  opacity: 1;
+}
+
+textarea.form-control:-webkit-autofill,
+input.form-control:-webkit-autofill,
+select.form-select:-webkit-autofill,
+.p-inputtext:-webkit-autofill,
+.p-inputtextarea:-webkit-autofill {
+  -webkit-text-fill-color: var(--theme-input-text) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--theme-input-bg) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 body.theme-navy .btn-primary,

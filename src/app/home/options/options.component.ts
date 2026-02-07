@@ -116,6 +116,11 @@ export class OptionsComponent implements OnInit {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('theme-navy', theme === 'navy');
   }
+
+  private applyInputStyleToBody(enabled: boolean): void {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('dark-input-fields', !!enabled);
+  }
   enableGenerationButton: boolean = true;
   showLoading: boolean = false;
   showStrength: boolean = false;
@@ -167,6 +172,7 @@ export class OptionsComponent implements OnInit {
   showLoras: boolean = false;
   availableLoras: string[] = ['Loras1', 'Loras2', 'Loras3']; // Example Loras names
   panelTheme: 'sonic' | 'navy' = 'sonic';
+  darkInputFields = false;
   loraResetToken = 0;
 
 
@@ -600,6 +606,12 @@ export class OptionsComponent implements OnInit {
     this.sharedService.setPrompt(this.generationRequest.prompt);
   }
 
+  onDarkInputFieldsChange(enabled: boolean) {
+    this.darkInputFields = !!enabled;
+    this.applyInputStyleToBody(this.darkInputFields);
+    this.saveSettings();
+  }
+
   // Save session storage info of changed settings
   saveSettings() {
     // Save prompt
@@ -650,6 +662,8 @@ export class OptionsComponent implements OnInit {
     this.panelTheme = this.normalizePanelTheme(this.panelTheme);
     localStorage.setItem("panel-theme", this.panelTheme);
     this.applyThemeToBody(this.panelTheme);
+    localStorage.setItem("dark-input-fields", this.darkInputFields.toString());
+    this.applyInputStyleToBody(this.darkInputFields);
 
     // Save notifications toggle
     localStorage.setItem("notifications-enabled", this.enableNotifications.toString());
@@ -694,7 +708,9 @@ export class OptionsComponent implements OnInit {
     } else {
       this.panelTheme = 'sonic';
     }
+    this.darkInputFields = localStorage.getItem("dark-input-fields") == 'true';
     this.applyThemeToBody(this.panelTheme);
+    this.applyInputStyleToBody(this.darkInputFields);
 
     // Ensure model is valid before downstream logic uses it.
     this.ensureValidModelSelected(false);
@@ -737,6 +753,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem("aspect-ratio");
     localStorage.removeItem("fast-pass-code");
     localStorage.removeItem("panel-theme");
+    localStorage.removeItem("dark-input-fields");
     localStorage.removeItem('showNSFWLoras');
     localStorage.removeItem('mobians:lora-sort');
     localStorage.removeItem('mobians:lora-favorites-only');
@@ -751,7 +768,9 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.guidance_scale = 4;
     this.generationRequest.model = "novaMobianXL_v10";
     this.panelTheme = 'sonic';
+    this.darkInputFields = false;
     this.applyThemeToBody(this.panelTheme);
+    this.applyInputStyleToBody(this.darkInputFields);
     // Default after reset: WebP images enabled
     this.generationRequest.lossy_images = true;
     this.enableNotifications = false;

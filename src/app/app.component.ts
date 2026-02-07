@@ -117,6 +117,8 @@ export class AppComponent implements OnInit, OnDestroy {
       const storedTheme = localStorage.getItem('panel-theme');
       const theme = this.normalizeTheme(storedTheme);
       document.body.classList.toggle('theme-navy', theme === 'navy');
+      const darkInputFields = localStorage.getItem('dark-input-fields') === 'true';
+      document.body.classList.toggle('dark-input-fields', darkInputFields);
     } catch {
       // Ignore theme load failures (e.g. storage unavailable).
     }

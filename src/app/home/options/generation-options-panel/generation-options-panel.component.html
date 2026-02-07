@@ -26,6 +26,14 @@
       <option value="navy">Navy</option>
     </select>
 
+    <div class="d-flex justify-content-start mb-3 mt-2">
+      <div class="form-check me-3">
+        <input class="form-check-input" type="checkbox" [ngModel]="darkInputFields"
+          (ngModelChange)="onDarkInputFieldsChange($event)" id="darkTextFields">
+        <label class="form-check-label" for="darkTextFields">Dark text boxes</label>
+      </div>
+    </div>
+
     <!-- Negative Prompt -->
     <div class="mb-3">
       <label for="negative-prompt-input" class="form-label">Negative Prompt

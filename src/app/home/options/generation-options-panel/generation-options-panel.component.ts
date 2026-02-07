@@ -18,6 +18,8 @@ export class GenerationOptionsPanelComponent {
 
   @Input() panelTheme: 'sonic' | 'navy' = 'sonic';
   @Output() panelThemeChange = new EventEmitter<'sonic' | 'navy'>();
+  @Input() darkInputFields = false;
+  @Output() darkInputFieldsChange = new EventEmitter<boolean>();
 
   @Input() currentSeed?: number;
 
@@ -44,6 +46,11 @@ export class GenerationOptionsPanelComponent {
 
   onPanelThemeChange(nextTheme: 'sonic' | 'navy') {
     this.panelThemeChange.emit(nextTheme);
+    this.saveSettings.emit();
+  }
+
+  onDarkInputFieldsChange(enabled: boolean) {
+    this.darkInputFieldsChange.emit(enabled);
     this.saveSettings.emit();
   }
 
