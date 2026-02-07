@@ -1,56 +1,57 @@
 <!-- Loras Content Panel -->
 <div class="collapse w-100" id="lorasCollapse">
-  <div class="card card-body" id="lorasDropdown" #lorasDropdown (scroll)="onLorasScroll($event)">
-    <p class="d-flex justify-content-between" [style]="{ marginBottom: '0px' }">
-      <span>
-        View and apply LoRAs to your image generation
-        <span class="ms-1 text-primary"
-          pTooltip="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."
-          tooltipPosition="top" style="
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 1px 6px; 
-            border-radius: 50%;
-            cursor: pointer;
-          ">
-          ?
+  <div class="loras-layout">
+    <div class="card card-body" id="lorasDropdown" #lorasDropdown (scroll)="onLorasScroll($event)">
+      <p class="d-flex justify-content-between" [style]="{ marginBottom: '0px' }">
+        <span>
+          View and apply LoRAs to your image generation
+          <span class="ms-1 text-primary"
+            pTooltip="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."
+            tooltipPosition="top" style="
+              background-color: rgba(255, 255, 255, 0.8);
+              padding: 1px 6px;
+              border-radius: 50%;
+              cursor: pointer;
+            ">
+            ?
+          </span>
         </span>
-      </span>
-      <span class="d-flex" [style]="{ marginLeft: '5px' }">
-        Show NSFW Loras?
-        <p-toggleswitch [ngModel]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="onShowNSFWLorasChange($event)"></p-toggleswitch>
-      </span>
-    </p>
+        <span class="d-flex" [style]="{ marginLeft: '5px' }">
+          Show NSFW Loras?
+          <p-toggleswitch [ngModel]="showNSFWLoras" [class]="'ms-2'" (ngModelChange)="onShowNSFWLorasChange($event)"></p-toggleswitch>
+        </span>
+      </p>
 
-    <!-- Tag Selection Buttons + Sort/Favorites Controls -->
-    <div class="lora-filter-row">
-      <p-multiSelect [options]="loraTagOptions" [ngModel]="selectedTags" (ngModelChange)="onSelectedTagsChange($event)"
-        optionLabel="optionLabel" optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43"
-        placeholder="Filter Loras by tags" styleClass="lora-tag-filter" panelStyleClass="lora-tag-filter-panel"
-        [style]="{ width: '100%' }">
-      </p-multiSelect>
-      <div class="lora-filter-controls">
-        <button type="button" class="btn btn-outline-secondary btn-sm lora-favorites-toggle"
-          [class.active]="showFavoriteLorasOnly" (click)="toggleFavoriteLorasOnly()" [disabled]="!isLoggedIn"
-          [attr.title]="isLoggedIn ? 'Show favorites only' : 'Login required to view favorites'">
-          <i class="bi" [ngClass]="showFavoriteLorasOnly ? 'bi-star-fill' : 'bi-star'"></i>
-        </button>
-        <select class="form-select form-select-sm lora-sort-select" [ngModel]="loraSortOption"
-          (ngModelChange)="onLoraSortChange($event)">
-          @for (option of loraSortOptions; track option) {
-            <option [ngValue]="option.value">{{ option.label }}</option>
-          }
-        </select>
-        <button type="button" class="btn btn-link btn-sm lora-clear-filters" (click)="clearLoraFilters()"
-          title="Clear LoRA filters">
-          <i class="bi bi-x-circle"></i>
-        </button>
+      <!-- Tag Selection Buttons + Sort/Favorites Controls -->
+      <div class="lora-filter-row">
+        <p-multiSelect [options]="loraTagOptions" [ngModel]="selectedTags" (ngModelChange)="onSelectedTagsChange($event)"
+          optionLabel="optionLabel" optionValue="optionValue" [virtualScroll]="true" [virtualScrollItemSize]="43"
+          placeholder="Filter Loras by tags" styleClass="lora-tag-filter" panelStyleClass="lora-tag-filter-panel"
+          [style]="{ width: '100%' }">
+        </p-multiSelect>
+        <div class="lora-filter-controls">
+          <button type="button" class="btn btn-outline-secondary btn-sm lora-favorites-toggle"
+            [class.active]="showFavoriteLorasOnly" (click)="toggleFavoriteLorasOnly()" [disabled]="!isLoggedIn"
+            [attr.title]="isLoggedIn ? 'Show favorites only' : 'Login required to view favorites'">
+            <i class="bi" [ngClass]="showFavoriteLorasOnly ? 'bi-star-fill' : 'bi-star'"></i>
+          </button>
+          <select class="form-select form-select-sm lora-sort-select" [ngModel]="loraSortOption"
+            (ngModelChange)="onLoraSortChange($event)">
+            @for (option of loraSortOptions; track option) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+          <button type="button" class="btn btn-link btn-sm lora-clear-filters" (click)="clearLoraFilters()"
+            title="Clear LoRA filters">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Search and Add Custom LoRA -->
-    <div class="d-flex justify-content-between mb-3 lora-search-row">
-      <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [ngModel]="loraSearchQuery"
-        (ngModelChange)="onSearchQueryChange($event)">
+      <!-- Search -->
+      <div class="d-flex justify-content-between mb-3 lora-search-row">
+        <input type="text" class="form-control w-80" placeholder="Search LoRAs..." [ngModel]="loraSearchQuery"
+          (ngModelChange)="onSearchQueryChange($event)">
       </div>
 
       <!-- Full-Sized Image Dialog -->
@@ -79,62 +80,63 @@
             </button>
             <img [src]="getThumbUrl(lora.image_url, 200)" [alt]="lora.name" class="lora-image" loading="lazy"
               (click)="openImageModalLoraPreview(lora.image_url)">
-              <div class="lora-info">
-                <h5 class="lora-name">{{ lora.name }}</h5>
-                <p class="lora-version">{{ lora.version }}</p>
-              </div>
-              @if (!isLoraSelected(lora)) {
-                <button class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">
-                  Select
-                </button>
-              }
-              @if (isLoraSelected(lora)) {
-                <button class="btn btn-danger btn-sm w-100" (click)="removeLora(lora)">
-                  Remove
-                </button>
-              }
+            <div class="lora-info">
+              <h5 class="lora-name">{{ lora.name }}</h5>
+              <p class="lora-version">{{ lora.version }}</p>
             </div>
-          }
+            @if (!isLoraSelected(lora)) {
+              <button class="btn btn-primary btn-sm w-100" (click)="selectLora(lora)">
+                Select
+              </button>
+            }
+            @if (isLoraSelected(lora)) {
+              <button class="btn btn-danger btn-sm w-100" (click)="removeLora(lora)">
+                Remove
+              </button>
+            }
+          </div>
+        }
         @if (hasMoreLoras) {
           <div #loadMoreTrigger class="lora-load-more-trigger" aria-hidden="true"></div>
         }
       </div>
+    </div>
 
-      <!-- Selected LoRA Display with Sliders -->
-      @if (selectedLoras.length > 0) {
-        <div class="selected-loras-panel">
-          <h6>Selected LoRAs:</h6>
-          @for (loraItem of selectedLoras; track loraItem) {
-            <div class="selected-lora-item">
-              <div class="d-flex align-items-center">
-                <img [src]="getThumbUrl(loraItem.image_url, 100)" [alt]="loraItem.name" class="selected-lora-image" loading="lazy">
-                <div class="selected-lora-details">
-                  <h5 class="lora-name">{{ loraItem.name }}</h5>
-                  <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
-                    (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
-                    <span>Strength: {{ loraItem.strength }}</span>
-                  </div>
-                  <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
-                </div>
+    <!-- Selected LoRA Display with Sliders -->
+    @if (selectedLoras.length > 0) {
+      <div class="selected-loras-panel">
+        <h6>Selected LoRAs:</h6>
+        @for (loraItem of selectedLoras; track loraItem) {
+          <div class="selected-lora-item">
+            <div class="d-flex align-items-center">
+              <img [src]="getThumbUrl(loraItem.image_url, 100)" [alt]="loraItem.name" class="selected-lora-image" loading="lazy">
+              <div class="selected-lora-details">
+                <h5 class="lora-name">{{ loraItem.name }}</h5>
+                <input type="range" min="0" max="1.5" step="0.1" [(ngModel)]="loraItem.strength"
+                  (ngModelChange)="updateStrength(loraItem, loraItem.strength)">
+                <span>Strength: {{ loraItem.strength }}</span>
               </div>
-            }
+              <button class="btn btn-danger btn-sm remove-button" (click)="removeLora(loraItem)">Remove</button>
+            </div>
           </div>
         }
       </div>
-    </div>
+    }
+  </div>
+</div>
 
-      <!-- Load LoRAs Prompt -->
-      <p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"
-        [appendTo]="'body'"
-        [style]="{width: 'min(90vw, 420px)'}" (onHide)="declineLoadHistoryLoras()">
-        <ng-template pTemplate="header">
-          <h5>Load LoRAs?</h5>
-        </ng-template>
-        <ng-template pTemplate="content">
-          <p>This image used LoRAs. Load them into your current selection?</p>
-        </ng-template>
-        <ng-template pTemplate="footer">
-          <button class="btn btn-secondary" type="button" (click)="declineLoadHistoryLoras()">No</button>
-          <button class="btn btn-primary ms-2" type="button" (click)="confirmLoadHistoryLoras()">Yes</button>
-        </ng-template>
-      </p-dialog>
+<!-- Load LoRAs Prompt -->
+<p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"
+  [appendTo]="'body'"
+  [style]="{width: 'min(90vw, 420px)'}" (onHide)="declineLoadHistoryLoras()">
+  <ng-template pTemplate="header">
+    <h5>Load LoRAs?</h5>
+  </ng-template>
+  <ng-template pTemplate="content">
+    <p>This image used LoRAs. Load them into your current selection?</p>
+  </ng-template>
+  <ng-template pTemplate="footer">
+    <button class="btn btn-secondary" type="button" (click)="declineLoadHistoryLoras()">No</button>
+    <button class="btn btn-primary ms-2" type="button" (click)="confirmLoadHistoryLoras()">Yes</button>
+  </ng-template>
+</p-dialog>

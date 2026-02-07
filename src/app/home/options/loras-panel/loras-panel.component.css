@@ -6,7 +6,7 @@
 
 .card-body {
   min-height: 75vh;
-  max-height: fit-content;
+  max-height: 75vh;
   overflow-y: auto;
   transition: height 0.5s ease-in-out;
   max-width: 600px;
@@ -19,7 +19,13 @@
 }
 
 #lorasDropdown {
+  min-height: 75vh;
+  height: 75vh;
   max-height: 75vh;
+}
+
+.loras-layout {
+  max-width: 600px;
 }
 
 /* loras */
@@ -227,6 +233,11 @@
 
 .selected-loras-panel {
   margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--theme-surface-bg);
+  color: var(--theme-surface-text);
+  max-width: 600px;
 }
 
 .btn.btn-primary.lora-request-btn {
@@ -255,13 +266,14 @@
   }
 
   #lorasDropdown {
-    min-height: 60vh;
+    min-height: 70vh;
+    height: 70vh;
     max-height: 70vh;
   }
 
   .card-body {
     min-height: 70vh;
-    max-height: 80vh;
+    max-height: 70vh;
     overflow-y: auto;
     transition: height 0.5s ease-in-out;
   }
