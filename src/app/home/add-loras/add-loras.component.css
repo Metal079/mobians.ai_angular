@@ -232,6 +232,36 @@
   color: var(--request-muted);
 }
 
+.pending-status {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pending-status.status-pending {
+  color: #b45309;
+}
+
+.pending-status.status-failed {
+  color: #7c3aed;
+}
+
+.pending-status.status-rejected {
+  color: #b91c1c;
+}
+
+.pending-status.status-approved {
+  color: #15803d;
+}
+
+.pending-error {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--request-muted) 88%, #475569);
+}
+
 :host ::ng-deep .pending-cancel-btn.p-button {
   min-width: 100px;
 }
@@ -380,6 +410,11 @@
   color: #ffffff;
 }
 
+.status-pill.status-failed {
+  background-color: #7c3aed;
+  color: #ffffff;
+}
+
 .lora-card.status-approved {
   border-color: color-mix(in srgb, #1f8a4c 55%, var(--request-border));
 }
@@ -390,6 +425,10 @@
 
 .lora-card.status-rejected {
   border-color: color-mix(in srgb, #dc2626 45%, var(--request-border));
+}
+
+.lora-card.status-failed {
+  border-color: color-mix(in srgb, #7c3aed 45%, var(--request-border));
 }
 
 .lora-card-body {

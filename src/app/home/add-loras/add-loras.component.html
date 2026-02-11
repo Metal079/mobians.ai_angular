@@ -87,6 +87,14 @@
                   <div class="pending-meta">
                     {{ item.version || 'Unknown version' }} • {{ item.base_model || 'Unknown base model' }}
                   </div>
+                  @if (item.status) {
+                    <div class="pending-status" [ngClass]="getStatusClassName(item.status)">
+                      {{ formatStatusLabel(item.status) }}
+                    </div>
+                  }
+                  @if (item.error_message) {
+                    <div class="pending-error">{{ item.error_message }}</div>
+                  }
                 </div>
                 <button
                   pButton

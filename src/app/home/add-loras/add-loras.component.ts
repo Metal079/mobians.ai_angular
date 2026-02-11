@@ -64,15 +64,18 @@ export class AddLorasComponent {
   approvedVersionIds: Set<string> = new Set();
   pendingVersionIds: Set<string> = new Set();
   rejectedVersionIds: Set<string> = new Set();
+  failedVersionIds: Set<string> = new Set();
 
   pendingSuggestions: any[] = [];
   rejectedSuggestions: any[] = [];
+  failedSuggestions: any[] = [];
   userPendingSuggestions: any[] = [];
 
-  statusLabels: Record<'approved' | 'pending' | 'rejected', string> = {
+  statusLabels: Record<'approved' | 'pending' | 'rejected' | 'failed', string> = {
     approved: 'Approved',
     pending: 'Pending',
-    rejected: 'Rejected'
+    rejected: 'Rejected',
+    failed: 'Needs Retry'
   };
 
   constructor(
@@ -250,7 +253,8 @@ export class AddLorasComponent {
 
     forkJoin({
       pending: this.stableDiffusionService.getMyLoraSuggestions('pending').pipe(catchError(() => of([]))),
-      rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([])))
+      rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([]))),
+      failed: this.stableDiffusionService.getMyLoraSuggestions('failed').pipe(catchError(() => of([])))
     })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -260,13 +264,15 @@ export class AddLorasComponent {
           });
         })
       )
-      .subscribe(({ pending, rejected }) => {
+      .subscribe(({ pending, rejected, failed }) => {
         this.applyAsyncState(() => {
           this.pendingSuggestions = Array.isArray(pending) ? pending : [];
           this.rejectedSuggestions = Array.isArray(rejected) ? rejected : [];
+          this.failedSuggestions = Array.isArray(failed) ? failed : [];
 
           this.pendingVersionIds.clear();
           this.rejectedVersionIds.clear();
+          this.failedVersionIds.clear();
 
           this.pendingSuggestions.forEach((row) => {
             const id = this.getVersionId(row);
@@ -278,13 +284,19 @@ export class AddLorasComponent {
             if (id) this.rejectedVersionIds.add(id);
           });
 
+          this.failedSuggestions.forEach((row) => {
+            const id = this.getVersionId(row);
+            if (id) this.failedVersionIds.add(id);
+          });
+
           this.updateUserPendingSuggestions();
         });
       });
   }
 
   updateUserPendingSuggestions() {
-    this.userPendingSuggestions = [...this.pendingSuggestions];
+    const combined = [...this.pendingSuggestions, ...this.failedSuggestions];
+    this.userPendingSuggestions = combined;
     if (this.userPendingSuggestions.length === 0) {
       this.showPendingRequests = false;
     }
@@ -333,11 +345,12 @@ export class AddLorasComponent {
     this.showPendingRequests = !this.showPendingRequests;
   }
 
-  getLoraStatus(lora: any): 'approved' | 'pending' | 'rejected' | null {
+  getLoraStatus(lora: any): 'approved' | 'pending' | 'rejected' | 'failed' | null {
     const id = this.getVersionId(lora);
     if (!id) return null;
     if (this.approvedVersionIds.has(id)) return 'approved';
     if (this.pendingVersionIds.has(id)) return 'pending';
+    if (this.failedVersionIds.has(id)) return 'failed';
     if (this.rejectedVersionIds.has(id)) return 'rejected';
     return null;
   }
@@ -345,6 +358,22 @@ export class AddLorasComponent {
   getLoraStatusClass(lora: any): string {
     const status = this.getLoraStatus(lora);
     return status ? `status-${status}` : '';
+  }
+
+  getStatusClassName(status: unknown): string {
+    const key = status == null ? '' : String(status).trim().toLowerCase();
+    return key ? `status-${key}` : '';
+  }
+
+  formatStatusLabel(status: unknown): string {
+    if (status == null) {
+      return '';
+    }
+    const key = String(status).trim().toLowerCase() as keyof typeof this.statusLabels;
+    if (key in this.statusLabels) {
+      return this.statusLabels[key];
+    }
+    return String(status);
   }
 
   private getVersionId(row: any): string | null {
