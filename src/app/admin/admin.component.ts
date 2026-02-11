@@ -106,6 +106,8 @@ export class AdminComponent implements OnInit, OnDestroy {
   // Inline editing state
   editingDisplayName: { [key: string]: boolean } = {};
   editDisplayNameValue: { [key: string]: string } = {};
+  editingTriggerWords: { [key: string]: boolean } = {};
+  editTriggerWordsValue: { [key: string]: string } = {};
 
   // Downloader status
   downloaderStatus: DownloaderStatus | null = null;
@@ -619,6 +621,128 @@ export class AdminComponent implements OnInit, OnDestroy {
   setEditNameValue(row: any, value: string): void {
     const key = row?.id ?? row?.name;
     this.editDisplayNameValue[key] = value;
+  }
+
+  startEditTriggerWords(row: any): void {
+    const key = row?.id ?? row?.name;
+    this.editingTriggerWords[key] = true;
+    this.editTriggerWordsValue[key] = this.normalizeTriggerWords(row?.trigger_words).join(', ');
+  }
+
+  cancelEditTriggerWords(row: any): void {
+    const key = row?.id ?? row?.name;
+    this.editingTriggerWords[key] = false;
+    delete this.editTriggerWordsValue[key];
+  }
+
+  saveTriggerWords(row: any): void {
+    const key = row?.id ?? row?.name;
+    const loraId = row?.id;
+    if (loraId == null) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Unable to update trigger words: missing id.',
+        life: 5000
+      });
+      return;
+    }
+
+    const triggerWords = this.parseTriggerWordsInput(this.editTriggerWordsValue[key] || '');
+    this.savingLora[key] = true;
+
+    this.sdService.updateLora(loraId, { trigger_words: triggerWords }).subscribe({
+      next: () => {
+        this.updateLoraTriggerWordsInList(loraId, triggerWords);
+        this.editingTriggerWords[key] = false;
+        delete this.editTriggerWordsValue[key];
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Updated',
+          detail: triggerWords.length > 0
+            ? `Saved ${triggerWords.length} trigger word${triggerWords.length === 1 ? '' : 's'}`
+            : 'Cleared trigger words',
+          life: 3000
+        });
+      },
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err?.error?.detail || 'Failed to update trigger words',
+          life: 5000
+        });
+      },
+      complete: () => {
+        this.savingLora[key] = false;
+      }
+    });
+  }
+
+  isEditingTriggerWords(row: any): boolean {
+    const key = row?.id ?? row?.name;
+    return !!this.editingTriggerWords[key];
+  }
+
+  getEditTriggerWordsValue(row: any): string {
+    const key = row?.id ?? row?.name;
+    return this.editTriggerWordsValue[key] || '';
+  }
+
+  setEditTriggerWordsValue(row: any, value: string): void {
+    const key = row?.id ?? row?.name;
+    this.editTriggerWordsValue[key] = value;
+  }
+
+  getTriggerWordsSummary(row: any): string {
+    const words = this.normalizeTriggerWords(row?.trigger_words);
+    return words.length > 0 ? words.join(', ') : 'None';
+  }
+
+  private parseTriggerWordsInput(raw: string): string[] {
+    return this.normalizeTriggerWords(raw);
+  }
+
+  private normalizeTriggerWords(value: unknown): string[] {
+    let candidates: unknown[] = [];
+    if (Array.isArray(value)) {
+      candidates = value;
+    } else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        candidates = [];
+      } else if (trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          candidates = Array.isArray(parsed) ? parsed : trimmed.split(/[\n,]/g);
+        } catch {
+          candidates = trimmed.split(/[\n,]/g);
+        }
+      } else {
+        candidates = trimmed.split(/[\n,]/g);
+      }
+    }
+
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const item of candidates) {
+      if (item == null) continue;
+      const cleaned = String(item).trim();
+      if (!cleaned) continue;
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(cleaned);
+    }
+    return result;
+  }
+
+  private updateLoraTriggerWordsInList(loraId: number, triggerWords: string[]): void {
+    const nextWords = [...triggerWords];
+    const target = this.allLoras.find((l) => l?.id === loraId);
+    if (target) target.trigger_words = nextWords;
+    const filteredTarget = this.filteredAllLoras.find((l) => l?.id === loraId);
+    if (filteredTarget) filteredTarget.trigger_words = nextWords;
   }
 
   getCivitAILink(row: any): string | null {

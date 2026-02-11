@@ -193,7 +193,7 @@ export class StableDiffusionService {
   }
 
   // Admin endpoints
-  updateLora(loraId: number, data: { is_active?: boolean; is_nsfw?: boolean; name?: string }): Observable<any> {
+  updateLora(loraId: number, data: { is_active?: boolean; is_nsfw?: boolean; name?: string; trigger_words?: string[] }): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}`;
     return this.http.patch(url, data);
   }

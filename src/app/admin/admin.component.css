@@ -608,6 +608,85 @@
   border-color: var(--theme-primary, #6366f1);
 }
 
+.trigger-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  min-width: 0;
+}
+
+.trigger-inline-label {
+  font-size: 0.7rem;
+  color: var(--admin-subtle-text);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.trigger-inline-value {
+  font-size: 0.78rem;
+  color: var(--admin-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trigger-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.trigger-inline-form input {
+  flex: 1;
+  min-width: 120px;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--admin-text);
+}
+
+.trigger-inline-form input:focus {
+  outline: none;
+  border-color: var(--theme-primary, #6366f1);
+}
+
+.trigger-edit {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.trigger-words-text {
+  white-space: pre-wrap;
+}
+
+.trigger-edit-form {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.trigger-edit-form textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--admin-text);
+  resize: vertical;
+}
+
+.trigger-edit-form textarea:focus {
+  outline: none;
+  border-color: var(--theme-primary, #6366f1);
+}
+
 .detail-item.full-width {
   grid-column: 1 / -1;
 }
@@ -968,6 +1047,8 @@
 
 :host-context(body.theme-navy) .search-input input:focus,
 :host-context(body.theme-navy) .name-edit-form input:focus,
+:host-context(body.theme-navy) .trigger-inline-form input:focus,
+:host-context(body.theme-navy) .trigger-edit-form textarea:focus,
 :host-context(body.theme-navy) .preview-img.clickable:hover,
 :host-context(body.theme-navy) .preview-img-lg.clickable:hover {
   border-color: var(--theme-primary);
@@ -1011,6 +1092,18 @@
   }
   
   .search-input { max-width: 100%; }
+
+  .trigger-inline {
+    flex-wrap: wrap;
+  }
+
+  .trigger-inline-form {
+    width: 100%;
+  }
+
+  .trigger-inline-form input {
+    min-width: 0;
+  }
   
   :host ::ng-deep .admin-table .p-datatable-thead { display: none; }
   

@@ -113,6 +113,28 @@
                           </div>
                         }
                       </div>
+                      <div class="detail-item full-width">
+                        <span class="detail-label">Trigger Words</span>
+                        @if (!isEditingTriggerWords(row)) {
+                          <div class="trigger-edit">
+                            <span class="detail-value trigger-words-text">{{ getTriggerWordsSummary(row) }}</span>
+                            <p-button icon="bi bi-pencil" styleClass="p-button-text p-button-sm" pTooltip="Edit trigger words" tooltipPosition="top" (onClick)="startEditTriggerWords(row)"></p-button>
+                          </div>
+                        }
+                        @if (isEditingTriggerWords(row)) {
+                          <div class="trigger-edit-form">
+                            <textarea
+                              rows="2"
+                              [ngModel]="getEditTriggerWordsValue(row)"
+                              (ngModelChange)="setEditTriggerWordsValue(row, $event)"
+                              (keyup.enter)="saveTriggerWords(row)"
+                              (keyup.escape)="cancelEditTriggerWords(row)"
+                              placeholder="comma or newline separated"></textarea>
+                            <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveTriggerWords(row)"></p-button>
+                            <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditTriggerWords(row)"></p-button>
+                          </div>
+                        }
+                      </div>
                       <div class="detail-item">
                         <span class="detail-label">Version</span>
                         <span class="detail-value">{{ row.version }}</span>
@@ -199,6 +221,27 @@
                     <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditName(row)"></p-button>
                   </div>
                 }
+                <div class="trigger-inline">
+                  <span class="trigger-inline-label">Triggers:</span>
+                  @if (!isEditingTriggerWords(row)) {
+                    <span class="trigger-inline-value">{{ getTriggerWordsSummary(row) }}</span>
+                    <button type="button" pButton pRipple class="p-button-text p-button-sm edit-name-btn" icon="bi bi-pencil" pTooltip="Edit trigger words" tooltipPosition="top" (click)="startEditTriggerWords(row)"></button>
+                  }
+                  @if (isEditingTriggerWords(row)) {
+                    <div class="trigger-inline-form">
+                      <input
+                        type="text"
+                        pInputText
+                        [ngModel]="getEditTriggerWordsValue(row)"
+                        (ngModelChange)="setEditTriggerWordsValue(row, $event)"
+                        (keyup.enter)="saveTriggerWords(row)"
+                        (keyup.escape)="cancelEditTriggerWords(row)"
+                        placeholder="comma separated" />
+                      <p-button icon="bi bi-check-lg" styleClass="p-button-success p-button-sm" [loading]="isLoraSaving(row)" (onClick)="saveTriggerWords(row)"></p-button>
+                      <p-button icon="bi bi-x-lg" styleClass="p-button-text p-button-sm" (onClick)="cancelEditTriggerWords(row)"></p-button>
+                    </div>
+                  }
+                </div>
               </td>
               <td class="col-hide-sm">
                 <span class="version-text">{{ row.version }}</span>

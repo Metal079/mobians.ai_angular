@@ -384,7 +384,7 @@ export class AddLorasComponent {
 
   showError(error: any) {
     // Default error message
-    let errorMessage = 'There was an error attempting to generate your image. Website is possibly down. Try out JSCammie\'s website as an alternative!. https://www.jscammie.com/';
+    let errorMessage = 'There was an error attempting to generate your image. Website is possibly down. Try out JSCammie\'s website as an alternative!. https://www.PixForge.ai/';
 
     // If the error comes from the backend and has a 'detail' field, use it as the error message
     if (error && error.error && error.error.detail) {
