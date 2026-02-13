@@ -175,6 +175,8 @@ export class OptionsComponent implements OnInit {
   darkInputFields = false;
   loraResetToken = 0;
 
+  downloadAllInProgress = false;
+
 
   // Persistence keys
   private readonly pendingJobKey = 'mobians:pending-job';
@@ -1349,7 +1351,13 @@ export class OptionsComponent implements OnInit {
   }
 
   async downloadAllImages() {
-    await this.historyPanel?.downloadAllImages();
+    if (this.downloadAllInProgress) return;
+    this.downloadAllInProgress = true;
+    try {
+      await this.historyPanel?.downloadAllImages();
+    } finally {
+      this.downloadAllInProgress = false;
+    }
   }
 
   // Example function after successful Discord login (no localStorage persistence)

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
+import { ZipWriter } from '@zip.js/zip.js';
 import { MessageService } from 'primeng/api';
 import { AuthService } from 'src/app/auth/auth.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
@@ -24,6 +25,13 @@ import { TabsModule } from 'primeng/tabs';
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
+
+  // Large downloads can fail (or appear to “never start”) on slower devices if we revoke
+  // object URLs too quickly or try to build a massive single ZIP in memory.
+  private readonly downloadUrlRevokeDelayMs = 30_000;
+  private readonly zipUrlRevokeDelayMs = 120_000;
+  private readonly maxImagesPerZipDesktop = 400;
+  private readonly maxImagesPerZipMobile = 150;
 
   @Input() lossyImages = true;
 
@@ -419,10 +427,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => this.safeRevoke(url), 0);
+    this.scheduleRevoke(url, this.downloadUrlRevokeDelayMs);
   }
 
-  private triggerZipDownload(content: Blob, filename: string): void {
+  private triggerZipDownload(content: Blob, filename: string, revokeDelayMs?: number): void {
     const url = URL.createObjectURL(content);
     const link = document.createElement('a');
     link.href = url;
@@ -431,7 +439,94 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => this.safeRevoke(url), 0);
+    this.scheduleRevoke(url, revokeDelayMs ?? this.zipUrlRevokeDelayMs);
+  }
+
+  private scheduleRevoke(url: string, delayMs: number): void {
+    // Don’t revoke immediately: browsers may not have started the download yet,
+    // especially when “Ask where to save each file” is enabled.
+    setTimeout(() => this.safeRevoke(url), Math.max(0, delayMs | 0));
+  }
+
+  private isMobileViewport(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.matchMedia?.(`(max-width: ${this.mobileBreakpointPx}px)`).matches ?? (window.innerWidth <= this.mobileBreakpointPx);
+    } catch {
+      return window.innerWidth <= this.mobileBreakpointPx;
+    }
+  }
+
+  private getMaxImagesPerZipPart(): number {
+    return this.isMobileViewport() ? this.maxImagesPerZipMobile : this.maxImagesPerZipDesktop;
+  }
+
+  private async yieldToUi(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  private canStreamSingleZipToDisk(): boolean {
+    if (typeof window === 'undefined') return false;
+    // File System Access API (Chromium). Requires secure context in production.
+    return (
+      'showSaveFilePicker' in window
+      && (window as any).showSaveFilePicker instanceof Function
+      && (window.isSecureContext ?? true)
+    );
+  }
+
+  private async downloadAllImagesAsSingleZipToDisk(allImages: MobiansImage[]): Promise<number> {
+    const suggestedName = `mobians-history-${Date.now()}.zip`;
+
+    // NOTE: showSaveFilePicker is Chromium-only today; fallback handled by caller.
+    const picker = await (window as any).showSaveFilePicker({
+      suggestedName,
+      types: [
+        {
+          description: 'ZIP archive',
+          accept: { 'application/zip': ['.zip'] }
+        }
+      ]
+    });
+
+    const writable: any = await picker.createWritable();
+    const zipWriter = new ZipWriter(writable);
+
+    let addedCount = 0;
+    try {
+      for (let i = 0; i < allImages.length; i++) {
+        const image = allImages[i];
+        const blob = await this.getDownloadBlob(image);
+        if (!blob) continue;
+
+        const filename = this.buildDownloadFilename(image, blob.type);
+        const readable = blob.stream?.() ?? new Response(blob).body;
+        if (!readable) continue;
+
+        // level: 0 (store) keeps CPU low; zip.js will still use Zip64 if needed.
+        await zipWriter.add(filename, readable as any, { level: 0 } as any);
+        addedCount++;
+
+        if (addedCount > 0 && addedCount % 25 === 0) {
+          await this.yieldToUi();
+        }
+      }
+
+      await zipWriter.close();
+      try {
+        await writable.close?.();
+      } catch {
+        // some implementations may already be closed by ZipWriter
+      }
+      return addedCount;
+    } catch (e) {
+      try {
+        await writable.abort?.();
+      } catch {
+        // no-op
+      }
+      throw e;
+    }
   }
 
   private async getBlobFromStore(uuid: string): Promise<Blob | undefined> {
@@ -731,22 +826,25 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   async bulkDownload() {
     if (this.selectedImages.size === 0) return;
     const zip = new JSZip();
-    const promises: Promise<void>[] = [];
 
-    this.selectedImages.forEach((uuid) => {
+    // Avoid Promise.all() for large selections; parallel blob reads can spike memory.
+    const selected = Array.from(this.selectedImages);
+    for (let i = 0; i < selected.length; i++) {
+      const uuid = selected[i];
       const image = this.favoritePageImages.find(img => img.UUID === uuid);
-      if (!image) return;
-      promises.push(
-        this.getDownloadBlob(image).then((blob) => {
-          if (!blob) return;
-          const filename = this.buildDownloadFilename(image, blob.type);
-          zip.file(filename, blob);
-        })
-      );
-    });
+      if (!image) continue;
 
-    await Promise.all(promises);
-    const content = await zip.generateAsync({ type: 'blob' });
+      const blob = await this.getDownloadBlob(image);
+      if (!blob) continue;
+      const filename = this.buildDownloadFilename(image, blob.type);
+      zip.file(filename, blob);
+
+      if (i > 0 && i % 25 === 0) {
+        await this.yieldToUi();
+      }
+    }
+
+    const content = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true });
     this.triggerZipDownload(content, `mobians-bulk-${Date.now()}.zip`);
   }
 
@@ -763,24 +861,123 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const confirmed = confirm(`Download all ${allImages.length} image(s) as a ZIP file?`);
+    // Preferred: stream a single large ZIP directly to disk (Chromium).
+    if (this.canStreamSingleZipToDisk()) {
+      const confirmed = confirm(
+        `Download all ${allImages.length} image(s) as ONE ZIP file?\n\n` +
+        `This will prompt you to choose where to save it and may take a while. Keep this tab open until it finishes.`
+      );
+      if (!confirmed) return;
+
+      this.isDownloadingAll = true;
+      try {
+        const addedCount = await this.downloadAllImagesAsSingleZipToDisk(allImages);
+        if (addedCount === 0) {
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Download Failed',
+            detail: 'Could not load any images for ZIP download.'
+          });
+          return;
+        }
+        if (addedCount < allImages.length) {
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Partial Download',
+            detail: `Downloaded ${addedCount} of ${allImages.length} images.`,
+            life: 7000
+          });
+        } else {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Download saved',
+            detail: 'Your ZIP file has been created.',
+            life: 4000
+          });
+        }
+      } catch (error: any) {
+        // If the user cancels the file picker, treat as a normal cancel.
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to stream image history ZIP', error);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Download Failed',
+          detail: 'Could not create image history ZIP.'
+        });
+      } finally {
+        this.isDownloadingAll = false;
+      }
+      return;
+    }
+
+    // Fallback: split into multiple ZIP files (most reliable cross-browser option).
+    const maxPerZip = this.getMaxImagesPerZipPart();
+    const parts = Math.max(1, Math.ceil(allImages.length / maxPerZip));
+
+    const confirmed = parts === 1
+      ? confirm(`Download all ${allImages.length} image(s) as a ZIP file? This may take a while—keep this tab open.`)
+      : confirm(
+          `You have ${allImages.length} images. Your browser does not support streaming a single large ZIP file.\n\n` +
+          `Download as ${parts} ZIP file(s) (~${maxPerZip} images each)?\n\n` +
+          `Your browser may ask you to allow multiple downloads.`
+        );
     if (!confirmed) return;
 
     this.isDownloadingAll = true;
 
     try {
-      const zip = new JSZip();
-      let addedCount = 0;
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Preparing download',
+        detail: parts === 1
+          ? 'Creating ZIP… this can take a few minutes for large histories.'
+          : `Creating ${parts} ZIP files… this can take a few minutes.`,
+        life: 6000
+      });
 
-      for (const image of allImages) {
-        const blob = await this.getDownloadBlob(image);
-        if (!blob) continue;
-        const filename = this.buildDownloadFilename(image, blob.type);
-        zip.file(filename, blob);
-        addedCount++;
+      const baseTs = Date.now();
+      let totalAdded = 0;
+
+      for (let partIndex = 0; partIndex < parts; partIndex++) {
+        const start = partIndex * maxPerZip;
+        const end = Math.min(allImages.length, start + maxPerZip);
+
+        const zip = new JSZip();
+        let partAdded = 0;
+
+        for (let i = start; i < end; i++) {
+          const image = allImages[i];
+          const blob = await this.getDownloadBlob(image);
+          if (!blob) continue;
+          const filename = this.buildDownloadFilename(image, blob.type);
+          zip.file(filename, blob);
+          partAdded++;
+          totalAdded++;
+
+          // Keep the UI responsive during large loops.
+          if (partAdded > 0 && partAdded % 25 === 0) {
+            await this.yieldToUi();
+          }
+        }
+
+        if (partAdded === 0) {
+          continue;
+        }
+
+        const content = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true });
+        const suffix = parts > 1 ? `-part${partIndex + 1}-of-${parts}` : '';
+        const revokeDelayMs = parts > 1 ? 30_000 : this.zipUrlRevokeDelayMs;
+        this.triggerZipDownload(content, `mobians-history-${baseTs}${suffix}.zip`, revokeDelayMs);
+
+        // Space out downloads a bit so browsers have time to enqueue the save.
+        if (parts > 1) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 500));
+        }
       }
 
-      if (addedCount === 0) {
+      if (totalAdded === 0) {
         this.messageService.add({
           severity: 'warn',
           summary: 'Download Failed',
@@ -789,14 +986,19 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const content = await zip.generateAsync({ type: 'blob' });
-      this.triggerZipDownload(content, `mobians-history-${Date.now()}.zip`);
-
-      if (addedCount < allImages.length) {
+      if (totalAdded < allImages.length) {
         this.messageService.add({
           severity: 'warn',
           summary: 'Partial Download',
-          detail: `Downloaded ${addedCount} of ${allImages.length} images.`
+          detail: `Downloaded ${totalAdded} of ${allImages.length} images.`,
+          life: 7000
+        });
+      } else {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Download started',
+          detail: parts === 1 ? 'Your ZIP download should begin shortly.' : `Your ${parts} ZIP downloads should begin shortly.`,
+          life: 4000
         });
       }
     } catch (error) {

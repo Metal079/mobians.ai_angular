@@ -166,10 +166,11 @@
                     class="btn btn-success btn-sm"
                     type="button"
                     (click)="downloadAllImages.emit()"
+                    [disabled]="downloadAllInProgress"
                     id="download-all-images-button"
                     title="Download all image history as ZIP"
                     aria-label="Download all image history">
-                    Download Image History
+                    {{ downloadAllInProgress ? 'Preparing download…' : 'Download Image History' }}
                   </button>
 
                   <button class="btn btn-danger btn-sm" type="button" (click)="deleteAllImages.emit()" id="delete-all-images-button">

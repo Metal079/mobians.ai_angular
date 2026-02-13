@@ -23,6 +23,7 @@
     "@auth0/auth0-angular": "^2.2.3",
     "@primeuix/themes": "^2.0.3",
     "@types/jszip": "^3.4.0",
+    "@zip.js/zip.js": "^2.8.20",
     "bootstrap-icons": "^1.11.3",
     "exifreader": "^4.23.5",
     "jszip": "^3.10.1",

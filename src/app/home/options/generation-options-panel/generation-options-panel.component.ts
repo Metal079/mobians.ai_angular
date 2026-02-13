@@ -34,6 +34,8 @@ export class GenerationOptionsPanelComponent {
 
   @Input() hiresTooltip = '';
 
+  @Input() downloadAllInProgress = false;
+
   @Output() modelChange = new EventEmitter<Event>();
   @Output() aspectRatioChange = new EventEmitter<Event>();
   @Output() saveSettings = new EventEmitter<void>();
