@@ -138,6 +138,30 @@
   min-width: 220px;
 }
 
+:host ::ng-deep .lora-tag-filter.p-multiselect {
+  background-color: var(--theme-input-bg) !important;
+  color: var(--theme-input-text) !important;
+  border-color: var(--theme-input-border) !important;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect .p-multiselect-label {
+  color: var(--theme-input-text) !important;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect .p-multiselect-label.p-placeholder {
+  color: var(--theme-input-placeholder) !important;
+  opacity: 1;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect .p-multiselect-trigger {
+  color: var(--theme-input-text) !important;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect.p-focus {
+  border-color: var(--theme-input-border) !important;
+  box-shadow: 0 0 0 0.2rem var(--theme-input-focus-ring) !important;
+}
+
 .lora-filter-controls {
   display: flex;
   align-items: center;

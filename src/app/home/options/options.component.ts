@@ -1038,6 +1038,13 @@ export class OptionsComponent implements OnInit {
           this.imagesChange.emit(this.images);
           this.loadingChange.emit(false);
           this.enableGenerationButton = true;
+          this.hasPendingJob = false;
+          this.jobID = "";
+          this.cancelInProgress = false;
+          this.queuePositionChange.emit(0);
+          this.queueStatusMessageChange.emit(undefined);
+          this.etaChange.emit(undefined);
+          this.removePendingJob();
           this.generationRequest.mask_image = undefined;
           this.lockService.release();
         }
@@ -1052,7 +1059,19 @@ export class OptionsComponent implements OnInit {
   // Action to cancel a pending/running job
   cancelPendingJob() {
     const id = this.jobID || this.getPendingJob()?.job_id;
-    if (!id) return;
+    if (!id) {
+      // Self-heal any stale pending UI state when no cancellable job exists.
+      this.hasPendingJob = false;
+      this.cancelInProgress = false;
+      this.enableGenerationButton = true;
+      this.loadingChange.emit(false);
+      this.queuePositionChange.emit(0);
+      this.queueStatusMessageChange.emit(undefined);
+      this.etaChange.emit(undefined);
+      this.removePendingJob();
+      this.lockService.release();
+      return;
+    }
     this.cancelInProgress = true;
     this.enableGenerationButton = false;
     this.stableDiffusionService.cancelJob(id).subscribe({
