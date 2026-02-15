@@ -171,6 +171,7 @@ export class ImageSyncService {
         is_favorite: image.favorite || false,
         sync_priority: this.calculateSyncPriority(image),
         loras: image.loras || [],
+        regional_prompting: image.regional_prompting || null,
         tags: image.tags || [],
         image_blob: base64
       };
@@ -306,6 +307,7 @@ export class ImageSyncService {
           favorite: item.is_favorite,
           syncPriority: item.sync_priority,
           loras: item.loras || [],
+          regional_prompting: item.regional_prompting || { enabled: false, regions: [] },
           tags: item.tags || [],
           timestamp: new Date(item.created_at)
         };

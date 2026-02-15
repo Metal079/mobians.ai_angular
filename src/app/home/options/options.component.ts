@@ -21,6 +21,7 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
 import { AuthService } from 'src/app/auth/auth.service';
+import { RegionalPromptRegion, RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
 import { ImageHistoryPanelComponent } from './image-history-panel/image-history-panel.component';
 import { GenerationOptionsPanelComponent } from './generation-options-panel/generation-options-panel.component';
 import { LorasPanelComponent } from './loras-panel/loras-panel.component';
@@ -96,11 +97,26 @@ export class OptionsComponent implements OnInit {
     }
   }
 
+  private isSdxlModel(modelId: unknown): boolean {
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    return normalized === 'autismMix' || normalized === 'novaFurryXL_ilV140' || normalized === 'novaMobianXL_v10';
+  }
+
+  private disableRegionalPromptingForNonSdxlModel(modelId: unknown): void {
+    if (this.isSdxlModel(modelId)) return;
+    if (!this.generationRequest?.regional_prompting) {
+      this.generationRequest.regional_prompting = { enabled: false, regions: [] };
+      return;
+    }
+    this.generationRequest.regional_prompting.enabled = false;
+  }
+
   private ensureValidModelSelected(persist: boolean = true): void {
     const previous = this.generationRequest?.model;
     const normalized = this.normalizeModelId(previous);
     this.generationRequest.model = normalized;
     this.applyModelDefaultsIfChanged(previous, normalized);
+    this.disableRegionalPromptingForNonSdxlModel(normalized);
 
     // Keep aspect ratio config in sync with the selected model.
     if (this.aspectRatio) this.aspectRatio.model = normalized;
@@ -151,6 +167,10 @@ export class OptionsComponent implements OnInit {
     is_dev_job: environment.isDevJob,
     loras: [],
     lossy_images: true,
+    regional_prompting: {
+      enabled: false,
+      regions: [],
+    },
   };
   jobID: string = "";
   // Add a simple flag to indicate a pending job
@@ -342,6 +362,12 @@ export class OptionsComponent implements OnInit {
             this.generationRequest.loras = this.snapshotLoras(pending.request.loras);
             this.updateCreditCost();
           }
+          if (pending.request.regional_prompting) {
+            this.generationRequest.regional_prompting = this.sanitizeRegionalPrompting(
+              pending.request.regional_prompting,
+              pending.request.model
+            );
+          }
         }
 
         // Pending job restore can also carry stale/invalid model values.
@@ -383,6 +409,7 @@ export class OptionsComponent implements OnInit {
   changeModel(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.generationRequest.model = selectElement.value;
+    this.disableRegionalPromptingForNonSdxlModel(selectElement.value);
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
     if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_ilV140" || selectElement.value == "novaMobianXL_v10") {
@@ -446,9 +473,7 @@ export class OptionsComponent implements OnInit {
   private isHiresAvailable(): boolean {
     return (
       !this.referenceImage &&
-      this.generationRequest?.job_type === 'txt2img' &&
-      this.generationRequest?.model !== 'sonicDiffusionXL' &&
-      this.generationRequest?.model !== 'autismMix'
+      this.generationRequest?.job_type === 'txt2img'
     );
   }
 
@@ -775,6 +800,7 @@ export class OptionsComponent implements OnInit {
     this.applyInputStyleToBody(this.darkInputFields);
     // Default after reset: WebP images enabled
     this.generationRequest.lossy_images = true;
+    this.generationRequest.regional_prompting = { enabled: false, regions: [] };
     this.enableNotifications = false;
     this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
@@ -796,6 +822,45 @@ export class OptionsComponent implements OnInit {
     }));
   }
 
+  private sanitizeRegionalPrompting(
+    input: any,
+    modelId: unknown = this.generationRequest?.model
+  ): { enabled: boolean; regions: RegionalPromptRegion[] } {
+    const empty = { enabled: false, regions: [] as RegionalPromptRegion[] };
+    if (!input || typeof input !== "object") return empty;
+    if (!this.isSdxlModel(modelId)) return empty;
+
+    const regions: RegionalPromptRegion[] = (Array.isArray(input.regions) ? input.regions : [])
+      .map((region: any) => ({
+        id: String(region?.id ?? `${Date.now()}-${Math.floor(Math.random() * 1000)}`),
+        prompt: String(region?.prompt ?? "").trim(),
+        negative_prompt: String(region?.negative_prompt ?? "").trim(),
+        x: Math.min(1, Math.max(0, Number(region?.x ?? 0))),
+        y: Math.min(1, Math.max(0, Number(region?.y ?? 0))),
+        width: Math.min(1, Math.max(0.05, Number(region?.width ?? 0.25))),
+        height: Math.min(1, Math.max(0.05, Number(region?.height ?? 0.25))),
+        denoise_strength: Math.min(1, Math.max(0, Number(region?.denoise_strength ?? 1))),
+        feather: Math.min(96, Math.max(0, Math.round(Number(region?.feather ?? 32)))),
+        opacity: Math.min(1, Math.max(0, Number(region?.opacity ?? 1))),
+        inherit_base_prompt: region?.inherit_base_prompt === true,
+      }))
+      .filter((region: RegionalPromptRegion) => region.prompt.length > 0)
+      .map((region: RegionalPromptRegion) => {
+        if (region.x + region.width > 1) {
+          region.x = Math.max(0, 1 - region.width);
+        }
+        if (region.y + region.height > 1) {
+          region.y = Math.max(0, 1 - region.height);
+        }
+        return region;
+      });
+
+    return {
+      enabled: !!input.enabled && regions.length > 0,
+      regions,
+    };
+  }
+
   private getHistoryLorasSnapshot(): any[] {
     const pending = this.getPendingJob();
     if (Array.isArray(pending?.request?.loras)) {
@@ -805,6 +870,14 @@ export class OptionsComponent implements OnInit {
       return this.snapshotLoras(this.generationRequest.loras);
     }
     return [];
+  }
+
+  private getHistoryRegionalPromptingSnapshot(): RegionalPromptingConfig {
+    const pending = this.getPendingJob();
+    if (pending?.request?.regional_prompting) {
+      return this.sanitizeRegionalPrompting(pending.request.regional_prompting, pending.request.model);
+    }
+    return this.sanitizeRegionalPrompting(this.generationRequest?.regional_prompting, this.generationRequest?.model);
   }
 
   // Send job to django api and retrieve job id.
@@ -922,6 +995,7 @@ export class OptionsComponent implements OnInit {
       ...this.generationRequest,
       job_type: jobTypeForRequest,
       queue_type: queueTypeForRequest,
+      regional_prompting: this.sanitizeRegionalPrompting(this.generationRequest.regional_prompting, this.generationRequest.model),
     };
 
     this.sharedService.setGenerationRequest(this.generationRequest);
@@ -952,7 +1026,8 @@ export class OptionsComponent implements OnInit {
             model: requestToSend.model,
             client_id: requestToSend.client_id,
             queue_type: requestToSend.queue_type,
-            loras: this.snapshotLoras(requestToSend.loras)
+            loras: this.snapshotLoras(requestToSend.loras),
+            regional_prompting: this.sanitizeRegionalPrompting(requestToSend.regional_prompting, requestToSend.model),
           });
 
           this.getJob(response.job_id);
@@ -1107,6 +1182,7 @@ export class OptionsComponent implements OnInit {
           if (jobComplete && lastResponse) {
             console.log(lastResponse);
             const historyLoras = this.getHistoryLorasSnapshot();
+            const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
             const generatedImages = lastResponse.result.map((base64String: string) => {
               const blob = this.blobMigrationService.base64ToBlob(base64String)
               const blobUrl = URL.createObjectURL(blob);
@@ -1121,6 +1197,7 @@ export class OptionsComponent implements OnInit {
                 timestamp: new Date(),
                 prompt: this.generationRequest.prompt,
                 loras: historyLoras,
+                regional_prompting: historyRegionalPrompting,
                 promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
                 url: blobUrl, // Generate URL
                 // New metadata fields for hover display
@@ -1403,6 +1480,12 @@ export class OptionsComponent implements OnInit {
       if (Array.isArray(pending.request.loras)) {
         this.generationRequest.loras = this.snapshotLoras(pending.request.loras);
         this.updateCreditCost();
+      }
+      if (pending.request.regional_prompting) {
+        this.generationRequest.regional_prompting = this.sanitizeRegionalPrompting(
+          pending.request.regional_prompting,
+          pending.request.model
+        );
       }
     }
     // Clear pending and release any lock just in case

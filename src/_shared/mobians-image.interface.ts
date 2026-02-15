@@ -1,3 +1,5 @@
+import { RegionalPromptingConfig } from './regional-prompting.interface';
+
 export interface MobiansImage {
     url?: string;
     width: number;
@@ -10,6 +12,7 @@ export interface MobiansImage {
     prompt?: string;
     promptSummary?: string;
     loras?: any[];
+    regional_prompting?: RegionalPromptingConfig;
     thumbnailUrl?: string;
     blob?: Blob;
     favorite?: boolean;
@@ -35,6 +38,6 @@ export interface ImageTag {
 // Used just for the image history
 export type MobiansImageMetadata = Pick<MobiansImage, 
   'UUID' | 'prompt' | 'promptSummary' | 'timestamp' | 'aspectRatio' | 
-  'width' | 'height' | 'favorite' | 'loras' | 'tags' | 'model' | 'seed' | 
+  'width' | 'height' | 'favorite' | 'loras' | 'regional_prompting' | 'tags' | 'model' | 'seed' | 
   'negativePrompt' | 'cfg' | 'syncPriority' | 'lastModified'
 >;

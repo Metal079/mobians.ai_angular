@@ -55,6 +55,26 @@ export interface DailyBonusResponse {
   credits_awarded: number;
 }
 
+export interface RegionalPromptPresetRegion {
+  id: string;
+  prompt: string;
+  negative_prompt: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  denoise_strength: number;
+  feather: number;
+  opacity: number;
+  inherit_base_prompt: boolean;
+}
+
+export interface RegionalPromptPreset {
+  id?: string;
+  name: string;
+  regions: RegionalPromptPresetRegion[];
+}
+
 export interface SubmitJobResponse {
   job_id: string;
   credits_used?: number;
@@ -180,6 +200,16 @@ export class StableDiffusionService {
   syncLoraPreferences(data: { preferences: Array<{ version_id: number; is_favorite?: boolean; last_used_at?: string }> }): Observable<any> {
     const url = `${this.apiBaseUrl}/lora/preferences`;
     return this.http.post(url, data);
+  }
+
+  getRegionalPromptPresets(): Observable<RegionalPromptPreset[]> {
+    const url = `${this.apiBaseUrl}/regional-presets`;
+    return this.http.get<RegionalPromptPreset[]>(url);
+  }
+
+  syncRegionalPromptPresets(data: { presets: RegionalPromptPreset[] }): Observable<{ success: boolean; synced_count: number }> {
+    const url = `${this.apiBaseUrl}/regional-presets`;
+    return this.http.post<{ success: boolean; synced_count: number }>(url, data);
   }
 
   getLoraSuggestions(status: string = 'pending'): Observable<any> {

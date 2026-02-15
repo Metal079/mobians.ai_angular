@@ -8,8 +8,9 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { SharedService } from 'src/app/shared.service';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
+import { RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
 import { AddLorasComponent } from '../../add-loras/add-loras.component';
-import { LoraHistoryPromptService } from '../lora-history-prompt.service';
+import { HistoryLoadRequest, LoraHistoryPromptService } from '../lora-history-prompt.service';
 import { environment } from 'src/environments/environment';
 import { DialogModule } from 'primeng/dialog';
 import { MultiSelectModule } from 'primeng/multiselect';
@@ -79,6 +80,8 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
 
   showLoraLoadPrompt = false;
   pendingLoraLoadImage: MobiansImage | null = null;
+  pendingLoadHasLoras = false;
+  pendingLoadHasRegionalPrompting = false;
 
   private loginInfo: any;
   private lastModelId?: string;
@@ -107,7 +110,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
 
     this.loraHistoryPromptService.requests$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((image) => this.handleHistoryLoraRequest(image));
+      .subscribe((request) => this.handleHistoryLoraRequest(request));
   }
 
   ngAfterViewInit(): void {
@@ -592,23 +595,33 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.syncLoraPreferencesToCloud();
   }
 
-  private handleHistoryLoraRequest(image: MobiansImage) {
+  private handleHistoryLoraRequest(request: HistoryLoadRequest) {
+    const image = request.image;
     const historyLoras = Array.isArray(image.loras) ? image.loras : [];
-    if (historyLoras.length === 0) return;
-
     const targetBaseModel = this.modelsTypes?.[this.generationRequest.model];
     const hasCompatibleLoras = !targetBaseModel
-      ? true
+      ? historyLoras.length > 0
       : historyLoras.some((lora) => lora?.base_model === targetBaseModel);
-    if (!hasCompatibleLoras) {
+    const hasRegionalPrompting = !!request.hasRegionalPrompting
+      && !!image.regional_prompting?.enabled
+      && Array.isArray(image.regional_prompting?.regions)
+      && image.regional_prompting.regions.length > 0;
+
+    if (!hasCompatibleLoras && !hasRegionalPrompting) {
       return;
     }
 
     this.pendingLoraLoadImage = image;
+    this.pendingLoadHasLoras = hasCompatibleLoras;
+    this.pendingLoadHasRegionalPrompting = hasRegionalPrompting;
     this.showLoraLoadPrompt = true;
   }
 
   confirmLoadHistoryLoras() {
+    this.loadHistoryWithLoras();
+  }
+
+  loadHistoryWithLoras() {
     const image = this.pendingLoraLoadImage;
     this.clearLoraLoadPrompt();
     if (!image) {
@@ -621,6 +634,42 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.emitLorasChanged();
   }
 
+  loadHistoryWithRegionalPrompting() {
+    const image = this.pendingLoraLoadImage;
+    this.clearLoraLoadPrompt();
+    if (!image || !image.regional_prompting) {
+      return;
+    }
+
+    this.generationRequest.regional_prompting = this.normalizeRegionalPrompting(image.regional_prompting);
+    this.emitLorasChanged();
+  }
+
+  loadHistoryAllSettings() {
+    const image = this.pendingLoraLoadImage;
+    if (!image) {
+      this.clearLoraLoadPrompt();
+      return;
+    }
+
+    const shouldLoadLoras = this.pendingLoadHasLoras;
+    const shouldLoadRegional = this.pendingLoadHasRegionalPrompting;
+    this.clearLoraLoadPrompt();
+
+    if (shouldLoadLoras) {
+      const resolved = this.resolveHistoryLoras(image.loras);
+      this.selectedLoras = resolved;
+      this.generationRequest.loras = this.selectedLoras;
+      this.markLorasUsed(this.selectedLoras);
+    }
+
+    if (shouldLoadRegional && image.regional_prompting) {
+      this.generationRequest.regional_prompting = this.normalizeRegionalPrompting(image.regional_prompting);
+    }
+
+    this.emitLorasChanged();
+  }
+
   declineLoadHistoryLoras() {
     this.clearLoraLoadPrompt();
   }
@@ -628,6 +677,21 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   private clearLoraLoadPrompt() {
     this.showLoraLoadPrompt = false;
     this.pendingLoraLoadImage = null;
+    this.pendingLoadHasLoras = false;
+    this.pendingLoadHasRegionalPrompting = false;
+  }
+
+  private normalizeRegionalPrompting(input: any): RegionalPromptingConfig {
+    if (!input || typeof input !== 'object') {
+      return { enabled: false, regions: [] };
+    }
+    const regions = Array.isArray(input.regions)
+      ? input.regions.map((region: any) => ({ ...region }))
+      : [];
+    return {
+      enabled: !!input.enabled && regions.length > 0,
+      regions,
+    };
   }
 
   private resolveHistoryLoras(historyLoras?: any[]): any[] {

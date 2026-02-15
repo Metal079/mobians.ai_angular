@@ -125,18 +125,20 @@
   </div>
 </div>
 
-<!-- Load LoRAs Prompt -->
+<!-- History Load Options -->
 <p-dialog [(visible)]="showLoraLoadPrompt" [modal]="true" [dismissableMask]="true" [closable]="true"
   [appendTo]="'body'"
   [style]="{width: 'min(90vw, 420px)'}" (onHide)="declineLoadHistoryLoras()">
   <ng-template pTemplate="header">
-    <h5>Load LoRAs?</h5>
+    <h5>Load History Settings?</h5>
   </ng-template>
   <ng-template pTemplate="content">
-    <p>This image used LoRAs. Load them into your current selection?</p>
+    <p>This history image has reusable settings. Choose what to load.</p>
   </ng-template>
   <ng-template pTemplate="footer">
-    <button class="btn btn-secondary" type="button" (click)="declineLoadHistoryLoras()">No</button>
-    <button class="btn btn-primary ms-2" type="button" (click)="confirmLoadHistoryLoras()">Yes</button>
+    <button class="btn btn-secondary" type="button" (click)="declineLoadHistoryLoras()">Image Only</button>
+    <button class="btn btn-primary ms-2" type="button" [disabled]="!pendingLoadHasLoras" (click)="loadHistoryWithLoras()">Load LoRAs</button>
+    <button class="btn btn-primary ms-2" type="button" [disabled]="!pendingLoadHasRegionalPrompting" (click)="loadHistoryWithRegionalPrompting()">Load Regional</button>
+    <button class="btn btn-success ms-2" type="button" [disabled]="!(pendingLoadHasLoras || pendingLoadHasRegionalPrompting)" (click)="loadHistoryAllSettings()">Load All</button>
   </ng-template>
 </p-dialog>

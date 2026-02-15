@@ -235,6 +235,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         prompt: image.prompt!,
         promptSummary: image.promptSummary,
         loras: image.loras,
+        regional_prompting: image.regional_prompting,
         timestamp: image.timestamp!,
         aspectRatio: image.aspectRatio,
         width: image.width,
@@ -396,8 +397,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
 
     const historyLoras = Array.isArray(image.loras) ? image.loras : [];
-    if (historyLoras.length > 0) {
-      this.loraHistoryPromptService.requestLoad(image);
+    const hasRegionalPrompting = !!image.regional_prompting?.enabled
+      && Array.isArray(image.regional_prompting?.regions)
+      && image.regional_prompting.regions.length > 0;
+    if (historyLoras.length > 0 || hasRegionalPrompting) {
+      this.loraHistoryPromptService.requestLoad({
+        image,
+        hasLoras: historyLoras.length > 0,
+        hasRegionalPrompting,
+      });
     }
   }
 
@@ -1906,6 +1914,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
           prompt: image.prompt,
           promptSummary: image.promptSummary,
           loras: image.loras,
+          regional_prompting: image.regional_prompting,
           timestamp: image.timestamp,
           aspectRatio: image.aspectRatio,
           width: image.width,

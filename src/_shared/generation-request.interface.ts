@@ -1,3 +1,5 @@
+import { RegionalPromptingConfig } from './regional-prompting.interface';
+
 export interface GenerationRequest {
     prompt: string;
     image?: string;
@@ -17,5 +19,6 @@ export interface GenerationRequest {
     model: string;
     fast_pass_code?: string;
     loras?: any[];
+    regional_prompting?: RegionalPromptingConfig;
   }
   

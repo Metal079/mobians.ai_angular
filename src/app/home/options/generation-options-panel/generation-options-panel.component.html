@@ -49,6 +49,230 @@
       [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings.emit()"></textarea>
     </div>
 
+    <section class="regional-panel mb-3">
+      <div class="regional-header">
+        <div class="regional-title-wrap">
+          <h5 class="regional-title">Regional Prompting</h5>
+          <p class="regional-subtitle mb-0">Give different areas of the image their own prompt details.</p>
+        </div>
+        <div class="form-check form-switch">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="regionalPromptingEnabled"
+            [disabled]="!regionalPromptingSupported"
+            [(ngModel)]="regionalEnabled">
+          <label class="form-check-label" for="regionalPromptingEnabled">Enable</label>
+        </div>
+      </div>
+      @if (!regionalPromptingSupported) {
+        <small class="text-muted">Regional prompting is available only for SDXL models.</small>
+      }
+
+      <div class="regional-actions">
+        <button class="btn btn-sm regional-action-btn primary" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion()">+ Add</button>
+        <button class="btn btn-sm regional-action-btn" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion('left-right')">Left / Right</button>
+        <button class="btn btn-sm regional-action-btn" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion('top-bottom')">Top / Bottom</button>
+        <button class="btn btn-sm regional-action-btn danger" type="button" [disabled]="!regionalPromptingSupported" (click)="clearRegions()">Clear</button>
+      </div>
+
+      <div class="regional-presets">
+        <div class="regional-preset-row">
+          <input
+            class="form-control form-control-sm"
+            placeholder="Preset name"
+            [(ngModel)]="newPresetName"
+            [disabled]="!canManagePresets || !regionalPromptingSupported">
+          <button
+            class="btn btn-sm regional-action-btn primary"
+            type="button"
+            [disabled]="!canManagePresets || !regionalPromptingSupported"
+            (click)="saveCurrentAsPreset()">Save Preset</button>
+        </div>
+        @if (regionalPresets.length > 0) {
+          <div class="regional-preset-chip-row">
+            @for (preset of regionalPresets; track preset.id) {
+              <button class="regional-chip" type="button" (click)="applyPreset(preset.id)">{{ preset.name }}</button>
+              <button
+                class="btn btn-sm regional-action-btn danger preset-delete-btn"
+                type="button"
+                [disabled]="!canManagePresets || !regionalPromptingSupported"
+                (click)="removePreset(preset.id, preset.name)">×</button>
+            }
+          </div>
+        }
+        <small class="regional-storage-hint">
+          {{ isLoggedIn ? 'Presets are saved to your account.' : 'Sign in to save and manage presets.' }}
+        </small>
+      </div>
+
+      <div class="regional-editor-toggle-row">
+        <button
+          class="btn btn-sm regional-action-btn"
+          type="button"
+          [disabled]="(!regionalEnabled && !hasRegions) || !regionalPromptingSupported"
+          (click)="toggleWorkspace()">
+          {{ workspaceExpanded ? 'Hide Workspace' : 'Edit Regions' }}
+        </button>
+        <span class="regional-summary-text">
+          {{ hasRegions ? (regionalRegions.length + ' region(s) configured') : 'No regions configured' }}
+        </span>
+      </div>
+
+      @if (workspaceExpanded) {
+        <div class="regional-workspace-shell" [class.enabled]="regionalEnabled">
+          @if (!regionalEnabled) {
+            <div class="regional-disabled-overlay">
+              <p class="mb-0">Enable regional prompting to edit and drag regions.</p>
+            </div>
+          }
+          <div class="regional-workspace">
+            <div class="regional-preview-column">
+              <div class="regional-preview">
+                <div class="regional-preview-frame" [style.aspect-ratio]="previewAspectRatio">
+                @for (region of regionalRegions; track region.id; let i = $index) {
+                  <button
+                    type="button"
+                    class="regional-preview-box"
+                    [class.active]="i === activeRegionIndex"
+                    [style.left.%]="region.x * 100"
+                    [style.top.%]="region.y * 100"
+                    [style.width.%]="region.width * 100"
+                    [style.height.%]="region.height * 100"
+                    (pointerdown)="onPreviewPointerDown($event, i)"
+                    (pointermove)="onPreviewPointerMove($event, i)"
+                    (pointerup)="onPreviewPointerUp($event, i)"
+                    (pointercancel)="onPreviewPointerUp($event, i)"
+                    (click)="selectRegion(i)">
+                    <span>R{{ i + 1 }}</span>
+                  </button>
+                }
+                </div>
+              </div>
+
+              @if (hasRegions) {
+                <div class="regional-chip-list">
+                  @for (region of regionalRegions; track region.id; let i = $index) {
+                    <button
+                      type="button"
+                      class="regional-chip"
+                      [class.active]="i === activeRegionIndex"
+                      (click)="selectRegion(i)">
+                      Region {{ i + 1 }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="regional-editor-column">
+              @if (selectedRegion; as region) {
+                <article class="regional-region-card">
+                  <div class="regional-region-head">
+                    <h6 class="mb-0">Editing Region {{ activeRegionIndex + 1 }}</h6>
+                    <button class="btn btn-sm regional-action-btn danger" type="button" (click)="removeRegion(activeRegionIndex)">Remove</button>
+                  </div>
+
+                  <label class="form-label mb-1">Region Prompt
+                    <span class="regional-help-icon"
+                      pTooltip="Describe only what should appear inside this region."
+                      tooltipPosition="top">?</span>
+                  </label>
+                  <textarea
+                    class="form-control mb-2"
+                    rows="2"
+                    [(ngModel)]="region.prompt"
+                    (ngModelChange)="saveSettings.emit()"
+                    placeholder="Describe this area"></textarea>
+
+                  <label class="form-label mb-1">Region Negative Prompt (optional)
+                    <span class="regional-help-icon"
+                      pTooltip="Things to avoid in this region (wrong character, colors, clothing, etc)."
+                      tooltipPosition="top">?</span>
+                  </label>
+                  <input
+                    class="form-control mb-2"
+                    [(ngModel)]="region.negative_prompt"
+                    (ngModelChange)="saveSettings.emit()"
+                    placeholder="What to avoid in this area">
+
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      [id]="'inheritBasePrompt-' + activeRegionIndex"
+                      [(ngModel)]="region.inherit_base_prompt"
+                      (ngModelChange)="saveSettings.emit()">
+                    <label class="form-check-label" [for]="'inheritBasePrompt-' + activeRegionIndex">
+                      Include base prompt context in this region's prompt
+                      <span class="regional-help-icon"
+                        pTooltip="When ON, this region also inherits the global prompt. Turn OFF for stronger separation."
+                        tooltipPosition="top">?</span>
+                    </label>
+                  </div>
+
+                  <div class="regional-grid">
+                    <div class="regional-slider-pair">
+                      <div class="regional-slider-item">
+                        <label class="form-label">X: {{ (region.x * 100).toFixed(0) }}%
+                          <span class="regional-help-icon" pTooltip="Horizontal position of the region." tooltipPosition="top">?</span>
+                        </label>
+                        <input type="range" class="form-range" min="0" max="1" step="0.01"
+                          [(ngModel)]="region.x" (ngModelChange)="normalizeRegion(region)">
+                      </div>
+
+                      <div class="regional-slider-item">
+                        <label class="form-label">Y: {{ (region.y * 100).toFixed(0) }}%
+                          <span class="regional-help-icon" pTooltip="Vertical position of the region." tooltipPosition="top">?</span>
+                        </label>
+                        <input type="range" class="form-range" min="0" max="1" step="0.01"
+                          [(ngModel)]="region.y" (ngModelChange)="normalizeRegion(region)">
+                      </div>
+                    </div>
+
+                    <div class="regional-slider-pair">
+                      <div class="regional-slider-item">
+                        <label class="form-label">Width: {{ (region.width * 100).toFixed(0) }}%
+                          <span class="regional-help-icon" pTooltip="How much horizontal area this region covers." tooltipPosition="top">?</span>
+                        </label>
+                        <input type="range" class="form-range" min="0.05" max="1" step="0.01"
+                          [(ngModel)]="region.width" (ngModelChange)="normalizeRegion(region)">
+                      </div>
+
+                      <div class="regional-slider-item">
+                        <label class="form-label">Height: {{ (region.height * 100).toFixed(0) }}%
+                          <span class="regional-help-icon" pTooltip="How much vertical area this region covers." tooltipPosition="top">?</span>
+                        </label>
+                        <input type="range" class="form-range" min="0.05" max="1" step="0.01"
+                          [(ngModel)]="region.height" (ngModelChange)="normalizeRegion(region)">
+                      </div>
+                    </div>
+
+                    <label class="form-label">Region Influence: {{ region.denoise_strength.toFixed(2) }}
+                      <span class="regional-help-icon" pTooltip="How strongly this region prompt affects the result in this area." tooltipPosition="top">?</span>
+                    </label>
+                    <input type="range" class="form-range" min="0" max="1" step="0.05"
+                      [(ngModel)]="region.denoise_strength" (ngModelChange)="normalizeRegion(region)">
+
+                    <label class="form-label">Edge Softness: {{ region.feather }} px
+                      <span class="regional-help-icon" pTooltip="Softens boundaries between regions. Lower values reduce concept bleeding." tooltipPosition="top">?</span>
+                    </label>
+                    <input type="range" class="form-range" min="0" max="96" step="2"
+                      [(ngModel)]="region.feather" (ngModelChange)="normalizeRegion(region)">
+                  </div>
+                </article>
+              } @else {
+                <div class="regional-empty-state">
+                  <h6>No regions yet</h6>
+                  <p>Create one with <strong>Add</strong> or use a split preset to start quickly.</p>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </section>
+
     <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
       <!-- Seed -->
       <div style="width: 49%; flex-basis: calc(49%);">
@@ -114,7 +338,7 @@
           </div>
 
           <!-- Hi-Res (Generate + Upscale) -->
-          @if (generationRequest.job_type == 'txt2img' && !referenceImage && generationRequest.model != 'sonicDiffusionXL' && generationRequest.model != 'autismMix') {
+          @if (generationRequest.job_type == 'txt2img' && !referenceImage) {
             <div
               class="d-flex justify-content-start mb-3">
               <div class="form-check me-3">
