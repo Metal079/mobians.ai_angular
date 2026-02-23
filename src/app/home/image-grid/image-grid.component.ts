@@ -408,22 +408,28 @@ export class ImageGridComponent implements OnDestroy {
   }
 
   private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {
-    let blob = image.blob;
+    let blob: Blob | null | undefined;
+    let blobSource: 'none' | 'url' | 'blob' = 'none';
 
-    if (!blob && image.url) {
+    if (image.url) {
       try {
         const response = await fetch(image.url);
         blob = await response.blob();
+        blobSource = 'url';
       } catch (error) {
-        console.error('Failed to fetch image blob for download', error);
-        return null;
+        console.warn('Failed to fetch image URL for download fallback', error);
       }
+    }
+
+    if (!blob && image.blob) {
+      blob = image.blob;
+      blobSource = 'blob';
     }
 
     if (!blob) return null;
 
     const lossyEnabled = this.sharedService.getGenerationRequestValue()?.lossy_images;
-    if (!lossyEnabled && blob.type === 'image/webp') {
+    if (blobSource !== 'url' && !lossyEnabled && blob.type === 'image/webp') {
       blob = await this.blobMigrationService.convertWebPToPNG(blob);
     }
 
