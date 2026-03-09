@@ -18,7 +18,7 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   private readonly sdxlModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
-    'novaMobianXL_v10',
+    'novaMobianXL_v20',
   ]);
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) aspectRatio!: AspectRatio;

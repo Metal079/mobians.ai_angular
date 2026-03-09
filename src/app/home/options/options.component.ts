@@ -57,11 +57,11 @@ export class OptionsComponent implements OnInit {
   models_types: { [model: string]: string; } = {
     "sonicDiffusionV4": "SD 1.5",
     "autismMix": "Pony",
-    "novaMobianXL_v10": "Illustrious",
+    "novaMobianXL_v20": "Illustrious",
     "novaFurryXL_ilV140": "Illustrious"
   }
 
-  private readonly defaultModelId: string = "novaMobianXL_v10";
+  private readonly defaultModelId: string = "novaMobianXL_v20";
 
   private getAvailableModelIds(): string[] {
     return Object.keys(this.models_types || {});
@@ -90,7 +90,7 @@ export class OptionsComponent implements OnInit {
     if (prevModel === nextModel) return;
 
     // Keep existing behavior: default CFG depends on model family.
-    if (nextModel == "autismMix" || nextModel == "novaFurryXL_ilV140" || nextModel == "novaMobianXL_v10") {
+    if (nextModel == "autismMix" || nextModel == "novaFurryXL_ilV140" || nextModel == "novaMobianXL_v20") {
       this.generationRequest.guidance_scale = 4;
     } else {
       this.generationRequest.guidance_scale = 7;
@@ -99,7 +99,7 @@ export class OptionsComponent implements OnInit {
 
   private isSdxlModel(modelId: unknown): boolean {
     const normalized = typeof modelId === 'string' ? modelId.trim() : '';
-    return normalized === 'autismMix' || normalized === 'novaFurryXL_ilV140' || normalized === 'novaMobianXL_v10';
+    return normalized === 'autismMix' || normalized === 'novaFurryXL_ilV140' || normalized === 'novaMobianXL_v20';
   }
 
   private disableRegionalPromptingForNonSdxlModel(modelId: unknown): void {
@@ -145,7 +145,7 @@ export class OptionsComponent implements OnInit {
   enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
-  aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaMobianXL_v10", aspectRatio: "square" };
+  aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaMobianXL_v20", aspectRatio: "square" };
   defaultNegativePrompt: string = "nsfw, 3d, EasyNegativeV2, worst quality, low quality, watermark, signature, simple background, bad anatomy, bad hands, deformed limbs, blurry, cropped, cross-eyed, extra arms, speech bubble, extra legs, extra limbs, bad proportions, poorly drawn hands, text, flat background";
   generationRequest: any = {
     prompt: "",
@@ -162,7 +162,7 @@ export class OptionsComponent implements OnInit {
     batch_size: 4,
     strength: 0.7,
     job_type: "txt2img",
-    model: "novaMobianXL_v10",
+    model: "novaMobianXL_v20",
     fast_pass_code: undefined,
     is_dev_job: environment.isDevJob,
     loras: [],
@@ -412,7 +412,7 @@ export class OptionsComponent implements OnInit {
     this.disableRegionalPromptingForNonSdxlModel(selectElement.value);
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_ilV140" || selectElement.value == "novaMobianXL_v10") {
+    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_ilV140" || selectElement.value == "novaMobianXL_v20") {
       this.generationRequest.guidance_scale = 4;
     }
     else {
@@ -793,7 +793,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
     this.generationRequest.guidance_scale = 4;
-    this.generationRequest.model = "novaMobianXL_v10";
+    this.generationRequest.model = "novaMobianXL_v20";
     this.panelTheme = 'sonic';
     this.darkInputFields = false;
     this.applyThemeToBody(this.panelTheme);
