@@ -226,4 +226,18 @@ describe('ImageHistoryPanelComponent', () => {
     expect(tag1?.imageCount).toBe(2);
     expect(tag2?.imageCount).toBe(1);
   });
+
+  it('getDownloadBlob should convert URL-backed WebP blobs to PNG when lossy downloads are disabled', async () => {
+    const webpBlob = new Blob(['webp'], { type: 'image/webp' });
+    const pngBlob = new Blob(['png'], { type: 'image/png' });
+    const blobMigrationService = TestBed.inject(BlobMigrationService) as unknown as BlobMigrationServiceStub;
+    spyOn(blobMigrationService, 'convertWebPToPNG').and.resolveTo(pngBlob);
+    spyOn(window, 'fetch').and.resolveTo(new Response(webpBlob));
+    component.lossyImages = false;
+
+    const result = await (component as any).getDownloadBlob({ UUID: 'download-1', url: 'blob:history-image' });
+
+    expect(blobMigrationService.convertWebPToPNG).toHaveBeenCalledTimes(1);
+    expect(result).toBe(pngBlob);
+  });
 });

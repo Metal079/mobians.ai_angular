@@ -573,13 +573,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {
     let blob: Blob | null | undefined;
-    let blobSource: 'none' | 'url' | 'blob' | 'store' = 'none';
 
     if (image.url) {
       try {
         const response = await fetch(image.url);
         blob = await response.blob();
-        blobSource = 'url';
       } catch (error) {
         console.warn('Failed to fetch image URL for download fallback', error);
       }
@@ -587,19 +585,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
     if (!blob && image.blob) {
       blob = image.blob;
-      blobSource = 'blob';
     }
 
     if (!blob && image.UUID) {
       blob = await this.getBlobFromStore(image.UUID);
-      if (blob) {
-        blobSource = 'store';
-      }
     }
 
     if (!blob) return null;
 
-    if (blobSource !== 'url' && !this.lossyImages && blob.type === 'image/webp') {
+    if (!this.lossyImages && blob.type === 'image/webp') {
       blob = await this.blobMigrationService.convertWebPToPNG(blob);
     }
 
