@@ -74,6 +74,8 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   private loraDisplayCount = 24;
   private loraLoadMoreObserver?: IntersectionObserver;
   private isLoadingMoreLoras = false;
+  isLoadingLoras = false;
+  loraLoadFailed = false;
 
   displayModal = false;
   selectedImageUrl: string | null = null;
@@ -242,6 +244,8 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   }
 
   loadLoras() {
+    this.isLoadingLoras = true;
+    this.loraLoadFailed = false;
     this.stableDiffusionService.getLoras().pipe(
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
@@ -253,8 +257,11 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
         if (requestLoras.length > 0) {
           this.syncSelectedFromRequest(requestLoras);
         }
+        this.isLoadingLoras = false;
       },
       error: (error) => {
+        this.loraLoadFailed = true;
+        this.isLoadingLoras = false;
         console.error('Error loading Loras:', error);
       }
     });
@@ -377,8 +384,44 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     return Math.max(0, this.filteredLoras.length - this.loraDisplayCount);
   }
 
+  get showLoraLoadError(): boolean {
+    return this.loraLoadFailed && !this.isLoadingLoras;
+  }
+
+  get showLoraEmptyState(): boolean {
+    return !this.isLoadingLoras && !this.loraLoadFailed && this.displayedLoras.length === 0;
+  }
+
+  get loraEmptyStateTitle(): string {
+    return this.hasActiveLoraFilters ? 'No LoRAs matched that combo' : 'No LoRAs for this model yet';
+  }
+
+  get loraEmptyStateMessage(): string {
+    if (this.hasActiveLoraFilters) {
+      return 'The shelf is doing a tiny hide-and-seek. Try easing up on the search or filters and they should pop back in.';
+    }
+
+    return 'Tiny tumbleweed moment. Nothing is broken, there just are not any LoRAs to show here right now.';
+  }
+
   trackLoraById(_index: number, lora: any): string | number {
     return lora?.version_id ?? `${lora?.name}::${lora?.version}`;
+  }
+
+  private get baseModelLoras(): any[] {
+    const activeBaseModel = this.modelsTypes?.[this.generationRequest?.model];
+    if (!activeBaseModel) {
+      return [];
+    }
+
+    return this.loras.filter((lora) => lora.base_model === activeBaseModel);
+  }
+
+  private get hasActiveLoraFilters(): boolean {
+    return this.loraSearchQuery.trim().length > 0
+      || this.selectedTags.length > 0
+      || this.showFavoriteLorasOnly
+      || (!this.showNSFWLoras && this.baseModelLoras.some((lora) => lora.is_nsfw));
   }
 
   refreshLoraFiltersList() {

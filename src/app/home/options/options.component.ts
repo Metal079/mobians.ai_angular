@@ -102,8 +102,12 @@ export class OptionsComponent implements OnInit {
   private applyModelDefaultsIfChanged(prevModel: string | undefined, nextModel: string): void {
     if (prevModel === nextModel) return;
 
-    // Keep existing behavior: these model families share the lower default CFG.
-    this.generationRequest.guidance_scale = this.usesSdxlResolutionDefaults(nextModel) ? 4 : 7;
+    this.generationRequest.guidance_scale = this.getDefaultCfgForModel(nextModel);
+  }
+
+  private getDefaultCfgForModel(modelId: string): number {
+    if (modelId === 'Anima-preview2') return 6;
+    return this.usesSdxlResolutionDefaults(modelId) ? 4 : 7;
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
@@ -427,8 +431,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.model = selectElement.value;
     this.disableRegionalPromptingForUnsupportedModel(selectElement.value);
 
-    // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    this.generationRequest.guidance_scale = this.usesSdxlResolutionDefaults(selectElement.value) ? 4 : 7;
+    this.generationRequest.guidance_scale = this.getDefaultCfgForModel(selectElement.value);
 
     // Update credit cost for new model
     this.updateCreditCost();

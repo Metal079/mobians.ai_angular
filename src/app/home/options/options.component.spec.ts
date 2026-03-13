@@ -115,7 +115,7 @@ describe('OptionsComponent', () => {
 
     component.changeModel({ target: { value: 'Anima-preview2' } } as any);
 
-    expect(component.generationRequest.guidance_scale).toBe(4);
+    expect(component.generationRequest.guidance_scale).toBe(6);
     expect(component.generationRequest.regional_prompting.enabled).toBeTrue();
     expect(component.generationRequest.regional_prompting.regions.length).toBe(1);
   });

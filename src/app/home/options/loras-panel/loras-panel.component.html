@@ -66,10 +66,24 @@
       </p-dialog>
 
       <!-- LoRAs Grid -->
-      <div class="loras-grid" #lorasGrid (scroll)="onLorasScroll($event)">
+      <div class="loras-grid" [class.is-empty]="showLoraEmptyState || showLoraLoadError" #lorasGrid (scroll)="onLorasScroll($event)">
         <button class="btn btn-primary lora-request-btn" type="button" (click)="openAddLorasDialog()">
           Request LoRAs!
         </button>
+        @if (showLoraLoadError) {
+          <div class="lora-empty-state lora-empty-state-error" role="status" aria-live="polite">
+            <i class="bi bi-exclamation-diamond" aria-hidden="true"></i>
+            <h5>LoRAs took a wrong turn</h5>
+            <p>Something went sideways loading them. Give it another try in a moment.</p>
+          </div>
+        }
+        @if (showLoraEmptyState) {
+          <div class="lora-empty-state" role="status" aria-live="polite">
+            <i class="bi bi-stars" aria-hidden="true"></i>
+            <h5>{{ loraEmptyStateTitle }}</h5>
+            <p>{{ loraEmptyStateMessage }}</p>
+          </div>
+        }
         @for (lora of displayedLoras; track trackLoraById($index, lora)) {
           <div class="lora-card">
             <button class="lora-favorite-btn" type="button"
