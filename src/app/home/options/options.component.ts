@@ -1251,15 +1251,8 @@ export class OptionsComponent implements OnInit {
             this.sharedService.disableInstructions();
             this.sharedService.setImages(this.images);
 
-            // Convert to webp if image is png
-            if (generatedImages[0]?.blob?.type === 'image/png') {
-              for (let i = 0; i < generatedImages.length; i++) {
-                if (!generatedImages[i].blob) continue;
-                generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob);
-              }
-            }
-            await this.historyPanel?.ingestGeneratedImages(generatedImages);
-
+            // Dismiss loading UI immediately so users see their images
+            // before potentially slow async operations (WebP conversion, history)
             this.loadingChange.emit(false);
             this.enableGenerationButton = true;
             this.hasPendingJob = false; // ensure UI switches back to Generate
@@ -1268,6 +1261,15 @@ export class OptionsComponent implements OnInit {
             this.etaChange.emit(undefined);
             this.removePendingJob();
             this.lockService.release();
+
+            // Convert to webp if image is png (non-blocking for UI)
+            if (generatedImages[0]?.blob?.type === 'image/png') {
+              for (let i = 0; i < generatedImages.length; i++) {
+                if (!generatedImages[i].blob) continue;
+                generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob);
+              }
+            }
+            await this.historyPanel?.ingestGeneratedImages(generatedImages);
           } else {
             // failed or not found
             this.hasPendingJob = false; // ensure UI switches back to Generate

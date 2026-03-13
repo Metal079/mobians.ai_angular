@@ -176,33 +176,44 @@ export class BlobMigrationService {
 
   async convertToWebP(blob: Blob): Promise<Blob> {
     try {
-      const bitmap = await createImageBitmap(blob);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        return blob;
-      }
-
-      ctx.drawImage(bitmap, 0, 0);
-
-      const webpBlob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob(
-          (converted) => {
-            resolve(converted ?? blob);
-          },
-          'image/webp',
-          0.95
-        );
-      });
-
-      return webpBlob;
+      // Race against a timeout to prevent indefinite hangs on iOS Safari
+      // where createImageBitmap or canvas.toBlob may never call back
+      const conversionTimeout = 3_000; // 3 seconds
+      const conversion = this.doConvertToWebP(blob);
+      const timeout = new Promise<Blob>((resolve) =>
+        setTimeout(() => resolve(blob), conversionTimeout)
+      );
+      return await Promise.race([conversion, timeout]);
     } catch (error) {
       console.warn('WebP conversion failed; keeping original blob.', error);
       return blob;
     }
+  }
+
+  private async doConvertToWebP(blob: Blob): Promise<Blob> {
+    const bitmap = await createImageBitmap(blob);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return blob;
+    }
+
+    ctx.drawImage(bitmap, 0, 0);
+
+    const webpBlob = await new Promise<Blob>((resolve) => {
+      canvas.toBlob(
+        (converted) => {
+          resolve(converted ?? blob);
+        },
+        'image/webp',
+        0.95
+      );
+    });
+
+    return webpBlob;
   }
   
   async convertWebPToPNG(webpBlob: Blob): Promise<Blob> {
