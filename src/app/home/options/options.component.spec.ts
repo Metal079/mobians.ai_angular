@@ -23,7 +23,9 @@ class StableDiffusionServiceStub {
   }
 }
 
-class SharedServiceStub {}
+class SharedServiceStub {
+  setGenerationRequest() {}
+}
 class MessageServiceStub {
   add() {}
 }
@@ -73,5 +75,48 @@ describe('OptionsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('uses the SDXL-sized defaults for Anima-preview2', () => {
+    expect((component as any).usesSdxlResolutionDefaults('Anima-preview2')).toBeTrue();
+    expect((component as any).supportsRegionalPrompting('Anima-preview2')).toBeTrue();
+  });
+
+  it('calculates Anima-preview2 credit costs with LoRAs', () => {
+    component.generationRequest.model = 'Anima-preview2';
+    component.generationRequest.loras = [{}, {}];
+
+    component.updateCreditCost();
+
+    expect(component.creditCost).toBe(30);
+    expect(component.upscaleCreditCost).toBe(90);
+    expect(component.hiresCreditCost).toBe(120);
+  });
+
+  it('keeps regional prompting enabled for Anima-preview2 while keeping its default CFG', () => {
+    component.generationRequest.regional_prompting = {
+      enabled: true,
+      regions: [
+        {
+          id: 'region-1',
+          prompt: 'foreground character',
+          negative_prompt: '',
+          x: 0,
+          y: 0,
+          width: 0.5,
+          height: 1,
+          denoise_strength: 1,
+          feather: 32,
+          opacity: 1,
+          inherit_base_prompt: true,
+        },
+      ],
+    };
+
+    component.changeModel({ target: { value: 'Anima-preview2' } } as any);
+
+    expect(component.generationRequest.guidance_scale).toBe(4);
+    expect(component.generationRequest.regional_prompting.enabled).toBeTrue();
+    expect(component.generationRequest.regional_prompting.regions.length).toBe(1);
   });
 });

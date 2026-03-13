@@ -37,6 +37,7 @@ type SearchOption = 'lora_name' | 'model_id' | 'username';
 export class AddLorasComponent {
   private readonly destroyRef = inject(DestroyRef);
   private isComponentDestroyed = false;
+  targetBaseModel: string | null = null;
 
   searchOptions: { value: SearchOption; label: string; icon: string }[] = [
     { value: 'lora_name', label: 'Search by Name', icon: 'pi pi-search' },
@@ -101,6 +102,11 @@ export class AddLorasComponent {
       if (stored != null) this.showNSFWLoras = stored === 'true';
     }
 
+    const targetBaseModel = this.config?.data?.targetBaseModel;
+    this.targetBaseModel = typeof targetBaseModel === 'string' && targetBaseModel.trim()
+      ? targetBaseModel.trim()
+      : null;
+
     this.loadApprovedLoras();
     this.loadSuggestionStatuses();
   }
@@ -156,6 +162,26 @@ export class AddLorasComponent {
 
   requestSelectedLoRA() {
     if (this.selectedLoRA) {
+      const status = this.getLoraStatus(this.selectedLoRA);
+      if (status === 'rejected') {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Rejected',
+          detail: 'This LoRA has been reviewed and rejected. It cannot be re-submitted.',
+          life: 5000
+        });
+        return;
+      }
+      if (status === 'approved') {
+        this.messageService.add({
+          severity: 'info',
+          summary: 'Already Approved',
+          detail: 'This LoRA has already been approved.',
+          life: 5000
+        });
+        return;
+      }
+
       console.log(`Selected LoRA: ${this.selectedLoRA.name}`);
 
       // Get the user's discord ID
@@ -254,7 +280,8 @@ export class AddLorasComponent {
     forkJoin({
       pending: this.stableDiffusionService.getMyLoraSuggestions('pending').pipe(catchError(() => of([]))),
       rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([]))),
-      failed: this.stableDiffusionService.getMyLoraSuggestions('failed').pipe(catchError(() => of([])))
+      failed: this.stableDiffusionService.getMyLoraSuggestions('failed').pipe(catchError(() => of([]))),
+      globalStatuses: this.stableDiffusionService.getAllSuggestionStatuses().pipe(catchError(() => of({ rejected: [], approved: [], pending: [], downloading: [] })))
     })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -264,7 +291,7 @@ export class AddLorasComponent {
           });
         })
       )
-      .subscribe(({ pending, rejected, failed }) => {
+      .subscribe(({ pending, rejected, failed, globalStatuses }) => {
         this.applyAsyncState(() => {
           this.pendingSuggestions = Array.isArray(pending) ? pending : [];
           this.rejectedSuggestions = Array.isArray(rejected) ? rejected : [];
@@ -274,6 +301,7 @@ export class AddLorasComponent {
           this.rejectedVersionIds.clear();
           this.failedVersionIds.clear();
 
+          // Populate from user's own suggestions
           this.pendingSuggestions.forEach((row) => {
             const id = this.getVersionId(row);
             if (id) this.pendingVersionIds.add(id);
@@ -288,6 +316,17 @@ export class AddLorasComponent {
             const id = this.getVersionId(row);
             if (id) this.failedVersionIds.add(id);
           });
+
+          // Merge global statuses so ALL rejected/approved/pending loras are visible
+          for (const vid of (globalStatuses.rejected || [])) {
+            this.rejectedVersionIds.add(String(vid));
+          }
+          for (const vid of (globalStatuses.approved || [])) {
+            this.approvedVersionIds.add(String(vid));
+          }
+          for (const vid of (globalStatuses.pending || [])) {
+            this.pendingVersionIds.add(String(vid));
+          }
 
           this.updateUserPendingSuggestions();
         });
@@ -410,7 +449,7 @@ export class AddLorasComponent {
       .subscribe({
         next: (response: any) => {
           console.log(successLog);
-          const mappedResults = this.mapSearchResults(response);
+          const mappedResults = this.filterResultsToTargetBaseModel(this.mapSearchResults(response));
 
           this.applyAsyncState(() => {
             this.searchResults = mappedResults;
@@ -439,6 +478,14 @@ export class AddLorasComponent {
         name: `${baseName}${versionName}`
       };
     });
+  }
+
+  private filterResultsToTargetBaseModel(results: any[]): any[] {
+    if (!this.targetBaseModel) {
+      return results;
+    }
+
+    return results.filter((result) => (result?.base_model ?? '').trim() === this.targetBaseModel);
   }
 
   private applyAsyncState(update: () => void): void {

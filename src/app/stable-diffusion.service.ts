@@ -222,6 +222,11 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
+  getAllSuggestionStatuses(): Observable<{ rejected: number[]; approved: number[]; pending: number[]; downloading: number[] }> {
+    const url = `${this.apiBaseUrl}/get_all_suggestion_statuses/`;
+    return this.http.get<{ rejected: number[]; approved: number[]; pending: number[]; downloading: number[] }>(url);
+  }
+
   // Admin endpoints
   updateLora(loraId: number, data: { is_active?: boolean; is_nsfw?: boolean; name?: string; trigger_words?: string[] }): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}`;

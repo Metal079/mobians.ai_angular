@@ -53,12 +53,25 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
+  private readonly sdxlResolutionModelIds = new Set<string>([
+    'autismMix',
+    'novaFurryXL_ilV140',
+    'novaMobianXL_v20',
+    'Anima-preview2',
+  ]);
+  private readonly regionalPromptingModelIds = new Set<string>([
+    'autismMix',
+    'novaFurryXL_ilV140',
+    'novaMobianXL_v20',
+    'Anima-preview2',
+  ]);
 
   models_types: { [model: string]: string; } = {
     "sonicDiffusionV4": "SD 1.5",
     "autismMix": "Pony",
     "novaMobianXL_v20": "Illustrious",
-    "novaFurryXL_ilV140": "Illustrious"
+    "novaFurryXL_ilV140": "Illustrious",
+    "Anima-preview2": "Anima"
   }
 
   private readonly defaultModelId: string = "novaMobianXL_v20";
@@ -89,21 +102,22 @@ export class OptionsComponent implements OnInit {
   private applyModelDefaultsIfChanged(prevModel: string | undefined, nextModel: string): void {
     if (prevModel === nextModel) return;
 
-    // Keep existing behavior: default CFG depends on model family.
-    if (nextModel == "autismMix" || nextModel == "novaFurryXL_ilV140" || nextModel == "novaMobianXL_v20") {
-      this.generationRequest.guidance_scale = 4;
-    } else {
-      this.generationRequest.guidance_scale = 7;
-    }
+    // Keep existing behavior: these model families share the lower default CFG.
+    this.generationRequest.guidance_scale = this.usesSdxlResolutionDefaults(nextModel) ? 4 : 7;
   }
 
-  private isSdxlModel(modelId: unknown): boolean {
+  private usesSdxlResolutionDefaults(modelId: unknown): boolean {
     const normalized = typeof modelId === 'string' ? modelId.trim() : '';
-    return normalized === 'autismMix' || normalized === 'novaFurryXL_ilV140' || normalized === 'novaMobianXL_v20';
+    return this.sdxlResolutionModelIds.has(normalized);
   }
 
-  private disableRegionalPromptingForNonSdxlModel(modelId: unknown): void {
-    if (this.isSdxlModel(modelId)) return;
+  private supportsRegionalPrompting(modelId: unknown): boolean {
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    return this.regionalPromptingModelIds.has(normalized);
+  }
+
+  private disableRegionalPromptingForUnsupportedModel(modelId: unknown): void {
+    if (this.supportsRegionalPrompting(modelId)) return;
     if (!this.generationRequest?.regional_prompting) {
       this.generationRequest.regional_prompting = { enabled: false, regions: [] };
       return;
@@ -116,7 +130,7 @@ export class OptionsComponent implements OnInit {
     const normalized = this.normalizeModelId(previous);
     this.generationRequest.model = normalized;
     this.applyModelDefaultsIfChanged(previous, normalized);
-    this.disableRegionalPromptingForNonSdxlModel(normalized);
+    this.disableRegionalPromptingForUnsupportedModel(normalized);
 
     // Keep aspect ratio config in sync with the selected model.
     if (this.aspectRatio) this.aspectRatio.model = normalized;
@@ -217,14 +231,16 @@ export class OptionsComponent implements OnInit {
   private readonly creditCosts: { [key: string]: number } = {
     'SD 1.5': 5,
     'Pony': 10,
-    'Illustrious': 10
+    'Illustrious': 10,
+    'Anima': 20,
   };
 
   // Additional cost per LoRA by model type
   private readonly loraCreditCosts: { [key: string]: number } = {
     'SD 1.5': 1,
     'Pony': 2,
-    'Illustrious': 2
+    'Illustrious': 2,
+    'Anima': 5,
   };
 
   @Input() inpaintMask?: string;
@@ -409,15 +425,10 @@ export class OptionsComponent implements OnInit {
   changeModel(event: any) {
     let selectElement = event.target as HTMLSelectElement;
     this.generationRequest.model = selectElement.value;
-    this.disableRegionalPromptingForNonSdxlModel(selectElement.value);
+    this.disableRegionalPromptingForUnsupportedModel(selectElement.value);
 
     // If the model selected is SDXL, change the CFG to 4 by default, else 7
-    if (selectElement.value == "autismMix" || selectElement.value == "novaFurryXL_ilV140" || selectElement.value == "novaMobianXL_v20") {
-      this.generationRequest.guidance_scale = 4;
-    }
-    else {
-      this.generationRequest.guidance_scale = 7;
-    }
+    this.generationRequest.guidance_scale = this.usesSdxlResolutionDefaults(selectElement.value) ? 4 : 7;
 
     // Update credit cost for new model
     this.updateCreditCost();
@@ -828,7 +839,7 @@ export class OptionsComponent implements OnInit {
   ): { enabled: boolean; regions: RegionalPromptRegion[] } {
     const empty = { enabled: false, regions: [] as RegionalPromptRegion[] };
     if (!input || typeof input !== "object") return empty;
-    if (!this.isSdxlModel(modelId)) return empty;
+    if (!this.supportsRegionalPrompting(modelId)) return empty;
 
     const regions: RegionalPromptRegion[] = (Array.isArray(input.regions) ? input.regions : [])
       .map((region: any) => ({

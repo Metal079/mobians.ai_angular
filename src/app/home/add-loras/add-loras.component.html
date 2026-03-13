@@ -175,7 +175,18 @@
 
   @if (selectedLoRA) {
     <div class="lora-request-button">
-      <button pButton type="button" icon="pi pi-send" label="Request Selected LoRA" class="p-button-primary" (click)="requestSelectedLoRA()"></button>
+      @if (getLoraStatus(selectedLoRA) === 'rejected') {
+        <div class="lora-request-rejected-msg">
+          <i class="pi pi-ban"></i> This LoRA has been reviewed and rejected.
+        </div>
+      } @else if (getLoraStatus(selectedLoRA) === 'approved') {
+        <div class="lora-request-approved-msg">
+          <i class="pi pi-check-circle"></i> This LoRA has already been approved.
+        </div>
+      } @else {
+        <button pButton type="button" icon="pi pi-send" label="Request Selected LoRA" class="p-button-primary" (click)="requestSelectedLoRA()"
+          [disabled]="getLoraStatus(selectedLoRA) === 'pending'"></button>
+      }
     </div>
   }
 

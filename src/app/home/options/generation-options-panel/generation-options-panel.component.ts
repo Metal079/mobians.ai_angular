@@ -15,10 +15,11 @@ import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-dif
     imports: [CommonModule, FormsModule, TooltipModule]
 })
 export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
-  private readonly sdxlModelIds = new Set<string>([
+  private readonly regionalPromptingModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
     'novaMobianXL_v20',
+    'Anima-preview2',
   ]);
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) aspectRatio!: AspectRatio;
@@ -337,7 +338,7 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
 
   private isRegionalPromptingSupported(): boolean {
     const currentModel = String(this.generationRequest?.model ?? '').trim();
-    return this.sdxlModelIds.has(currentModel);
+    return this.regionalPromptingModelIds.has(currentModel);
   }
 
   private enforceRegionalPromptingSupport() {
