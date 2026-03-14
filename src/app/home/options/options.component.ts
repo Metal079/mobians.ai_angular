@@ -233,17 +233,17 @@ export class OptionsComponent implements OnInit {
   
   // Credit costs by model type
   private readonly creditCosts: { [key: string]: number } = {
-    'SD 1.5': 5,
-    'Pony': 10,
-    'Illustrious': 10,
+    'SD 1.5': 10,
+    'Pony': 15,
+    'Illustrious': 15,
     'Anima': 20,
   };
 
   // Additional cost per LoRA by model type
   private readonly loraCreditCosts: { [key: string]: number } = {
-    'SD 1.5': 1,
-    'Pony': 2,
-    'Illustrious': 2,
+    'SD 1.5': 2,
+    'Pony': 5,
+    'Illustrious': 5,
     'Anima': 5,
   };
 
