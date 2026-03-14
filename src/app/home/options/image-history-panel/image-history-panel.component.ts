@@ -1113,7 +1113,6 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.safeRevoke(image.url);
     this.imageUrlCache.delete(image.UUID);
     this.runInAngularZone(() => {
-      this.currentPageImages = this.currentPageImages.filter(img => img.UUID !== image.UUID);
       this.imageHistoryMetadata = this.imageHistoryMetadata.filter(img => img.UUID !== image.UUID);
       this.totalPages = Math.max(1, Math.ceil(this.imageHistoryMetadata.length / this.imagesPerPage));
       if (this.currentPageNumber > this.totalPages) {
@@ -1134,6 +1133,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       console.error('Failed to delete image from IndexedDB', error);
     }
 
+    await this.loadImagePage(this.currentPageNumber);
     await this.updateFavoriteImages();
   }
 
