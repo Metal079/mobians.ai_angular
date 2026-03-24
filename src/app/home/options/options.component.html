@@ -77,16 +77,7 @@
     <div class="inpaint-button">
       <!-- inpaint switch -->
       <p-button label="Inpainting" (click)="openImageModal()"></p-button>
-      <span class="ms-1 text-primary"
-        pTooltip="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"
-      tooltipPosition="top" style="
-    background-color: rgba(255, 255, 255, 0.8);
-    padding: 2px 4px;
-    border-radius: 50%;
-    cursor: pointer;
-    ">
-        ?
-      </span>
+      <app-hint text="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"></app-hint>
       <!-- Upscale button -->
       @if (this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix') {
         <span class="d-inline-flex align-items-center"
@@ -96,16 +87,7 @@
             [ngClass]="!isLoggedIn ? 'bg-secondary' : (userCredits < upscaleCreditCost ? 'bg-danger' : 'bg-dark')">
             {{upscaleCreditCost}} ⚡
           </span>
-          <span class="ms-1 text-primary"
-            [pTooltip]="getUpscaleTooltip()"
-        tooltipPosition="top" style="
-        background-color: rgba(255, 255, 255, 0.8);
-        padding: 2px 4px;
-        border-radius: 50%;
-        cursor: pointer;
-        ">
-            ?
-          </span>
+          <app-hint [text]="getUpscaleTooltip()"></app-hint>
         </span>
       }
     </div>
@@ -116,16 +98,7 @@
     <div id="denoise-strength">
       <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
       }}</span>
-      <span class="ms-1 text-primary"
-        pTooltip="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."
-        tooltipPosition="top" style="
-          background-color: rgba(255, 255, 255, 0.8);
-          padding: 2px 4px;
-          border-radius: 50%;
-          cursor: pointer;
-          ">
-        ?
-      </span>
+      <app-hint text="Adjust how much the source image should be followed. Lower values will follow the reference image more closely, higher values will change the image more. A value of 1 will ignore the reference image entirely."></app-hint>
     </label>
     <input type="range" class="form-range" min="0.2" max="1" value="0.8" step="0.05" id="custom-denoise"
       [(ngModel)]="generationRequest.strength" (ngModelChange)="saveSettings()" />

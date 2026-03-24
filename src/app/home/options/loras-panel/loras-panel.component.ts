@@ -16,6 +16,7 @@ import { DialogModule } from 'primeng/dialog';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
+import { HintComponent } from 'src/app/hint/hint.component';
 
 type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
 
@@ -30,7 +31,8 @@ type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
       TooltipModule,
       ToggleSwitchModule,
       MultiSelectModule,
-      DialogModule
+      DialogModule,
+      HintComponent
     ]
 })
 export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterViewInit, OnDestroy {

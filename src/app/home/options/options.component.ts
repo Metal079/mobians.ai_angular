@@ -6,9 +6,9 @@ import { RouterOutlet } from '@angular/router';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { interval, of } from 'rxjs';
+import { interval, of, firstValueFrom } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen } from 'rxjs/operators';
+import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { timer } from 'rxjs';
@@ -29,6 +29,7 @@ import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { TextareaModule } from 'primeng/textarea';
+import { HintComponent } from 'src/app/hint/hint.component';
 
 
 @Component({
@@ -44,6 +45,7 @@ import { TextareaModule } from 'primeng/textarea';
       ButtonModule,
       TooltipModule,
       TextareaModule,
+      HintComponent,
       GenerationOptionsPanelComponent,
       ImageHistoryPanelComponent,
       LorasPanelComponent
@@ -1137,35 +1139,37 @@ export class OptionsComponent implements OnInit {
     // Clear any previous reconnect banner for a new poll session
     this.queueStatusMessageChange.emit(undefined);
 
-    const getJobInfo = {
-      "job_id": job_id,
-    }
-
     const reconnectAttempts = 3;
     const reconnectTriesPerAttempt = 4;
     const reconnectDelayMs = 5000;
     const maxReconnectTries = reconnectAttempts * reconnectTriesPerAttempt;
     let lastReconnectAttemptShown: number | null = null;
 
-    // Create an interval which fires every 1 second
+    // Adaptive polling: slower interval on poor connections
+    const pollingIntervalMs = this.getAdaptivePollingInterval();
+
+    // Create an interval which fires at the adaptive rate
     let subscription: Subscription; // Declare a variable to hold the subscription
-    subscription = interval(1000)
+    subscription = interval(pollingIntervalMs)
       .pipe(
-        // For each tick of the interval, call the service
+        // For each tick of the interval, call the lightweight status endpoint
         concatMap((): any => {
           if (!navigator.onLine) {
             // Emit a dummy "pending" shape to keep types consistent
             return of({ status: 'pending' } as any);
           }
-          return this.stableDiffusionService.getJob(getJobInfo).pipe(
+          return this.stableDiffusionService.getJobStatus(job_id).pipe(
+            timeout(30000), // 30s timeout for status polls
             retryWhen((errors: any) =>
               errors.pipe(
                 // use the scan operator to track the number of attempts
                 scan((failuresSoFar: number, err: any) => {
                   const nextFailureCount = failuresSoFar + 1;
-                  const status = err?.status;
+                  const status = err?.status ?? err?.name;
                   const retryableStatusCodes = [0, 500, 502, 503, 504];
-                  const isRetryable = status == null || retryableStatusCodes.includes(status);
+                  const isRetryable = status == null
+                    || retryableStatusCodes.includes(status)
+                    || err?.name === 'TimeoutError';
 
                   if (!isRetryable || nextFailureCount >= maxReconnectTries) {
                     this.queueStatusMessageChange.emit(undefined);
@@ -1212,64 +1216,9 @@ export class OptionsComponent implements OnInit {
             this.notificationService.playDing();
             this.notificationService.sendPushNotification();
           }
-          if (jobComplete && lastResponse) {
-            console.log(lastResponse);
-            const historyLoras = this.getHistoryLorasSnapshot();
-            const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
-            const generatedImages = lastResponse.result.map((base64String: string) => {
-              const blob = this.blobMigrationService.base64ToBlob(base64String)
-              const blobUrl = URL.createObjectURL(blob);
-
-              return {
-                blob: blob,
-                width: this.generationRequest.width,
-                height: this.generationRequest.height,
-                aspectRatio: this.aspectRatio.aspectRatio,
-                UUID: uuidv4(),
-                rated: false,
-                timestamp: new Date(),
-                prompt: this.generationRequest.prompt,
-                loras: historyLoras,
-                regional_prompting: historyRegionalPrompting,
-                promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', // Truncate prompt summary
-                url: blobUrl, // Generate URL
-                // New metadata fields for hover display
-                model: this.generationRequest.model,
-                seed: this.currentSeed,
-                negativePrompt: this.generationRequest.negative_prompt,
-                cfg: this.generationRequest.guidance_scale,
-                tags: [],
-                syncPriority: 0,
-                lastModified: new Date()
-              } as MobiansImage;
-            });
-            // Track created URLs for later revocation
-            generatedImages.forEach((img: MobiansImage) => {
-              if (img.url) this.blobUrls.push(img.url);
-            });
-            this.images = generatedImages;
-            this.sharedService.disableInstructions();
-            this.sharedService.setImages(this.images);
-
-            // Dismiss loading UI immediately so users see their images
-            // before potentially slow async operations (WebP conversion, history)
-            this.loadingChange.emit(false);
-            this.enableGenerationButton = true;
-            this.hasPendingJob = false; // ensure UI switches back to Generate
-            this.jobID = "";
-            this.queuePositionChange.emit(0);
-            this.etaChange.emit(undefined);
-            this.removePendingJob();
-            this.lockService.release();
-
-            // Convert to webp if image is png (non-blocking for UI)
-            if (generatedImages[0]?.blob?.type === 'image/png') {
-              for (let i = 0; i < generatedImages.length; i++) {
-                if (!generatedImages[i].blob) continue;
-                generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob);
-              }
-            }
-            await this.historyPanel?.ingestGeneratedImages(generatedImages);
+          if (jobComplete) {
+            // Status polling detected completion — now download images individually
+            await this.downloadJobImages(job_id);
           } else {
             // failed or not found
             this.hasPendingJob = false; // ensure UI switches back to Generate
@@ -1338,6 +1287,231 @@ export class OptionsComponent implements OnInit {
 
     // Track active polling subscription so we can stop it on cancel
     this.jobPollSub = subscription;
+  }
+
+  /**
+   * Download completed job images individually with extended retries for slow connections.
+   * Falls back to the full /get_job/ endpoint if individual downloads fail.
+   */
+  private async downloadJobImages(job_id: string) {
+    const imageCount = 4;
+    const maxRetries = 10;
+    const blobs: (Blob | null)[] = new Array(imageCount).fill(null);
+
+    this.queueStatusMessageChange.emit('Downloading images...');
+
+    // Download images sequentially (better for slow connections — no bandwidth competition)
+    for (let i = 0; i < imageCount; i++) {
+      this.queueStatusMessageChange.emit(`Downloading image ${i + 1} of ${imageCount}...`);
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (this.cancelInProgress) return;
+        try {
+          blobs[i] = await firstValueFrom(
+            this.stableDiffusionService.getJobImage(job_id, i).pipe(
+              timeout(120000) // 2 minute timeout per image
+            )
+          );
+          break; // success — move to next image
+        } catch (err: any) {
+          const status = err?.status;
+          const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
+          if (!retryable || attempt >= maxRetries - 1) {
+            console.error(`Failed to download image ${i} after ${attempt + 1} attempts`, err);
+            break; // give up on this image
+          }
+          // Exponential backoff: 3s, 6s, 12s, 24s, 30s (capped)
+          const delay = Math.min(3000 * Math.pow(2, attempt), 30000);
+          this.queueStatusMessageChange.emit(
+            `Downloading image ${i + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    this.queueStatusMessageChange.emit(undefined);
+
+    const successfulBlobs = blobs.filter((b): b is Blob => b !== null);
+
+    if (successfulBlobs.length === 0) {
+      // All individual downloads failed — fall back to full /get_job/ endpoint
+      console.warn('All individual image downloads failed, falling back to /get_job/');
+      await this.downloadJobImagesFallback(job_id);
+      return;
+    }
+
+    // Build MobiansImage array from downloaded blobs
+    const historyLoras = this.getHistoryLorasSnapshot();
+    const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
+
+    const generatedImages: MobiansImage[] = [];
+    for (let i = 0; i < blobs.length; i++) {
+      const blob = blobs[i];
+      if (!blob) continue;
+      const blobUrl = URL.createObjectURL(blob);
+      generatedImages.push({
+        blob: blob,
+        width: this.generationRequest.width,
+        height: this.generationRequest.height,
+        aspectRatio: this.aspectRatio.aspectRatio,
+        UUID: uuidv4(),
+        rated: false,
+        timestamp: new Date(),
+        prompt: this.generationRequest.prompt,
+        loras: historyLoras,
+        regional_prompting: historyRegionalPrompting,
+        promptSummary: this.generationRequest.prompt.slice(0, 50) + '...',
+        url: blobUrl,
+        model: this.generationRequest.model,
+        seed: this.currentSeed,
+        negativePrompt: this.generationRequest.negative_prompt,
+        cfg: this.generationRequest.guidance_scale,
+        tags: [],
+        syncPriority: 0,
+        lastModified: new Date()
+      } as MobiansImage);
+    }
+
+    // Track created URLs for later revocation
+    generatedImages.forEach((img: MobiansImage) => {
+      if (img.url) this.blobUrls.push(img.url);
+    });
+    this.images = generatedImages;
+    this.sharedService.disableInstructions();
+    this.sharedService.setImages(this.images);
+
+    // Dismiss loading UI immediately so users see their images
+    this.loadingChange.emit(false);
+    this.enableGenerationButton = true;
+    this.hasPendingJob = false;
+    this.jobID = "";
+    this.queuePositionChange.emit(0);
+    this.etaChange.emit(undefined);
+    this.removePendingJob();
+    this.lockService.release();
+
+    // Convert to webp if image is png (non-blocking for UI)
+    if (generatedImages[0]?.blob?.type === 'image/png') {
+      for (let i = 0; i < generatedImages.length; i++) {
+        if (!generatedImages[i].blob) continue;
+        generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob!);
+      }
+    }
+    await this.historyPanel?.ingestGeneratedImages(generatedImages);
+  }
+
+  /**
+   * Fallback: download all images via the original /get_job/ endpoint (single large response).
+   */
+  private async downloadJobImagesFallback(job_id: string) {
+    const maxRetries = 5;
+    const getJobInfo = { job_id };
+
+    this.queueStatusMessageChange.emit('Downloading images (fallback)...');
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (this.cancelInProgress) return;
+      try {
+        const response = await firstValueFrom(
+          this.stableDiffusionService.getJob(getJobInfo).pipe(
+            timeout(180000) // 3 minute timeout for full payload
+          )
+        );
+
+        this.queueStatusMessageChange.emit(undefined);
+
+        if (response?.status !== 'completed' || !response.result) {
+          this.handleFailedJob(response);
+          this.hasPendingJob = false;
+          this.jobID = "";
+          this.queuePositionChange.emit(0);
+          this.etaChange.emit(undefined);
+          this.removePendingJob();
+          this.lockService.release();
+          return;
+        }
+
+        const historyLoras = this.getHistoryLorasSnapshot();
+        const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
+        const generatedImages = response.result.map((base64String: string) => {
+          const blob = this.blobMigrationService.base64ToBlob(base64String);
+          const blobUrl = URL.createObjectURL(blob);
+          return {
+            blob, width: this.generationRequest.width, height: this.generationRequest.height,
+            aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv4(), rated: false, timestamp: new Date(),
+            prompt: this.generationRequest.prompt, loras: historyLoras, regional_prompting: historyRegionalPrompting,
+            promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', url: blobUrl,
+            model: this.generationRequest.model, seed: this.currentSeed,
+            negativePrompt: this.generationRequest.negative_prompt, cfg: this.generationRequest.guidance_scale,
+            tags: [], syncPriority: 0, lastModified: new Date()
+          } as MobiansImage;
+        });
+        generatedImages.forEach((img: MobiansImage) => {
+          if (img.url) this.blobUrls.push(img.url);
+        });
+        this.images = generatedImages;
+        this.sharedService.disableInstructions();
+        this.sharedService.setImages(this.images);
+        this.loadingChange.emit(false);
+        this.enableGenerationButton = true;
+        this.hasPendingJob = false;
+        this.jobID = "";
+        this.queuePositionChange.emit(0);
+        this.etaChange.emit(undefined);
+        this.removePendingJob();
+        this.lockService.release();
+
+        if (generatedImages[0]?.blob?.type === 'image/png') {
+          for (let i = 0; i < generatedImages.length; i++) {
+            if (!generatedImages[i].blob) continue;
+            generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob!);
+          }
+        }
+        await this.historyPanel?.ingestGeneratedImages(generatedImages);
+        return; // success
+      } catch (err: any) {
+        const status = err?.status;
+        const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
+        if (!retryable || attempt >= maxRetries - 1) {
+          this.queueStatusMessageChange.emit(undefined);
+          console.error('Fallback image download failed', err);
+          this.showError(err);
+          this.enableGenerationButton = true;
+          this.loadingChange.emit(false);
+          this.hasPendingJob = false;
+          this.jobID = "";
+          this.queuePositionChange.emit(0);
+          this.etaChange.emit(undefined);
+          this.removePendingJob();
+          this.lockService.release();
+          return;
+        }
+        const delay = Math.min(5000 * Math.pow(2, attempt), 30000);
+        this.queueStatusMessageChange.emit(`Downloading images... (retry ${attempt + 1} of ${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  /**
+   * Returns an adaptive polling interval in ms based on connection quality.
+   * Uses the Network Information API where available; falls back to 1s.
+   */
+  private getAdaptivePollingInterval(): number {
+    const conn = (navigator as any).connection;
+    if (conn?.effectiveType) {
+      switch (conn.effectiveType) {
+        case 'slow-2g':
+        case '2g':
+          return 5000;
+        case '3g':
+          return 3000;
+        default: // '4g' or better
+          return 1000;
+      }
+    }
+    return 1000; // default 1s
   }
 
   // Add this method to your class

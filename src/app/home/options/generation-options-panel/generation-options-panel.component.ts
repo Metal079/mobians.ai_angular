@@ -5,6 +5,7 @@ import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { RegionalPromptRegion } from 'src/_shared/regional-prompting.interface';
 import { TooltipModule } from 'primeng/tooltip';
+import { HintComponent } from 'src/app/hint/hint.component';
 import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
 
 @Component({
@@ -12,7 +13,7 @@ import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-dif
     templateUrl: './generation-options-panel.component.html',
     styleUrls: ['./generation-options-panel.component.css'],
     standalone: true,
-    imports: [CommonModule, FormsModule, TooltipModule]
+    imports: [CommonModule, FormsModule, TooltipModule, HintComponent]
 })
 export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   private readonly regionalPromptingModelIds = new Set<string>([

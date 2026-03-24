@@ -1,0 +1,20 @@
+<span class="hint-wrapper"
+  [class.hint-regional]="variant === 'regional'"
+  (mouseenter)="onMouseEnter()"
+  (mouseleave)="onMouseLeave()">
+  <span class="hint-icon"
+    [class.hint-icon-regional]="variant === 'regional'"
+    [class.active]="showPopup"
+    (click)="onIconClick($event)"
+    role="button"
+    aria-label="Show hint"
+    tabindex="0">?</span>
+  @if (showPopup) {
+    <span #popup class="hint-popup"
+      [class.hint-popup-bottom]="position === 'bottom'"
+      [class.hint-popup-top]="position === 'top'"
+      [ngStyle]="popupStyle">
+      {{ text }}
+    </span>
+  }
+</span>

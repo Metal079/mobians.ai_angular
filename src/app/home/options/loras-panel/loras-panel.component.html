@@ -5,16 +5,7 @@
       <p class="d-flex justify-content-between" [style]="{ marginBottom: '0px' }">
         <span>
           View and apply LoRAs to your image generation
-          <span class="ms-1 text-primary"
-            pTooltip="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."
-            tooltipPosition="top" style="
-              background-color: rgba(255, 255, 255, 0.8);
-              padding: 1px 6px;
-              border-radius: 50%;
-              cursor: pointer;
-            ">
-            ?
-          </span>
+          <app-hint text="LoRAs (Low-Rank Adaptations) are used to fine-tune image generation models to produce specific styles or adapt to different conditions."></app-hint>
         </span>
         <span class="d-flex" [style]="{ marginLeft: '5px' }">
           Show NSFW Loras?

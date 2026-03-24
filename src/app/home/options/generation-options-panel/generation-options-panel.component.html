@@ -38,13 +38,7 @@
     <!-- Negative Prompt -->
     <div class="mb-3">
       <label for="negative-prompt-input" class="form-label">Negative Prompt
-        <span class="ms-1 text-primary"
-          pTooltip="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modifed unless the below negative does not work well for you."
-          tooltipPosition="top" style="
-            cursor: pointer;
-          ">
-          ?
-        </span>
+        <app-hint text="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modified unless the below negative does not work well for you."></app-hint>
       </label>
       <textarea class="form-control" id="negative-prompt-input" rows="3"
       [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings.emit()"></textarea>
@@ -175,9 +169,7 @@
                   </div>
 
                   <label class="form-label mb-1">Region Prompt
-                    <span class="regional-help-icon"
-                      pTooltip="Describe only what should appear inside this region."
-                      tooltipPosition="top">?</span>
+                    <app-hint text="Describe only what should appear inside this region." variant="regional"></app-hint>
                   </label>
                   <textarea
                     class="form-control mb-2"
@@ -187,9 +179,7 @@
                     placeholder="Describe this area"></textarea>
 
                   <label class="form-label mb-1">Region Negative Prompt (optional)
-                    <span class="regional-help-icon"
-                      pTooltip="Things to avoid in this region (wrong character, colors, clothing, etc)."
-                      tooltipPosition="top">?</span>
+                    <app-hint text="Things to avoid in this region (wrong character, colors, clothing, etc)." variant="regional"></app-hint>
                   </label>
                   <input
                     class="form-control mb-2"
@@ -206,9 +196,7 @@
                       (ngModelChange)="saveSettings.emit()">
                     <label class="form-check-label" [for]="'inheritBasePrompt-' + activeRegionIndex">
                       Include base prompt context in this region's prompt
-                      <span class="regional-help-icon"
-                        pTooltip="When ON, this region also inherits the global prompt. Turn OFF for stronger separation."
-                        tooltipPosition="top">?</span>
+                      <app-hint text="When ON, this region also inherits the global prompt. Turn OFF for stronger separation." variant="regional"></app-hint>
                     </label>
                   </div>
 
@@ -216,7 +204,7 @@
                     <div class="regional-slider-pair">
                       <div class="regional-slider-item">
                         <label class="form-label">X: {{ (region.x * 100).toFixed(0) }}%
-                          <span class="regional-help-icon" pTooltip="Horizontal position of the region." tooltipPosition="top">?</span>
+                          <app-hint text="Horizontal position of the region." variant="regional"></app-hint>
                         </label>
                         <input type="range" class="form-range" min="0" max="1" step="0.01"
                           [(ngModel)]="region.x" (ngModelChange)="normalizeRegion(region)">
@@ -224,7 +212,7 @@
 
                       <div class="regional-slider-item">
                         <label class="form-label">Y: {{ (region.y * 100).toFixed(0) }}%
-                          <span class="regional-help-icon" pTooltip="Vertical position of the region." tooltipPosition="top">?</span>
+                          <app-hint text="Vertical position of the region." variant="regional"></app-hint>
                         </label>
                         <input type="range" class="form-range" min="0" max="1" step="0.01"
                           [(ngModel)]="region.y" (ngModelChange)="normalizeRegion(region)">
@@ -234,7 +222,7 @@
                     <div class="regional-slider-pair">
                       <div class="regional-slider-item">
                         <label class="form-label">Width: {{ (region.width * 100).toFixed(0) }}%
-                          <span class="regional-help-icon" pTooltip="How much horizontal area this region covers." tooltipPosition="top">?</span>
+                          <app-hint text="How much horizontal area this region covers." variant="regional"></app-hint>
                         </label>
                         <input type="range" class="form-range" min="0.05" max="1" step="0.01"
                           [(ngModel)]="region.width" (ngModelChange)="normalizeRegion(region)">
@@ -242,7 +230,7 @@
 
                       <div class="regional-slider-item">
                         <label class="form-label">Height: {{ (region.height * 100).toFixed(0) }}%
-                          <span class="regional-help-icon" pTooltip="How much vertical area this region covers." tooltipPosition="top">?</span>
+                          <app-hint text="How much vertical area this region covers." variant="regional"></app-hint>
                         </label>
                         <input type="range" class="form-range" min="0.05" max="1" step="0.01"
                           [(ngModel)]="region.height" (ngModelChange)="normalizeRegion(region)">
@@ -250,13 +238,13 @@
                     </div>
 
                     <label class="form-label">Region Influence: {{ region.denoise_strength.toFixed(2) }}
-                      <span class="regional-help-icon" pTooltip="How strongly this region prompt affects the result in this area." tooltipPosition="top">?</span>
+                      <app-hint text="How strongly this region prompt affects the result in this area." variant="regional"></app-hint>
                     </label>
                     <input type="range" class="form-range" min="0" max="1" step="0.05"
                       [(ngModel)]="region.denoise_strength" (ngModelChange)="normalizeRegion(region)">
 
                     <label class="form-label">Edge Softness: {{ region.feather }} px
-                      <span class="regional-help-icon" pTooltip="Softens boundaries between regions. Lower values reduce concept bleeding." tooltipPosition="top">?</span>
+                      <app-hint text="Softens boundaries between regions. Lower values reduce concept bleeding." variant="regional"></app-hint>
                     </label>
                     <input type="range" class="form-range" min="0" max="96" step="2"
                       [(ngModel)]="region.feather" (ngModelChange)="normalizeRegion(region)">
@@ -279,12 +267,7 @@
       <div style="width: 49%; flex-basis: calc(49%);">
         <label for="seedInput" class="form-label">
           Seed
-          <span class="ms-1 text-primary"
-            pTooltip="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."
-            tooltipPosition="top"
-            style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
-            ?
-          </span>
+          <app-hint text="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."></app-hint>
         </label>
         <input type="number" class="form-control" id="seedInput1" placeholder="-1"
           [(ngModel)]="generationRequest.seed" />
@@ -294,12 +277,7 @@
         <div style="width: 49%; flex-basis: calc(49%);">
           <label for="seedInput2" class="form-label">
             Current Seed
-            <span class="ms-1 text-primary"
-              pTooltip="The current seed of the currently generated images. This can be used to regenerate the same/or very similar image."
-              tooltipPosition="top"
-              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
-              ?
-            </span>
+            <app-hint text="The current seed of the currently generated images. This can be used to regenerate the same/or very similar image."></app-hint>
           </label>
           <input type="number" class="form-control" id="seedInput2" placeholder="Generate to see seed."
             [(ngModel)]="currentSeed" disabled="true" [value]="currentSeed" />
@@ -309,16 +287,7 @@
         <!-- CFG -->
         <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
         }}</span>
-        <span class="ms-1 text-primary"
-          pTooltip="CFG refers to how closely a image tries follow to a prompt, too high values may fry images, while too low of a value will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."
-        tooltipPosition="top" style="
-          background-color: rgba(255, 255, 255, 0.8);
-          padding: 2px 4px;
-          border-radius: 50%;
-          cursor: pointer;
-        ">
-          ?
-        </span>
+        <app-hint text="CFG refers to how closely an image tries to follow a prompt. Too high values may fry images, while too low values will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."></app-hint>
       </label>
       <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
@@ -327,12 +296,7 @@
         <div class="mb-3">
           <label for="fastPassCode" class="form-label">
             FastPass Code
-            <span class="ms-1 text-primary"
-              pTooltip="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."
-              tooltipPosition="top"
-              style="background-color: rgba(255, 255, 255, 0.8); padding: 2px 4px; border-radius: 50%; cursor: pointer;">
-              ?
-            </span>
+            <app-hint text="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."></app-hint>
           </label>
           <input type="password" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
             [(ngModel)]="generationRequest.fast_pass_code" (input)="fastPassCodeChange.emit($event)" />
@@ -347,16 +311,7 @@
                   (ngModelChange)="onHiresEnabledChange($event)" id="hiresToggle" [disabled]="!isLoggedIn">
                   <label class="form-check-label" for="hiresToggle">
                     Enhanced Quality (Generate + Upscale)
-                    <span class="ms-1 text-primary"
-                      [pTooltip]="hiresTooltip"
-            tooltipPosition="top" style="
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 2px 4px;
-            border-radius: 50%;
-            cursor: pointer;
-            ">
-                      ?
-                    </span>
+                    <app-hint [text]="hiresTooltip"></app-hint>
                   </label>
                 </div>
               </div>

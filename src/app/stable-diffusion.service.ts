@@ -300,11 +300,16 @@ export class StableDiffusionService {
     return this.http.post(url, {});
   }
 
-  getJobStatus(jobId: string): Observable<any> {
+  getJobStatus(jobId: string): Observable<JobStatusResponse> {
     const url = `${this.apiBaseUrl}/get_job_status/`;  // note the trailing slash
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify({ job_id: jobId });
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post<JobStatusResponse>(url, body, {'headers':headers});
+  }
+
+  getJobImage(jobId: string, imageIndex: number): Observable<Blob> {
+    const url = `${this.apiBaseUrl}/get_job_image/${encodeURIComponent(jobId)}/${imageIndex}`;
+    return this.http.get(url, { responseType: 'blob' });
   }
 
   cancelJob(jobId: string): Observable<any> {

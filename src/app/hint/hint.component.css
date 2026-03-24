@@ -1,0 +1,75 @@
+.hint-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.3rem;
+}
+
+/* Default (label-level) ? icon */
+.hint-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  color: var(--theme-primary, #2f6fd6);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.hint-icon:hover,
+.hint-icon.active {
+  background-color: var(--theme-primary, #2f6fd6);
+  color: #fff;
+}
+
+/* Regional variant ? icon */
+.hint-icon-regional {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.7rem;
+  border: 1px solid rgba(186, 221, 255, 0.75);
+  color: #eaf7ff;
+  background: rgba(10, 34, 99, 0.85);
+}
+
+.hint-icon-regional:hover,
+.hint-icon-regional.active {
+  background: rgba(30, 80, 180, 0.95);
+  color: #fff;
+}
+
+/* Popup bubble */
+.hint-popup {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #eaf2ff;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.hint-popup-top {
+  /* Position set via ngStyle */
+}
+
+.hint-popup-bottom {
+  /* Position set via ngStyle */
+}
+
