@@ -1,4 +1,4 @@
-<button class="leaderboard-btn" (click)="open()">🏆 Ring Leaderboard</button>
+<button class="leaderboard-btn" (click)="open(); $event.stopPropagation()">🏆 Ring Leaderboard</button>
 
 <p-dialog header="🏆 Ring Collection Leaderboard" [(visible)]="visible" [modal]="true"
          [style]="{ width: '400px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false">
