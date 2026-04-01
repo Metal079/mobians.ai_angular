@@ -7,6 +7,7 @@ import { RegionalPromptRegion } from 'src/_shared/regional-prompting.interface';
 import { TooltipModule } from 'primeng/tooltip';
 import { HintComponent } from 'src/app/hint/hint.component';
 import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { AprilFoolsService } from 'src/app/april-fools.service';
 
 @Component({
     selector: 'app-generation-options-panel',
@@ -69,7 +70,7 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   private dragSurfaceWidth = 1;
   private dragSurfaceHeight = 1;
 
-  constructor(private stableDiffusionService: StableDiffusionService) {}
+  constructor(private stableDiffusionService: StableDiffusionService, public aprilFools: AprilFoolsService) {}
 
   ngOnInit(): void {
     if (this.isLoggedIn) {

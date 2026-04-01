@@ -269,7 +269,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     });
   }
 
-  filterLoras() {
+  filterLoras(resetPaging = true) {
     let filtered = this.loras.filter(lora => lora.base_model === this.modelsTypes[this.generationRequest.model]);
 
     if (!this.showNSFWLoras) {
@@ -298,8 +298,9 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     }
 
     this.filteredLoras = filtered;
-    // Reset progressive loading when filters change
-    this.loraDisplayCount = this.loraPageSize;
+    if (resetPaging) {
+      this.loraDisplayCount = this.loraPageSize;
+    }
     this.updateDisplayedLoras();
   }
 
@@ -637,7 +638,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     } else {
       delete this.loraFavorites[key];
     }
-    this.filterLoras();
+    this.filterLoras(false);
     this.syncLoraPreferencesToCloud();
   }
 

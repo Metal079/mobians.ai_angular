@@ -1,0 +1,44 @@
+<div class="ring-game-container">
+  <!-- HUD -->
+  <div class="hud">
+    <div class="ring-counter">
+      <img src="assets/ring.webp" class="ring-icon" alt="ring"> {{ totalScore }}
+    </div>
+    @if (combo >= 3) {
+      <div class="combo-badge" [class.combo-fire]="combo >= 10" [class.combo-hot]="combo >= 5 && combo < 10">
+        {{ combo }}x COMBO!
+      </div>
+    }
+  </div>
+
+  <!-- Ring field -->
+  <div class="ring-field">
+    @for (ring of rings; track ring.id) {
+      <div class="ring ring-{{ ring.type }}"
+           [class.ring-collected]="ring.collected"
+           [class.ring-expired]="ring.expired"
+           [class.ring-urgent]="!ring.collected && !ring.expired && getRingUrgency(ring) > 0.7"
+           [style.left.%]="ring.x"
+           [style.top.%]="ring.y"
+           (click)="collectRing(ring, $event)"
+           (touchstart)="collectRing(ring, $event)">
+        <span class="ring-visual">
+          @if (ring.type === 'emerald') {
+            <img src="assets/emerald.png" class="emerald-img" alt="emerald">
+          } @else {
+            <img src="assets/ring.webp" class="sonic-ring-img" alt="ring">
+          }
+        </span>
+      </div>
+    }
+
+    <!-- Score popups -->
+    @for (popup of scorePopups; track popup.id) {
+      <div class="score-popup {{ popup.cssClass }}"
+           [style.left.%]="popup.x"
+           [style.top.%]="popup.y">
+        {{ popup.text }}
+      </div>
+    }
+  </div>
+</div>

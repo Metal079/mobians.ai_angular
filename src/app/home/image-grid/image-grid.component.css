@@ -138,3 +138,39 @@ img {
   }
 
 }
+
+/* April Fools - Sanic spinner */
+.sanic-spinner {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  animation: sanic-spin 0.5s linear infinite;
+}
+
+@keyframes sanic-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* April Fools - Eggman queue message */
+.eggman-queue-message {
+  margin-top: 8px;
+  font-style: italic;
+  color: #ff6b35;
+  font-size: 0.9em;
+  opacity: 0.9;
+  animation: eggman-fade-in 0.5s ease-in;
+}
+
+@keyframes eggman-fade-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 0.9; transform: translateY(0); }
+}
+
+/* April Fools - Leaderboard button position */
+app-ring-leaderboard {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 5;
+}

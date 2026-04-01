@@ -137,6 +137,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .lora-tag-filter {
@@ -161,6 +162,14 @@
 
 :host ::ng-deep .lora-tag-filter.p-multiselect .p-multiselect-trigger {
   color: var(--theme-input-text) !important;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect {
+  max-height: 38px;
+}
+
+:host ::ng-deep .lora-tag-filter.p-multiselect .p-multiselect-label {
+  padding: 0.4rem 0.75rem;
 }
 
 :host ::ng-deep .lora-tag-filter.p-multiselect.p-focus {

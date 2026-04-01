@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { SharedService } from './shared.service';
 import { SwUpdate } from '@angular/service-worker';
 import { AuthService } from './auth/auth.service';
+import { AprilFoolsService } from './april-fools.service';
 import { Subscription } from 'rxjs';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { LoginModalComponent } from './auth/login-modal.component';
@@ -41,7 +42,8 @@ export class AppComponent implements OnInit, OnDestroy {
     private swUpdate: SwUpdate,
     private shared: SharedService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private aprilFools: AprilFoolsService
   ) {
     this.updateRouteFlags(this.router.url);
     this.checkForUpdates();
@@ -114,6 +116,12 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private applyStoredTheme(): void {
     try {
+      if (this.aprilFools.isAprilFools()) {
+        document.body.classList.remove('theme-navy');
+        document.body.classList.add('theme-eggman');
+        document.body.classList.add('dark-input-fields');
+        return;
+      }
       const storedTheme = localStorage.getItem('panel-theme');
       const theme = this.normalizeTheme(storedTheme);
       document.body.classList.toggle('theme-navy', theme === 'navy');

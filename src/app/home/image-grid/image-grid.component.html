@@ -13,7 +13,11 @@
     <div id="loading-container">
       <!-- Loading bar -->
       <div id="loading-bar">
-        <div class="spinner-border text-primary" role="status"></div>
+        @if (aprilFools.isAprilFools()) {
+          <img src="assets/Sanic.webp" alt="Sanic" class="sanic-spinner">
+        } @else {
+          <div class="spinner-border text-primary" role="status"></div>
+        }
         <!-- Loading text -->
         <div id="queue-position">
           {{ queueStatusMessage ? queueStatusMessage : (queuePosition ? 'Queue Position: ' + queuePosition : 'Generating images...') }}
@@ -21,8 +25,17 @@
             <div> ETA: {{ formatEta(etaSeconds) }}</div>
           }
         </div>
+        @if (aprilFools.isAprilFools() && aprilFoolsQueueMessage && !queueStatusMessage) {
+          <div class="eggman-queue-message">{{ aprilFoolsQueueMessage }}</div>
+        }
       </div>
     </div>
+    @if (aprilFools.isAprilFools()) {
+      <app-ring-game (ringsCollected)="onRingsCollected($event)"></app-ring-game>
+    }
+  }
+  @if (aprilFools.isAprilFools()) {
+    <app-ring-leaderboard></app-ring-leaderboard>
   }
 
   <!-- Images -->

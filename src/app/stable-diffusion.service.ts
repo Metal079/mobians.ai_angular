@@ -316,4 +316,18 @@ export class StableDiffusionService {
     const url = `${this.apiBaseUrl}/cancel_job/${encodeURIComponent(jobId)}/`;
     return this.http.delete(url);
   }
+
+  // April Fools - Ring Collection
+  submitRings(rings: number): Observable<{ status: string; total_rings: number }> {
+    return this.http.post<{ status: string; total_rings: number }>(
+      `${this.apiBaseUrl}/april-fools/rings`,
+      { rings }
+    );
+  }
+
+  getRingLeaderboard(): Observable<{ leaderboard: Array<{ rank: number; display_name: string; rings: number }> }> {
+    return this.http.get<{ leaderboard: Array<{ rank: number; display_name: string; rings: number }> }>(
+      `${this.apiBaseUrl}/april-fools/ring-leaderboard`
+    );
+  }
 }

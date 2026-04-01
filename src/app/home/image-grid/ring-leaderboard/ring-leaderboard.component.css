@@ -1,0 +1,68 @@
+.leaderboard-btn {
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffd700;
+  border: 1px solid #ffd700;
+  border-radius: 16px;
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.leaderboard-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.leaderboard-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 2px solid #ffd700;
+  color: #ffd700;
+  font-size: 0.9rem;
+}
+
+.leaderboard-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.9rem;
+}
+
+.leaderboard-table .top-three td {
+  font-weight: bold;
+}
+
+.rank-col {
+  width: 40px;
+  text-align: center;
+}
+
+.name-col {
+  flex: 1;
+}
+
+.rings-col {
+  width: 80px;
+  text-align: right;
+}
+
+.loading-text,
+.empty-text {
+  text-align: center;
+  padding: 20px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.rings-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-left: 2px;
+}

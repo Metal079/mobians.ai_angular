@@ -30,6 +30,7 @@ import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { TextareaModule } from 'primeng/textarea';
 import { HintComponent } from 'src/app/hint/hint.component';
+import { AprilFoolsService } from 'src/app/april-fools.service';
 
 
 @Component({
@@ -272,6 +273,7 @@ export class OptionsComponent implements OnInit {
     , private blobMigrationService: BlobMigrationService
     , private lockService: GenerationLockService
     , private authService: AuthService
+    , public aprilFools: AprilFoolsService
   ) {
     this.blobMigrationService.progress$.subscribe(
       () => {
@@ -1025,10 +1027,14 @@ export class OptionsComponent implements OnInit {
           // Update credits if priority queue was used
           if (response.credits_remaining !== undefined) {
             this.authService.updateCredits(response.credits_remaining);
+            const creditsUsed = response.credits_used ?? 0;
+            const creditsToast = this.aprilFools.isAprilFools()
+              ? this.aprilFools.getCreditsUsedToast(creditsUsed, response.credits_remaining)
+              : { summary: 'Credits Used', detail: `${creditsUsed} credits used. Remaining: ${response.credits_remaining}` };
             this.messageService.add({
               severity: 'info',
-              summary: 'Credits Used',
-              detail: `${response.credits_used} credits used. Remaining: ${response.credits_remaining}`,
+              summary: creditsToast.summary,
+              detail: creditsToast.detail,
               life: 3000
             });
           }
@@ -1111,9 +1117,15 @@ export class OptionsComponent implements OnInit {
         if (response?.credits_refunded && response.credits_refunded > 0) {
           this.userCredits += response.credits_refunded;
           this.authService.updateCredits(this.userCredits);
-          this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: `Generation cancelled. ${response.credits_refunded} credits refunded.` });
+          const cancelToast = this.aprilFools.isAprilFools()
+            ? this.aprilFools.getCancelledToast(response.credits_refunded)
+            : { summary: 'Cancelled', detail: `Generation cancelled. ${response.credits_refunded} credits refunded.` };
+          this.messageService.add?.({ severity: 'success', summary: cancelToast.summary, detail: cancelToast.detail });
         } else {
-          this.messageService.add?.({ severity: 'success', summary: 'Cancelled', detail: 'Generation cancelled.' });
+          const cancelToast = this.aprilFools.isAprilFools()
+            ? this.aprilFools.getCancelledToast()
+            : { summary: 'Cancelled', detail: 'Generation cancelled.' };
+          this.messageService.add?.({ severity: 'success', summary: cancelToast.summary, detail: cancelToast.detail });
         }
         // Reset cancel flag after handling
         this.cancelInProgress = false;
@@ -1551,10 +1563,13 @@ export class OptionsComponent implements OnInit {
     }
 
     // Display the error toast
+    const errToast = this.aprilFools.isAprilFools()
+      ? this.aprilFools.getErrorToast(errorMessage)
+      : { summary: 'Error Message', detail: errorMessage };
     this.messageService.add({
       severity: 'error',
-      summary: 'Error Message',
-      detail: errorMessage,
+      summary: errToast.summary,
+      detail: errToast.detail,
       life: 500000  // Here is the addition.
     });
   }

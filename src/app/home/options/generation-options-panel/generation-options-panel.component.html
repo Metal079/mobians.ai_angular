@@ -21,11 +21,17 @@
     </select>
 
     <label for="themeSelect">Site Theme</label>
-    <select class="form-select" id="themeSelect" aria-label="Panel theme select"
-      [ngModel]="panelTheme" (ngModelChange)="onPanelThemeChange($event)">
-      <option value="sonic">Sonic Blue</option>
-      <option value="navy">Navy</option>
-    </select>
+    @if (aprilFools.isAprilFools()) {
+      <div class="form-control text-danger fw-bold" style="background: #2d0a0a; border-color: #8B0000; color: #ff6b35 !important;">
+        🥚 Dr. Eggman has seized control of the theme selector!
+      </div>
+    } @else {
+      <select class="form-select" id="themeSelect" aria-label="Panel theme select"
+        [ngModel]="panelTheme" (ngModelChange)="onPanelThemeChange($event)">
+        <option value="sonic">Sonic Blue</option>
+        <option value="navy">Navy</option>
+      </select>
+    }
 
     <div class="d-flex justify-content-start mb-3 mt-2">
       <div class="form-check me-3">

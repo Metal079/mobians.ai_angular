@@ -7,6 +7,9 @@ import { MessageModule } from 'primeng/message';
 import { ImageGridComponent } from './image-grid/image-grid.component';
 import { OptionsComponent } from './options/options.component';
 import { FaqComponent } from './faq/faq.component';
+import { AprilFoolsService } from 'src/app/april-fools.service';
+import { StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { AuthService } from 'src/app/auth/auth.service';
 
 interface HeaderMessage {
   severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
@@ -43,9 +46,22 @@ export class HomeComponent {
   }];
   loginInfo: any = null;
 
-  constructor(private sharedService: SharedService) {}
+  constructor(
+    private sharedService: SharedService,
+    private aprilFools: AprilFoolsService,
+    private sdService: StableDiffusionService,
+    private authService: AuthService,
+  ) {}
 
   ngOnInit() {
+    if (this.aprilFools.isAprilFools()) {
+      this.title = "The Eggman Empire's Premier Roboticization Generator";
+      this.headerMessage = [{
+        severity: 'error',
+        summary: '🥚 EGGMAN EMPIRE TAKEOVER',
+        detail: 'All generators have been commandeered by the Eggman Empire. Resistance is futile! <a href="https://discord.gg/mobians" target="_blank">Join the resistance on Discord.</a>',
+      }];
+    }
     // Discord userdata check
     this.sharedService.getUserData().subscribe(userData => {
       if (userData) {
@@ -113,6 +129,14 @@ export class HomeComponent {
     if (open) {
       const referenceImageUrl = this.sharedService.getReferenceImageValue()!.url;
       this.imageModal.openModal(referenceImageUrl!);
+    }
+  }
+
+  onRingsToSubmit(rings: number): void {
+    if (rings > 0 && this.authService.isLoggedIn()) {
+      this.sdService.submitRings(rings).subscribe({
+        error: (err) => console.warn('Failed to submit rings:', err),
+      });
     }
   }
 }

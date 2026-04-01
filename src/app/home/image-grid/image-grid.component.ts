@@ -8,6 +8,9 @@ import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
+import { AprilFoolsService } from 'src/app/april-fools.service';
+import { RingGameComponent } from './ring-game/ring-game.component';
+import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.component';
 
 
 @Component({
@@ -15,7 +18,7 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
     templateUrl: './image-grid.component.html',
     styleUrls: ['./image-grid.component.css'],
     standalone: true,
-    imports: [CommonModule]
+    imports: [CommonModule, RingGameComponent, RingLeaderboardComponent]
 })
 export class ImageGridComponent implements OnDestroy {
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
@@ -47,6 +50,14 @@ export class ImageGridComponent implements OnDestroy {
 
   private objectUrls: string[] = [];
 
+  // April Fools rotating queue messages
+  aprilFoolsQueueMessage: string = '';
+  private queueMessageInterval?: ReturnType<typeof setInterval>;
+
+  // April Fools ring game
+  pendingRings = 0;
+  @Output() ringsToSubmit = new EventEmitter<number>();
+
   // Formats ETA seconds into mm:ss
   formatEta(seconds?: number): string {
     if (seconds == null || !isFinite(seconds)) return '';
@@ -62,6 +73,7 @@ export class ImageGridComponent implements OnDestroy {
     public sharedService: SharedService
     , private inpaintingMaskService: InpaintingMaskService
     , private blobMigrationService: BlobMigrationService
+    , public aprilFools: AprilFoolsService
   ) {
     this.screenWidth = window.innerWidth;
     this.getScreenSize();
@@ -274,6 +286,23 @@ export class ImageGridComponent implements OnDestroy {
       this.ctx.clearRect(0, 0, this.imageCanvas.nativeElement.width, this.imageCanvas.nativeElement.height);
       this.inpaintingMaskService.clearCanvasData();
     }
+    // Start/stop April Fools queue message rotation
+    if (changes['showLoading']) {
+      if (this.showLoading && this.aprilFools.isAprilFools()) {
+        this.pendingRings = 0;
+        this.aprilFoolsQueueMessage = this.aprilFools.getNextQueueMessage();
+        this.queueMessageInterval = setInterval(() => {
+          this.aprilFoolsQueueMessage = this.aprilFools.getNextQueueMessage();
+        }, 5000);
+      } else {
+        // Emit collected rings when loading ends
+        if (this.pendingRings > 0) {
+          this.ringsToSubmit.emit(this.pendingRings);
+          this.pendingRings = 0;
+        }
+        this.stopQueueMessageRotation();
+      }
+    }
     if (changes['referenceImage']) {
       if (this.images.length == 0 && this.sharedService.getReferenceImageValue() == null) {
         this.sharedService.enableInstructions();
@@ -479,10 +508,23 @@ export class ImageGridComponent implements OnDestroy {
   }
 
   ngOnDestroy() {
+    this.stopQueueMessageRotation();
     // Revoke any object URLs created for local files to avoid memory leaks
     this.objectUrls.forEach((u) => {
       try { URL.revokeObjectURL(u); } catch { /* no-op */ }
     });
     this.objectUrls = [];
+  }
+
+  private stopQueueMessageRotation(): void {
+    if (this.queueMessageInterval) {
+      clearInterval(this.queueMessageInterval);
+      this.queueMessageInterval = undefined;
+    }
+    this.aprilFoolsQueueMessage = '';
+  }
+
+  onRingsCollected(total: number): void {
+    this.pendingRings = total;
   }
 }
