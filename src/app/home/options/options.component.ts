@@ -1083,6 +1083,7 @@ export class OptionsComponent implements OnInit {
     const id = this.jobID || this.getPendingJob()?.job_id;
     if (!id) {
       // Self-heal any stale pending UI state when no cancellable job exists.
+      this.aprilFools.discardRingGameProgress();
       this.hasPendingJob = false;
       this.cancelInProgress = false;
       this.enableGenerationButton = true;
@@ -1098,6 +1099,7 @@ export class OptionsComponent implements OnInit {
     this.enableGenerationButton = false;
     this.stableDiffusionService.cancelJob(id).subscribe({
       next: (response: any) => {
+        this.aprilFools.discardRingGameProgress();
         // Stop polling if active
         this.jobPollSub?.unsubscribe();
         this.jobPollSub = undefined;

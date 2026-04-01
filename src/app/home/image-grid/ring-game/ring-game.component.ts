@@ -1,5 +1,6 @@
 import { Component, EventEmitter, OnDestroy, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { AprilFoolsService } from 'src/app/april-fools.service';
 
 type RingType = 'normal' | 'super' | 'emerald';
 
@@ -48,7 +49,15 @@ export class RingGameComponent implements OnInit, OnDestroy {
   private audioPool: HTMLAudioElement[] = [];
   private audioIndex = 0;
 
+  constructor(private aprilFools: AprilFoolsService) {}
+
   ngOnInit(): void {
+    const savedProgress = this.aprilFools.getRingGameProgress();
+    if (savedProgress) {
+      this.totalScore = savedProgress.totalScore;
+      this.ringsCollected.emit(this.totalScore);
+    }
+
     for (let i = 0; i < 5; i++) {
       const a = new Audio('assets/ding.mp3');
       a.volume = 0.25;
@@ -60,10 +69,17 @@ export class RingGameComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.aprilFools.shouldPersistRingGameProgress()) {
+      this.persistProgress();
+    }
     if (this.spawnTimeout) clearTimeout(this.spawnTimeout);
     if (this.tickInterval) clearInterval(this.tickInterval);
     if (this.secondsInterval) clearInterval(this.secondsInterval);
     if (this.comboTimer) clearTimeout(this.comboTimer);
+  }
+
+  private persistProgress(): void {
+    this.aprilFools.setRingGameProgress({ totalScore: this.totalScore });
   }
 
   /** Spawn delay decreases from ~1.2s down to ~0.4s over 2 minutes */
@@ -153,6 +169,7 @@ export class RingGameComponent implements OnInit, OnDestroy {
     const comboMult = this.combo >= 10 ? 3 : this.combo >= 5 ? 2 : 1;
     const points = baseValue * comboMult;
     this.totalScore += points;
+    this.persistProgress();
     this.ringsCollected.emit(this.totalScore);
 
     // Floating score popup

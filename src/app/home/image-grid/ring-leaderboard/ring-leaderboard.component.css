@@ -67,6 +67,50 @@
   margin-left: 2px;
 }
 
+.viewer-summary {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: 10px;
+}
+
+.viewer-summary-anon {
+  margin-top: 2px;
+}
+
+.viewer-summary-header {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #b68a00;
+  margin-bottom: 6px;
+}
+
+.viewer-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.viewer-rings {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.viewer-rings-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.viewer-summary-subtext {
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
 .prize-info {
   margin-top: 16px;
   padding: 10px 12px;

@@ -325,8 +325,26 @@ export class StableDiffusionService {
     );
   }
 
-  getRingLeaderboard(): Observable<{ leaderboard: Array<{ rank: number; display_name: string; rings: number }> }> {
-    return this.http.get<{ leaderboard: Array<{ rank: number; display_name: string; rings: number }> }>(
+  getRingLeaderboard(): Observable<{
+    leaderboard: Array<{ rank: number; display_name: string; rings: number }>;
+    viewer: {
+      display_name: string;
+      rings: number;
+      rank: number | null;
+      points_to_top_ten: number;
+      top_ten_cutoff: number | null;
+    } | null;
+  }> {
+    return this.http.get<{
+      leaderboard: Array<{ rank: number; display_name: string; rings: number }>;
+      viewer: {
+        display_name: string;
+        rings: number;
+        rank: number | null;
+        points_to_top_ten: number;
+        top_ten_cutoff: number | null;
+      } | null;
+    }>(
       `${this.apiBaseUrl}/april-fools/ring-leaderboard`
     );
   }

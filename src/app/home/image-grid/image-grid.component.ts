@@ -298,8 +298,9 @@ export class ImageGridComponent implements OnDestroy {
         // Emit collected rings when loading ends
         if (this.pendingRings > 0) {
           this.ringsToSubmit.emit(this.pendingRings);
-          this.pendingRings = 0;
         }
+        this.pendingRings = 0;
+        this.aprilFools.discardRingGameProgress();
         this.stopQueueMessageRotation();
       }
     }

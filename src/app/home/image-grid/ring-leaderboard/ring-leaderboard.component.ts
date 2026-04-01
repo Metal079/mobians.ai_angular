@@ -14,6 +14,13 @@ export class RingLeaderboardComponent implements OnInit {
   visible = false;
   loading = false;
   leaderboard: Array<{ rank: number; display_name: string; rings: number }> = [];
+  viewer: {
+    display_name: string;
+    rings: number;
+    rank: number | null;
+    points_to_top_ten: number;
+    top_ten_cutoff: number | null;
+  } | null = null;
 
   constructor(private sdService: StableDiffusionService) {}
 
@@ -25,10 +32,12 @@ export class RingLeaderboardComponent implements OnInit {
     this.sdService.getRingLeaderboard().subscribe({
       next: (res) => {
         this.leaderboard = res.leaderboard;
+        this.viewer = res.viewer;
         this.loading = false;
       },
       error: () => {
         this.leaderboard = [];
+        this.viewer = null;
         this.loading = false;
       },
     });

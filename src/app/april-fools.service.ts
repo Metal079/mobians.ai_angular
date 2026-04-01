@@ -1,7 +1,13 @@
 import { Injectable } from '@angular/core';
 
+interface RingGameProgress {
+  totalScore: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AprilFoolsService {
+  private readonly ringGameProgressKey = 'april-fools-ring-game-progress';
+  private skipNextRingGamePersist = false;
 
   private readonly queueMessages: string[] = [
     'Dr. Eggman is hogging GPU #2...',
@@ -72,5 +78,48 @@ export class AprilFoolsService {
       ? `Mission aborted! ${creditsRefunded} rings returned to you.`
       : 'Mission aborted! Generation cancelled.';
     return { summary: 'Too slow!', detail };
+  }
+
+  getRingGameProgress(): RingGameProgress | null {
+    try {
+      const raw = sessionStorage.getItem(this.ringGameProgressKey);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as Partial<RingGameProgress>;
+      if (typeof parsed.totalScore !== 'number' || !isFinite(parsed.totalScore) || parsed.totalScore < 0) {
+        return null;
+      }
+
+      return { totalScore: parsed.totalScore };
+    } catch {
+      return null;
+    }
+  }
+
+  setRingGameProgress(progress: RingGameProgress): void {
+    try {
+      sessionStorage.setItem(this.ringGameProgressKey, JSON.stringify(progress));
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  clearRingGameProgress(): void {
+    try {
+      sessionStorage.removeItem(this.ringGameProgressKey);
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  discardRingGameProgress(): void {
+    this.skipNextRingGamePersist = true;
+    this.clearRingGameProgress();
+  }
+
+  shouldPersistRingGameProgress(): boolean {
+    const shouldPersist = !this.skipNextRingGamePersist;
+    this.skipNextRingGamePersist = false;
+    return shouldPersist;
   }
 }

@@ -5,32 +5,57 @@
          [draggable]="false" [resizable]="false">
   @if (loading) {
     <div class="loading-text">Loading leaderboard...</div>
-  } @else if (leaderboard.length === 0) {
-    <div class="empty-text">No rings collected yet. Be the first!</div>
   } @else {
-    <table class="leaderboard-table">
-      <thead>
-        <tr>
-          <th class="rank-col">#</th>
-          <th class="name-col">Player</th>
-          <th class="rings-col">Rings</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of leaderboard; track entry.rank) {
-          <tr [class.top-three]="entry.rank <= 3">
-            <td class="rank-col">
-              @if (entry.rank === 1) { 🥇 }
-              @else if (entry.rank === 2) { 🥈 }
-              @else if (entry.rank === 3) { 🥉 }
-              @else { {{ entry.rank }} }
-            </td>
-            <td class="name-col">{{ entry.display_name }}</td>
-            <td class="rings-col">{{ entry.rings }} <img src="assets/ring.webp" class="rings-icon" alt="ring"></td>
-          </tr>
+    @if (viewer) {
+      <div class="viewer-summary">
+        <div class="viewer-summary-header">Your Ring Total</div>
+        <div class="viewer-summary-main">
+          <span class="viewer-rings">{{ viewer.rings }}</span>
+          <img src="assets/ring.webp" class="viewer-rings-icon" alt="ring">
+        </div>
+        @if (viewer.rank && viewer.rank <= 10) {
+          <div class="viewer-summary-subtext">You're currently in <strong>#{{ viewer.rank }}</strong>.</div>
+        } @else if (viewer.top_ten_cutoff !== null && viewer.points_to_top_ten > 0) {
+          <div class="viewer-summary-subtext">You need <strong>{{ viewer.points_to_top_ten }}</strong> more ring@if (viewer.points_to_top_ten !== 1) {s} to enter the top 10.</div>
+        } @else if (leaderboard.length < 10) {
+          <div class="viewer-summary-subtext">The leaderboard still has open spots. Any score can make the board.</div>
+        } @else {
+          <div class="viewer-summary-subtext">Collect a few more rings to break into the leaderboard.</div>
         }
-      </tbody>
-    </table>
+      </div>
+    } @else {
+      <div class="viewer-summary viewer-summary-anon">
+        <div class="viewer-summary-subtext">Sign in to track your own ring total and see how close you are to the top 10.</div>
+      </div>
+    }
+
+    @if (leaderboard.length === 0) {
+      <div class="empty-text">No rings collected yet. Be the first!</div>
+    } @else {
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th class="rank-col">#</th>
+            <th class="name-col">Player</th>
+            <th class="rings-col">Rings</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of leaderboard; track entry.rank) {
+            <tr [class.top-three]="entry.rank <= 3">
+              <td class="rank-col">
+                @if (entry.rank === 1) { 🥇 }
+                @else if (entry.rank === 2) { 🥈 }
+                @else if (entry.rank === 3) { 🥉 }
+                @else { {{ entry.rank }} }
+              </td>
+              <td class="name-col">{{ entry.display_name }}</td>
+              <td class="rings-col">{{ entry.rings }} <img src="assets/ring.webp" class="rings-icon" alt="ring"></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
   }
   <div class="prize-info">
     <div class="prize-header">🏆 Prizes (credited as site Credits)</div>
