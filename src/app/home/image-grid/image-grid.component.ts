@@ -55,7 +55,6 @@ export class ImageGridComponent implements OnDestroy {
   private queueMessageInterval?: ReturnType<typeof setInterval>;
 
   // April Fools ring game
-  pendingRings = 0;
   @Output() ringsToSubmit = new EventEmitter<number>();
 
   // Formats ETA seconds into mm:ss
@@ -289,17 +288,11 @@ export class ImageGridComponent implements OnDestroy {
     // Start/stop April Fools queue message rotation
     if (changes['showLoading']) {
       if (this.showLoading && this.aprilFools.isAprilFools()) {
-        this.pendingRings = 0;
         this.aprilFoolsQueueMessage = this.aprilFools.getNextQueueMessage();
         this.queueMessageInterval = setInterval(() => {
           this.aprilFoolsQueueMessage = this.aprilFools.getNextQueueMessage();
         }, 5000);
       } else {
-        // Emit collected rings when loading ends
-        if (this.pendingRings > 0) {
-          this.ringsToSubmit.emit(this.pendingRings);
-        }
-        this.pendingRings = 0;
         this.aprilFools.discardRingGameProgress();
         this.stopQueueMessageRotation();
       }
@@ -525,7 +518,9 @@ export class ImageGridComponent implements OnDestroy {
     this.aprilFoolsQueueMessage = '';
   }
 
-  onRingsCollected(total: number): void {
-    this.pendingRings = total;
+  onRingsCollected(rings: number): void {
+    if (rings > 0) {
+      this.ringsToSubmit.emit(rings);
+    }
   }
 }

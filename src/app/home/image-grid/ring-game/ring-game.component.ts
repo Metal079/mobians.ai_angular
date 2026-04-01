@@ -55,7 +55,6 @@ export class RingGameComponent implements OnInit, OnDestroy {
     const savedProgress = this.aprilFools.getRingGameProgress();
     if (savedProgress) {
       this.totalScore = savedProgress.totalScore;
-      this.ringsCollected.emit(this.totalScore);
     }
 
     for (let i = 0; i < 5; i++) {
@@ -170,7 +169,7 @@ export class RingGameComponent implements OnInit, OnDestroy {
     const points = baseValue * comboMult;
     this.totalScore += points;
     this.persistProgress();
-    this.ringsCollected.emit(this.totalScore);
+    this.ringsCollected.emit(points);
 
     // Floating score popup
     let popupText = `+${points}`;
