@@ -168,9 +168,9 @@ img {
 }
 
 /* April Fools - Leaderboard button position */
-app-ring-leaderboard {
+.leaderboard-wrapper {
   position: absolute;
   bottom: 8px;
   left: 8px;
-  z-index: 5;
+  z-index: 101;
 }

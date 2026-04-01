@@ -34,10 +34,6 @@
       <app-ring-game (ringsCollected)="onRingsCollected($event)"></app-ring-game>
     }
   }
-  @if (aprilFools.isAprilFools()) {
-    <app-ring-leaderboard></app-ring-leaderboard>
-  }
-
   <!-- Images -->
   @if (images.length > 0 && !showLoading && !showReferenceImage) {
     <div class="image-wrapper" id="wrapper1">
@@ -82,6 +78,11 @@
   @if (this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage) {
     <div class="reference-image" id="wrapper5">
       <img [src]="this.sharedService.getReferenceImageValue()!.url ?? this.sharedService.getReferenceImageValue()!.thumbnailUrl" alt="Reference Image goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(4, $event)" id="referenceImage">
+    </div>
+  }
+  @if (aprilFools.isAprilFools()) {
+    <div (click)="$event.stopPropagation()" class="leaderboard-wrapper">
+      <app-ring-leaderboard></app-ring-leaderboard>
     </div>
   }
   <canvas #imageCanvas id="drawing-canvas" (mousedown)="onMouseDown($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()"></canvas>

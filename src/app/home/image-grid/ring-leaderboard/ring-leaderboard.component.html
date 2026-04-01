@@ -1,7 +1,8 @@
 <button class="leaderboard-btn" (click)="open(); $event.stopPropagation()">🏆 Ring Leaderboard</button>
 
 <p-dialog header="🏆 Ring Collection Leaderboard" [(visible)]="visible" [modal]="true"
-         [style]="{ width: '400px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false">
+         [style]="{ width: '400px', maxWidth: '95vw' }" [contentStyle]="{ maxHeight: '70vh', overflowY: 'auto' }"
+         [draggable]="false" [resizable]="false">
   @if (loading) {
     <div class="loading-text">Loading leaderboard...</div>
   } @else if (leaderboard.length === 0) {
@@ -31,4 +32,11 @@
       </tbody>
     </table>
   }
+  <div class="prize-info">
+    <div class="prize-header">🏆 Prizes (credited as site Credits)</div>
+    <div class="prize-row">🥇 1st Place: <strong>1,500 Credits</strong></div>
+    <div class="prize-row">🥈 2nd Place: <strong>1,000 Credits</strong></div>
+    <div class="prize-row">🥉 3rd Place: <strong>500 Credits</strong></div>
+    <div class="prize-row">4th-10th: <strong>200 Credits</strong></div>
+  </div>
 </p-dialog>

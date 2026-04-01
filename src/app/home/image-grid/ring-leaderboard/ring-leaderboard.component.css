@@ -66,3 +66,23 @@
   vertical-align: middle;
   margin-left: 2px;
 }
+
+.prize-info {
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.prize-header {
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.prize-row {
+  padding: 2px 0;
+}
