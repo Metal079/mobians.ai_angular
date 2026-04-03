@@ -9,6 +9,8 @@ import { HintComponent } from 'src/app/hint/hint.component';
 import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 
+type PanelTheme = 'sonic' | 'navy' | 'eggman';
+
 @Component({
     selector: 'app-generation-options-panel',
     templateUrl: './generation-options-panel.component.html',
@@ -26,8 +28,8 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) aspectRatio!: AspectRatio;
 
-  @Input() panelTheme: 'sonic' | 'navy' = 'sonic';
-  @Output() panelThemeChange = new EventEmitter<'sonic' | 'navy'>();
+  @Input() panelTheme: PanelTheme = 'sonic';
+  @Output() panelThemeChange = new EventEmitter<PanelTheme>();
   @Input() darkInputFields = false;
   @Output() darkInputFieldsChange = new EventEmitter<boolean>();
 
@@ -89,7 +91,7 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
     }
   }
 
-  onPanelThemeChange(nextTheme: 'sonic' | 'navy') {
+  onPanelThemeChange(nextTheme: PanelTheme) {
     this.panelThemeChange.emit(nextTheme);
     this.saveSettings.emit();
   }

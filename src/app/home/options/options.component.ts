@@ -145,13 +145,16 @@ export class OptionsComponent implements OnInit {
     if (persist) localStorage.setItem('model', normalized);
   }
 
-  private normalizePanelTheme(theme: string | null | undefined): 'sonic' | 'navy' {
-    return theme === 'navy' ? 'navy' : 'sonic';
+  private normalizePanelTheme(theme: string | null | undefined): 'sonic' | 'navy' | 'eggman' {
+    if (theme === 'navy') return 'navy';
+    if (theme === 'eggman') return 'eggman';
+    return 'sonic';
   }
 
-  private applyThemeToBody(theme: 'sonic' | 'navy'): void {
+  private applyThemeToBody(theme: 'sonic' | 'navy' | 'eggman'): void {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('theme-navy', theme === 'navy');
+    document.body.classList.toggle('theme-eggman', theme === 'eggman');
   }
 
   private applyInputStyleToBody(enabled: boolean): void {
@@ -212,7 +215,7 @@ export class OptionsComponent implements OnInit {
   showHistory: boolean = false;
   showLoras: boolean = false;
   availableLoras: string[] = ['Loras1', 'Loras2', 'Loras3']; // Example Loras names
-  panelTheme: 'sonic' | 'navy' = 'sonic';
+  panelTheme: 'sonic' | 'navy' | 'eggman' = 'sonic';
   darkInputFields = false;
   loraResetToken = 0;
 

@@ -110,8 +110,10 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  private normalizeTheme(theme: string | null | undefined): 'sonic' | 'navy' {
-    return theme === 'navy' ? 'navy' : 'sonic';
+  private normalizeTheme(theme: string | null | undefined): 'sonic' | 'navy' | 'eggman' {
+    if (theme === 'navy') return 'navy';
+    if (theme === 'eggman') return 'eggman';
+    return 'sonic';
   }
 
   private applyStoredTheme(): void {
@@ -125,6 +127,7 @@ export class AppComponent implements OnInit, OnDestroy {
       const storedTheme = localStorage.getItem('panel-theme');
       const theme = this.normalizeTheme(storedTheme);
       document.body.classList.toggle('theme-navy', theme === 'navy');
+      document.body.classList.toggle('theme-eggman', theme === 'eggman');
       const darkInputFields = localStorage.getItem('dark-input-fields') === 'true';
       document.body.classList.toggle('dark-input-fields', darkInputFields);
     } catch {
