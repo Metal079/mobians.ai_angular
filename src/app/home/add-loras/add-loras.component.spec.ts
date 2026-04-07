@@ -17,14 +17,32 @@ class StableDiffusionServiceStub {
     return of([] as any[]);
   }
 
+  getAllSuggestionStatuses() {
+    return of({ rejected: [], approved: [], pending: [], downloading: [] });
+  }
+
   searchByQuery() {
     return of([] as any[]);
+  }
+
+  addLoraSuggestion() {
+    return of({ status: 'success' });
+  }
+
+  cancelLoraSuggestion() {
+    return of({ message: 'cancelled' });
   }
 }
 
 class SharedServiceStub {
+  private userData: any = { discord_user_id: 'user-1', user_id: 'internal-user-1' };
+
   getUserDataValue() {
-    return { discord_user_id: 'user-1' };
+    return this.userData;
+  }
+
+  setUserDataValue(value: any) {
+    this.userData = value;
   }
 }
 
@@ -40,6 +58,7 @@ describe('AddLorasComponent', () => {
   let component: AddLorasComponent;
   let fixture: ComponentFixture<AddLorasComponent>;
   let stableDiffusionService: StableDiffusionServiceStub;
+  let sharedService: SharedServiceStub;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -67,6 +86,7 @@ describe('AddLorasComponent', () => {
     fixture = TestBed.createComponent(AddLorasComponent);
     component = fixture.componentInstance;
     stableDiffusionService = TestBed.inject(StableDiffusionService) as unknown as StableDiffusionServiceStub;
+    sharedService = TestBed.inject(SharedService) as unknown as SharedServiceStub;
   });
 
   it('loads the target base model from dialog config', () => {
@@ -88,5 +108,32 @@ describe('AddLorasComponent', () => {
     expect(component.searchResults.length).toBe(1);
     expect(component.searchResults[0].base_model).toBe('Anima');
     expect(component.searchResults[0].name).toContain('Anima LoRA');
+  });
+
+  it('submits LoRA requests for Google-authenticated users without a Discord id', () => {
+    spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
+    sharedService.setUserDataValue({ google_user_id: 'google-user-1', user_id: 'internal-user-99' });
+    component.selectedLoRA = {
+      model_version_id: 123,
+      name: 'Test LoRA',
+      model_name: 'v1',
+      nsfw: false,
+      minor: false,
+      images: [{ url: 'https://example.com/preview.png' }],
+      base_model: 'Anima'
+    };
+
+    component.requestSelectedLoRA();
+
+    expect((stableDiffusionService as any).addLoraSuggestion).toHaveBeenCalledWith({
+      lora_version_id: 123,
+      name: 'Test LoRA',
+      version: 'v1',
+      status: 'pending',
+      is_nsfw: false,
+      is_minor: false,
+      preview_image: 'https://example.com/preview.png',
+      base_model: 'Anima'
+    });
   });
 });

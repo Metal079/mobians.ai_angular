@@ -162,6 +162,17 @@ export class AddLorasComponent {
 
   requestSelectedLoRA() {
     if (this.selectedLoRA) {
+      const userData = this.sharedService.getUserDataValue();
+      if (!this.hasAuthenticatedUser(userData)) {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Login required',
+          detail: 'You must be logged in to request a LoRA.',
+          life: 5000
+        });
+        return;
+      }
+
       const status = this.getLoraStatus(this.selectedLoRA);
       if (status === 'rejected') {
         this.messageService.add({
@@ -184,19 +195,15 @@ export class AddLorasComponent {
 
       console.log(`Selected LoRA: ${this.selectedLoRA.name}`);
 
-      // Get the user's discord ID
-      const discordUserID = this.sharedService.getUserDataValue().discord_user_id;
-
       // Create data to send to the backend
       const data = {
         'lora_version_id': this.selectedLoRA.model_version_id,
         'name': this.selectedLoRA.name,
         'version': this.selectedLoRA.model_name,
         'status': 'pending',
-        'requestor': discordUserID,
         'is_nsfw': this.selectedLoRA.nsfw,
         'is_minor': this.selectedLoRA.minor,
-        'preview_image': this.selectedLoRA.images[0].url,
+        'preview_image': this.selectedLoRA.images?.[0]?.url ?? '',
         'base_model': this.selectedLoRA.base_model,
       };
 
@@ -419,6 +426,10 @@ export class AddLorasComponent {
     const id = row?.model_version_id ?? row?.version_id ?? row?.lora_version_id ?? row?.modelVersionId ?? row?.versionId;
     if (id === undefined || id === null || id === '') return null;
     return String(id);
+  }
+
+  private hasAuthenticatedUser(userData: any): boolean {
+    return !!(userData?.user_id || userData?.discord_user_id || userData?.google_user_id);
   }
 
   showError(error: any) {

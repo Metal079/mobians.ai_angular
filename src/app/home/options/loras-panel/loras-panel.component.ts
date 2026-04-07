@@ -106,9 +106,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.loadLoras();
 
     this.sharedService.getUserData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(userData => {
-      if (userData?.discord_user_id) {
-        this.loginInfo = userData;
-      }
+      this.loginInfo = this.isAuthenticatedUser(userData) ? userData : null;
       this.tryLoadLoraPreferencesFromCloud();
     });
 
@@ -207,7 +205,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
       this.messageService.add({
         severity: 'error',
         summary: 'Error Message',
-        detail: 'You must be logged in to suggest LoRAs. (Discord button in the FAQ section)',
+        detail: 'You must be logged in to suggest LoRAs.',
         life: 3000
       });
       return;
@@ -928,5 +926,9 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     const parsed = Number(key);
     if (!Number.isFinite(parsed)) return null;
     return parsed;
+  }
+
+  private isAuthenticatedUser(userData: any): boolean {
+    return !!(userData?.user_id || userData?.discord_user_id || userData?.google_user_id);
   }
 }
