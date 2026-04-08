@@ -77,13 +77,19 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('uses the SDXL-sized defaults for Anima-preview2', () => {
+  it('uses the SDXL-sized defaults for Anima-preview3', () => {
+    expect((component as any).usesSdxlResolutionDefaults('Anima-preview3')).toBeTrue();
+    expect((component as any).supportsRegionalPrompting('Anima-preview3')).toBeTrue();
+  });
+
+  it('maps the legacy Anima-preview2 id to Anima-preview3', () => {
+    expect((component as any).normalizeModelId('Anima-preview2')).toBe('Anima-preview3');
     expect((component as any).usesSdxlResolutionDefaults('Anima-preview2')).toBeTrue();
     expect((component as any).supportsRegionalPrompting('Anima-preview2')).toBeTrue();
   });
 
-  it('calculates Anima-preview2 credit costs with LoRAs', () => {
-    component.generationRequest.model = 'Anima-preview2';
+  it('calculates Anima-preview3 credit costs with LoRAs', () => {
+    component.generationRequest.model = 'Anima-preview3';
     component.generationRequest.loras = [{}, {}];
 
     component.updateCreditCost();
@@ -93,7 +99,7 @@ describe('OptionsComponent', () => {
     expect(component.hiresCreditCost).toBe(120);
   });
 
-  it('keeps regional prompting enabled for Anima-preview2 while keeping its default CFG', () => {
+  it('keeps regional prompting enabled for Anima-preview3 while keeping its default CFG', () => {
     component.generationRequest.regional_prompting = {
       enabled: true,
       regions: [
@@ -113,7 +119,7 @@ describe('OptionsComponent', () => {
       ],
     };
 
-    component.changeModel({ target: { value: 'Anima-preview2' } } as any);
+    component.changeModel({ target: { value: 'Anima-preview3' } } as any);
 
     expect(component.generationRequest.guidance_scale).toBe(6);
     expect(component.generationRequest.regional_prompting.enabled).toBeTrue();

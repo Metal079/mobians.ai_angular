@@ -56,17 +56,20 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
+  private readonly modelIdAliases = new Map<string, string>([
+    ['anima-preview2', 'Anima-preview3'],
+  ]);
   private readonly sdxlResolutionModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
     'novaMobianXL_v20',
-    'Anima-preview2',
+    'Anima-preview3',
   ]);
   private readonly regionalPromptingModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
     'novaMobianXL_v20',
-    'Anima-preview2',
+    'Anima-preview3',
   ]);
 
   models_types: { [model: string]: string; } = {
@@ -74,7 +77,7 @@ export class OptionsComponent implements OnInit {
     "autismMix": "Pony",
     "novaMobianXL_v20": "Illustrious",
     "novaFurryXL_ilV140": "Illustrious",
-    "Anima-preview2": "Anima"
+    "Anima-preview3": "Anima"
   }
 
   private readonly defaultModelId: string = "novaMobianXL_v20";
@@ -89,8 +92,15 @@ export class OptionsComponent implements OnInit {
     return available[0] || this.defaultModelId;
   }
 
-  private normalizeModelId(model: unknown): string {
+  private resolveModelAlias(model: unknown): string {
     const raw = (typeof model === 'string' ? model : '').trim();
+    if (!raw) return '';
+
+    return this.modelIdAliases.get(raw.toLowerCase()) || raw;
+  }
+
+  private normalizeModelId(model: unknown): string {
+    const raw = this.resolveModelAlias(model);
     if (!raw) return this.getDefaultModelId();
 
     const available = this.getAvailableModelIds();
@@ -109,17 +119,18 @@ export class OptionsComponent implements OnInit {
   }
 
   private getDefaultCfgForModel(modelId: string): number {
-    if (modelId === 'Anima-preview2') return 6;
-    return this.usesSdxlResolutionDefaults(modelId) ? 4 : 7;
+    const normalized = this.resolveModelAlias(modelId);
+    if (normalized === 'Anima-preview3') return 6;
+    return this.usesSdxlResolutionDefaults(normalized) ? 4 : 7;
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    const normalized = this.resolveModelAlias(modelId);
     return this.sdxlResolutionModelIds.has(normalized);
   }
 
   private supportsRegionalPrompting(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    const normalized = this.resolveModelAlias(modelId);
     return this.regionalPromptingModelIds.has(normalized);
   }
 
