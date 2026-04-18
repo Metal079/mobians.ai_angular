@@ -112,7 +112,7 @@
     </section>
   }
 
-  @if (!isLoading && hasSearched && searchResults.length === 0) {
+  @if (!isLoading && hasSearched && visibleSearchResults.length === 0) {
     <div class="empty-results">
       <i class="pi pi-search"></i>
       <h6>No matching LoRAs found</h6>
@@ -120,14 +120,14 @@
     </div>
   }
 
-  @if (!isLoading && searchResults && searchResults.length > 0) {
+  @if (!isLoading && visibleSearchResults && visibleSearchResults.length > 0) {
     <div class="results-header">
       <h6>Search Results</h6>
-      <span class="results-count">{{ searchResults.length }}</span>
+      <span class="results-count">{{ visibleSearchResults.length }}</span>
     </div>
 
     <div class="mobile-results">
-      @for (lora of searchResults; track lora) {
+      @for (lora of visibleSearchResults; track lora) {
         <div
           class="lora-card"
           [ngClass]="[getLoraStatusClass(lora), lora === selectedLoRA ? 'selected' : '']"

@@ -52,7 +52,7 @@ export class AddLorasComponent {
 
   showNSFWLoras: boolean = false;
 
-  searchResults: any[] = []; // Will hold the API search results
+  searchResults: any[] = []; // Will hold the API search results (always NSFW-inclusive; filtered for display)
   selectedLoRA: any = null;  // Holds the selected LoRA from the table
   showImageDialog: boolean = false; // Track the state of the image dialog
   imageToShow: string = ''; // The image URL to show in the dialog
@@ -113,6 +113,10 @@ export class AddLorasComponent {
 
   onShowNsfwChanged(): void {
     localStorage.setItem('showNSFWLoras', this.showNSFWLoras.toString());
+    // Re-filter currently-selected LoRA in case it's now hidden.
+    if (!this.showNSFWLoras && this.selectedLoRA?.nsfw) {
+      this.selectedLoRA = null;
+    }
   }
 
   selectOption(option: SearchOption) {
@@ -124,6 +128,13 @@ export class AddLorasComponent {
     // Reset the form fields
     this.loraFile = null;
     this.searchField = '';
+  }
+
+  get visibleSearchResults(): any[] {
+    if (this.showNSFWLoras) {
+      return this.searchResults;
+    }
+    return this.searchResults.filter((result) => !result?.nsfw);
   }
 
   onFileSelected(event: any) {
@@ -147,17 +158,17 @@ export class AddLorasComponent {
     }
   }
 
+  // Always fetch NSFW-inclusive results; the toggle only affects client-side visibility.
   searchByUsername(query: string) {
-    this.executeSearch(this.stableDiffusionService.searchByUser(query, this.showNSFWLoras), 'civitAi user search done');
+    this.executeSearch(this.stableDiffusionService.searchByUser(query, true), 'civitAi user search done');
   }
 
   searchByLoRAName(query: string) {
-    this.executeSearch(this.stableDiffusionService.searchByQuery(query, this.showNSFWLoras), 'civitAi query search done');
+    this.executeSearch(this.stableDiffusionService.searchByQuery(query, true), 'civitAi query search done');
   }
 
-  // New method to search by Model ID
   searchByModelId(query: string) {
-    this.executeSearch(this.stableDiffusionService.searchByID(query, this.showNSFWLoras), 'civitAi model ID search done');
+    this.executeSearch(this.stableDiffusionService.searchByID(query, true), 'civitAi model ID search done');
   }
 
   requestSelectedLoRA() {
