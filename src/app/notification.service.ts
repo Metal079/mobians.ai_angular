@@ -3,18 +3,17 @@ import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
+import { environment } from '../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class NotificationService {
 
-  readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
+  readonly VAPID_PUBLIC_KEY = environment.vapidPublicKey;
   private static readonly USER_ID_STORAGE_KEY = 'notifications-user-id';
   public userId: string;
-
-  //private apiBaseUrl = 'http://76.157.184.213:9000';
-  private apiBaseUrl = 'https://api.mobians.ai';
+  private readonly apiBaseUrl = environment.apiBaseUrl;
 
   constructor(private http: HttpClient, private swPush: SwPush) {
     // Persist the anonymous id across reloads so the backend can keep
@@ -27,6 +26,10 @@ export class NotificationService {
     // current auth context. The auth interceptor attaches the Bearer token
     // automatically, so a logged-in user ends up with user_id attached to
     // their subscription — which is what enables LoRA-ready notifications.
+    if (!this.swPush.isEnabled) {
+      return;
+    }
+
     this.swPush.subscription.subscribe(subscription => {
       if (subscription) {
         this.sendSubscriptionToServer(subscription);
@@ -53,18 +56,17 @@ export class NotificationService {
   }
 
   private sendSubscriptionToServer(subscription: PushSubscription) {
-    const p256dhKey = subscription.getKey('p256dh');
-    const authKey = subscription.getKey('auth');
-    if (!p256dhKey || !authKey) return;
+    const subscriptionJson = subscription.toJSON();
+    const keys = subscriptionJson.keys;
+    if (!subscription.endpoint || !keys?.['p256dh'] || !keys['auth']) {
+      return;
+    }
 
     const data = {
       userId: this.userId,
       endpoint: subscription.endpoint,
       expirationTime: subscription.expirationTime,
-      keys: {
-        p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dhKey))),
-        auth: btoa(String.fromCharCode(...new Uint8Array(authKey)))
-      }
+      keys,
     };
 
     this.http.post(`${this.apiBaseUrl}/subscribe`, data).subscribe({
@@ -74,6 +76,11 @@ export class NotificationService {
   }
 
   subscribeToNotifications() {
+    if (!this.swPush.isEnabled) {
+      console.warn('Push notifications are unavailable in this build. Use the local push build or a production-like build so the service worker can register.');
+      return;
+    }
+
     this.swPush.requestSubscription({
       serverPublicKey: this.VAPID_PUBLIC_KEY
     })
@@ -86,6 +93,10 @@ export class NotificationService {
    * backend stops targeting it. Safe to call when there's no active subscription.
    */
   async unsubscribeFromNotifications(): Promise<void> {
+    if (!this.swPush.isEnabled) {
+      return;
+    }
+
     try {
       const subscription = await firstValueFrom(this.swPush.subscription);
       const endpoint = subscription?.endpoint;

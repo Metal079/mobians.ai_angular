@@ -93,6 +93,19 @@
               "extractLicenses": false,
               "sourceMap": true,
               "namedChunks": true
+            },
+            "localpush": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.localpush.ts"
+                }
+              ],
+              "extractLicenses": false,
+              "namedChunks": true,
+              "optimization": false,
+              "outputHashing": "all",
+              "sourceMap": true
             }
           },
           "defaultConfiguration": "production"

@@ -263,8 +263,6 @@ export class OptionsComponent implements OnInit {
   @Output() queueStatusMessageChange = new EventEmitter<string | undefined>();
   @Output() imageModalOpen = new EventEmitter<boolean>();
   @Output() etaChange = new EventEmitter<number | undefined>();
-
-  readonly VAPID_PUBLIC_KEY = "BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg";
   private readonly destroyRef = inject(DestroyRef);
 
   constructor(

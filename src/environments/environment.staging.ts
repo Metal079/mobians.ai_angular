@@ -15,6 +15,7 @@ export const environment = {
   googleClientId: '705855401047-0kr2m6jvp5foa8mjm1f05lrmcvtmo6v3.apps.googleusercontent.com',
   // TODO: point this at your staging API if you have one
   apiBaseUrl: 'https://api.mobians.ai',
+  vapidPublicKey: 'BDrvd3soyvIOUEp5c-qXV-833C8hJvO-6wE1GZquvs9oqWQ70j0W4V9RCa_el8gIpOBeCKkuyVwmnAdalvOMfLg',
   isDevJob: false,
   // PayPal (staging typically uses sandbox; replace if needed)
   paypalClientId: 'Abvbwdl-mP9GbFTglLpJcyLF8ZYlIY-pSwRqry68WgLNOrr0L2LdBcxXND20CaFX0dRxHOmqT03fxf_1',
