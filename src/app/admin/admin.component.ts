@@ -22,6 +22,7 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
+import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 interface DownloaderStatus {
   status: string;
@@ -68,7 +69,8 @@ interface DownloadHistoryItem {
       TagModule,
       ToastModule,
       ToggleSwitchModule,
-      TooltipModule
+      TooltipModule,
+      ProgressSpinnerModule
     ]
 })
 export class AdminComponent implements OnInit, OnDestroy {
@@ -90,6 +92,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   imagePreviewVisible = false;
   imagePreviewUrl = '';
   imagePreviewTitle = '';
+  imagePreviewLoading = false;
 
   // Row expansion state (keys must match dataKey used in table)
   expandedRowKeysLoras: { [key: string]: boolean } = {};
@@ -397,9 +400,31 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   openImagePreview(url: string, title: string): void {
     if (!url) return;
-    this.imagePreviewUrl = url;
+    // Force <img> to be destroyed so it never shows the previous image while
+    // the newly-selected one is still downloading. The @if in the template
+    // keys off both `imagePreviewVisible` and `imagePreviewUrl`, so clearing
+    // the URL first guarantees a fresh <img> element on the next tick.
+    this.imagePreviewUrl = '';
     this.imagePreviewTitle = title || 'Preview';
     this.imagePreviewVisible = true;
+    this.imagePreviewLoading = true;
+    setTimeout(() => {
+      this.imagePreviewUrl = url;
+    });
+  }
+
+  onImagePreviewHide(): void {
+    this.imagePreviewUrl = '';
+    this.imagePreviewTitle = '';
+    this.imagePreviewLoading = false;
+  }
+
+  onImagePreviewLoad(): void {
+    this.imagePreviewLoading = false;
+  }
+
+  onImagePreviewError(): void {
+    this.imagePreviewLoading = false;
   }
 
   trackById(_idx: number, row: any): any {

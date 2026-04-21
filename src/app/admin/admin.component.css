@@ -862,6 +862,25 @@
 .image-preview-container {
   display: flex;
   justify-content: center;
+  align-items: center;
+  position: relative;
+  min-width: 200px;
+  min-height: 200px;
+}
+
+.image-preview-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+  pointer-events: none;
+}
+
+:host ::ng-deep .image-preview-spinner .p-progress-spinner-circle {
+  stroke: var(--admin-accent, #29b6f6);
+  animation: p-progress-spinner-dash 1.5s ease-in-out infinite;
 }
 
 .preview-full-image {
@@ -869,6 +888,11 @@
   max-height: 85vh;
   object-fit: contain;
   border-radius: 4px;
+  transition: opacity 0.2s ease;
+}
+
+.preview-full-image.loading {
+  opacity: 0;
 }
 
 /* Downloader */

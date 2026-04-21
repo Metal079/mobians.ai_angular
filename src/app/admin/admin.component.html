@@ -591,9 +591,16 @@
   </p-dialog>
 
   <!-- Image Preview Dialog -->
-  <p-dialog [(visible)]="imagePreviewVisible" [modal]="true" [dismissableMask]="true" [showHeader]="true" [header]="imagePreviewTitle" [style]="{width: 'auto', maxWidth: '95vw'}" styleClass="image-preview-dialog">
+  <p-dialog [(visible)]="imagePreviewVisible" [modal]="true" [dismissableMask]="true" [showHeader]="true" [header]="imagePreviewTitle" [style]="{width: 'auto', maxWidth: '95vw'}" styleClass="image-preview-dialog" (onHide)="onImagePreviewHide()">
     <div class="image-preview-container">
-      <img [src]="imagePreviewUrl" [alt]="imagePreviewTitle" class="preview-full-image" />
+      @if (imagePreviewLoading) {
+        <div class="image-preview-loader">
+          <p-progressSpinner strokeWidth="4" styleClass="image-preview-spinner"></p-progressSpinner>
+        </div>
+      }
+      @if (imagePreviewVisible && imagePreviewUrl) {
+        <img [src]="imagePreviewUrl" [alt]="imagePreviewTitle" class="preview-full-image" [class.loading]="imagePreviewLoading" (load)="onImagePreviewLoad()" (error)="onImagePreviewError()" />
+      }
     </div>
   </p-dialog>
 </div>
