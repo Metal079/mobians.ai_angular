@@ -1607,8 +1607,9 @@ export class OptionsComponent implements OnInit {
       this.notificationService.userId = userId;
       this.notificationService.subscribeToNotifications();
     } else {
-      // Optionally handle unsubscribe if your NotificationService supports it
-      // this.notificationService.unsubscribeFromNotifications?.();
+      // Fully unsubscribe: drop the browser's push subscription AND delete the
+      // server-side row so the backend stops targeting this device.
+      this.notificationService.unsubscribeFromNotifications();
     }
   }
 
