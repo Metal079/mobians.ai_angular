@@ -12,6 +12,7 @@ export class NotificationService {
 
   readonly VAPID_PUBLIC_KEY = environment.vapidPublicKey;
   private static readonly USER_ID_STORAGE_KEY = 'notifications-user-id';
+  private static readonly VAPID_PUBLIC_KEY_STORAGE_KEY = 'notifications-vapid-public-key';
   public userId: string;
   private readonly apiBaseUrl = environment.apiBaseUrl;
 
@@ -31,8 +32,8 @@ export class NotificationService {
     }
 
     this.swPush.subscription.subscribe(subscription => {
-      if (subscription) {
-        this.sendSubscriptionToServer(subscription);
+      if (subscription && this.hasCurrentVapidPublicKey()) {
+        void this.sendSubscriptionToServer(subscription);
       }
     });
   }
@@ -49,13 +50,41 @@ export class NotificationService {
     }
   }
 
+  private getStoredVapidPublicKey(): string | null {
+    try {
+      return localStorage.getItem(NotificationService.VAPID_PUBLIC_KEY_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private hasCurrentVapidPublicKey(): boolean {
+    return this.getStoredVapidPublicKey() === this.VAPID_PUBLIC_KEY;
+  }
+
+  private storeCurrentVapidPublicKey(): void {
+    try {
+      localStorage.setItem(NotificationService.VAPID_PUBLIC_KEY_STORAGE_KEY, this.VAPID_PUBLIC_KEY);
+    } catch {
+      // Ignore storage failures and fall back to explicit resubscribe.
+    }
+  }
+
+  private clearStoredVapidPublicKey(): void {
+    try {
+      localStorage.removeItem(NotificationService.VAPID_PUBLIC_KEY_STORAGE_KEY);
+    } catch {
+      // Ignore storage failures when clearing notification state.
+    }
+  }
+
   playDing() {
     const ding = new Audio('/assets/ding.mp3');
     ding.volume = 0.5;
     ding.play();
   }
 
-  private sendSubscriptionToServer(subscription: PushSubscription) {
+  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
     const subscriptionJson = subscription.toJSON();
     const keys = subscriptionJson.keys;
     if (!subscription.endpoint || !keys?.['p256dh'] || !keys['auth']) {
@@ -69,23 +98,60 @@ export class NotificationService {
       keys,
     };
 
-    this.http.post(`${this.apiBaseUrl}/subscribe`, data).subscribe({
-      next: response => console.log('Subscription sent to server:', response),
-      error: error => console.error('Error sending subscription to server:', error)
-    });
+    try {
+      const response = await firstValueFrom(this.http.post(`${this.apiBaseUrl}/subscribe`, data));
+      this.storeCurrentVapidPublicKey();
+      console.log('Subscription sent to server:', response);
+    } catch (error) {
+      console.error('Error sending subscription to server:', error);
+    }
   }
 
-  subscribeToNotifications() {
+  private async removeSubscriptionFromServer(endpoint: string): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post(`${this.apiBaseUrl}/unsubscribe`, { endpoint }));
+      console.log('Push subscription removed from server');
+    } catch (error) {
+      console.error('Error removing push subscription:', error);
+    }
+  }
+
+  private async removeExistingSubscription(subscription: PushSubscription | null): Promise<void> {
+    const endpoint = subscription?.endpoint;
+
+    await this.swPush.unsubscribe().catch(() => { /* no-op if already gone */ });
+    this.clearStoredVapidPublicKey();
+
+    if (endpoint) {
+      await this.removeSubscriptionFromServer(endpoint);
+    }
+  }
+
+  async subscribeToNotifications(): Promise<void> {
     if (!this.swPush.isEnabled) {
       console.warn('Push notifications are unavailable in this build. Use the local push build or a production-like build so the service worker can register.');
       return;
     }
 
-    this.swPush.requestSubscription({
-      serverPublicKey: this.VAPID_PUBLIC_KEY
-    })
-      .then(subscription => this.sendSubscriptionToServer(subscription))
-      .catch(err => console.error("Could not subscribe to notifications", err));
+    const existingSubscription = await firstValueFrom(this.swPush.subscription);
+
+    if (existingSubscription && this.hasCurrentVapidPublicKey()) {
+      await this.sendSubscriptionToServer(existingSubscription);
+      return;
+    }
+
+    if (existingSubscription) {
+      await this.removeExistingSubscription(existingSubscription);
+    }
+
+    try {
+      const subscription = await this.swPush.requestSubscription({
+        serverPublicKey: this.VAPID_PUBLIC_KEY
+      });
+      await this.sendSubscriptionToServer(subscription);
+    } catch (err) {
+      console.error('Could not subscribe to notifications', err);
+    }
   }
 
   /**
@@ -94,22 +160,15 @@ export class NotificationService {
    */
   async unsubscribeFromNotifications(): Promise<void> {
     if (!this.swPush.isEnabled) {
+      this.clearStoredVapidPublicKey();
       return;
     }
 
     try {
       const subscription = await firstValueFrom(this.swPush.subscription);
-      const endpoint = subscription?.endpoint;
-      // Tell the browser to drop the push subscription first so the server
-      // can't deliver anything in the window before the DB row is gone.
-      await this.swPush.unsubscribe().catch(() => { /* no-op if already gone */ });
-      if (endpoint) {
-        this.http.post(`${this.apiBaseUrl}/unsubscribe`, { endpoint }).subscribe({
-          next: () => console.log('Push subscription removed from server'),
-          error: err => console.error('Error removing push subscription:', err)
-        });
-      }
+      await this.removeExistingSubscription(subscription);
     } catch (err) {
+      this.clearStoredVapidPublicKey();
       console.error('Error unsubscribing from notifications', err);
     }
   }
