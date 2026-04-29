@@ -1,9 +1,19 @@
 <router-outlet></router-outlet>
-<app-login-modal [visible]="loginPromptVisible" (visibleChange)="onLoginModalVisibleChange($event)"></app-login-modal>
+<app-login-modal
+  [visible]="loginPromptVisible"
+  [context]="loginCtaContext"
+  (visibleChange)="onLoginModalVisibleChange($event)">
+</app-login-modal>
+
+<app-credits-purchase
+  [visible]="creditPurchaseVisible"
+  [context]="creditPurchaseCtaContext"
+  (visibleChange)="onCreditPurchaseVisibleChange($event)">
+</app-credits-purchase>
 
 <!-- Floating user menu (always available) -->
 @if (!hideFloatingMenu) {
   <div class="floating-menu" style="position: fixed; right: .5rem; bottom: .5rem; z-index: 1000;">
-    <app-profile-menu (loginRequest)="loginPromptVisible = true"></app-profile-menu>
+    <app-profile-menu (loginRequest)="openLoginPrompt()"></app-profile-menu>
   </div>
 }

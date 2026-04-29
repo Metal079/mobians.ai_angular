@@ -31,6 +31,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { TextareaModule } from 'primeng/textarea';
 import { HintComponent } from 'src/app/hint/hint.component';
 import { AprilFoolsService } from 'src/app/april-fools.service';
+import { AccountCtaService } from 'src/app/auth/account-cta.service';
 
 
 @Component({
@@ -236,6 +237,8 @@ export class OptionsComponent implements OnInit {
   userCredits: number = 0;
   isLoggedIn: boolean = false;
   private queueTypeBeforeHires: 'free' | 'priority' = 'free';
+  private lastSubmittedCreditCost = 0;
+  private lastSubmittedMode: 'generate' | 'upscale' | 'hires' | 'priority' = 'generate';
   
   // Credit costs by model type
   private readonly creditCosts: { [key: string]: number } = {
@@ -275,6 +278,7 @@ export class OptionsComponent implements OnInit {
     , private lockService: GenerationLockService
     , private authService: AuthService
     , public aprilFools: AprilFoolsService
+    , private accountCtaService: AccountCtaService
   ) {
     this.blobMigrationService.progress$.subscribe(
       () => {
@@ -532,22 +536,14 @@ export class OptionsComponent implements OnInit {
       }
 
       if (!this.authService.isLoggedIn()) {
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Login Required',
-          detail: `Please log in to use Hi-Res. Hi-Res costs ${this.hiresCreditCost} credits.`
-        });
+        this.requestLoginCta('hires', this.hiresCreditCost);
         this.hiresEnabled = false;
         this.saveSettings();
         return;
       }
 
       if (this.userCredits < this.hiresCreditCost) {
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Insufficient Credits',
-          detail: `You need ${this.hiresCreditCost} credits but only have ${this.userCredits}.`
-        });
+        this.requestCreditPurchaseCta('hires', this.hiresCreditCost);
         this.hiresEnabled = false;
         this.saveSettings();
         return;
@@ -572,24 +568,14 @@ export class OptionsComponent implements OnInit {
     
     // If switching to priority without enough credits, show warning
     if (type === 'priority' && !this.authService.isLoggedIn()) {
-      this.messageService.add({
-        severity: 'info',
-        summary: 'Login Required',
-        detail: 'Sign in to use the priority queue and earn free credits!',
-        life: 4000
-      });
+      this.requestLoginCta('priority', this.hiresEligible ? this.hiresCreditCost : this.creditCost);
       this.queueType = 'free';
       return;
     }
     
     const requiredCredits = this.hiresEligible ? this.hiresCreditCost : this.creditCost;
     if (type === 'priority' && this.userCredits < requiredCredits) {
-      this.messageService.add({
-        severity: 'warn',
-        summary: 'Insufficient Credits',
-        detail: `You need ${requiredCredits} credits. You have ${this.userCredits}.`,
-        life: 4000
-      });
+      this.requestCreditPurchaseCta(this.hiresEligible ? 'hires' : 'priority', requiredCredits);
       this.queueType = 'free';
     }
   }
@@ -915,27 +901,17 @@ export class OptionsComponent implements OnInit {
     const queueTypeForRequest: 'free' | 'priority' = (isUpscaleJob || isHiresJob) ? 'priority' : this.queueType;
     const creditCostForRequest = isUpscaleJob ? this.upscaleCreditCost : (isHiresJob ? this.hiresCreditCost : this.creditCost);
     const jobTypeForRequest = isUpscaleJob ? 'upscale' : (isHiresJob ? 'txt2img_upscale' : this.generationRequest.job_type);
+    this.lastSubmittedCreditCost = creditCostForRequest;
+    this.lastSubmittedMode = isUpscaleJob ? 'upscale' : (isHiresJob ? 'hires' : (queueTypeForRequest === 'priority' ? 'priority' : 'generate'));
 
     // Validate priority queue requirements
     if (queueTypeForRequest === 'priority') {
       if (!this.authService.isLoggedIn()) {
-        this.messageService.add({ 
-          severity: 'warn', 
-          summary: 'Login Required', 
-          detail: isUpscaleJob
-            ? `Please log in to upscale images. Upscaling costs ${creditCostForRequest} credits due to longer generation times.`
-            : (isHiresJob
-              ? `Please log in to use Hi-Res. Hi-Res costs ${creditCostForRequest} credits.`
-              : 'Please log in to use the priority queue.')
-        });
+        this.requestLoginCta(isUpscaleJob ? 'upscale' : (isHiresJob ? 'hires' : 'priority'), creditCostForRequest);
         return;
       }
       if (this.userCredits < creditCostForRequest) {
-        this.messageService.add({ 
-          severity: 'warn', 
-          summary: 'Insufficient Credits', 
-          detail: `You need ${creditCostForRequest} credits but only have ${this.userCredits}.` 
-        });
+        this.requestCreditPurchaseCta(isUpscaleJob ? 'upscale' : (isHiresJob ? 'hires' : 'priority'), creditCostForRequest);
         return;
       }
     }
@@ -1562,7 +1538,26 @@ export class OptionsComponent implements OnInit {
 
     // If the error comes from the backend and has a 'detail' field, use it as the error message
     if (error && error.error && error.error.detail) {
-      errorMessage = error.error.detail;
+      errorMessage = this.normalizeErrorDetail(error.error.detail);
+    }
+
+    if (error?.status === 401) {
+      this.requestLoginCta(
+        this.lastSubmittedMode === 'upscale' || this.lastSubmittedMode === 'hires' ? this.lastSubmittedMode : 'priority',
+        this.lastSubmittedCreditCost,
+        errorMessage
+      );
+      return;
+    }
+
+    if (error?.status === 402) {
+      this.requestCreditPurchaseCta(
+        this.lastSubmittedMode,
+        this.lastSubmittedCreditCost || (this.hiresEligible ? this.hiresCreditCost : this.creditCost),
+        errorMessage,
+        'backend-402'
+      );
+      return;
     }
 
     // Display the error toast
@@ -1573,8 +1568,54 @@ export class OptionsComponent implements OnInit {
       severity: 'error',
       summary: errToast.summary,
       detail: errToast.detail,
-      life: 500000  // Here is the addition.
+      life: 10000
     });
+  }
+
+  private requestLoginCta(mode: 'priority' | 'upscale' | 'hires', requiredCredits: number, message?: string): void {
+    this.accountCtaService.requestLogin({
+      reason: mode,
+      requiredCredits,
+      message: message || this.getLoginCtaMessage(mode, requiredCredits)
+    });
+  }
+
+  private requestCreditPurchaseCta(
+    mode: 'priority' | 'upscale' | 'hires' | 'generate',
+    requiredCredits: number,
+    message?: string,
+    reason: 'insufficient-credits' | 'backend-402' = 'insufficient-credits'
+  ): void {
+    this.accountCtaService.requestCreditPurchase({
+      reason,
+      requestedMode: mode,
+      requiredCredits,
+      currentCredits: this.userCredits,
+      message: message || `You need ${requiredCredits} credits for this request, but you only have ${this.userCredits}.`
+    });
+  }
+
+  private getLoginCtaMessage(mode: 'priority' | 'upscale' | 'hires', requiredCredits: number): string {
+    if (mode === 'upscale') {
+      return `Sign in to upscale images. Upscaling costs ${requiredCredits} credits because it uses longer generation time.`;
+    }
+    if (mode === 'hires') {
+      return `Sign in to use Hi-Res generation. This request costs ${requiredCredits} credits.`;
+    }
+    return `Sign in to use the priority queue. This request costs ${requiredCredits} credits, and new accounts can claim free daily credits.`;
+  }
+
+  private normalizeErrorDetail(detail: unknown): string {
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    if (detail && typeof detail === 'object' && 'detail' in detail) {
+      const nestedDetail = (detail as { detail?: unknown }).detail;
+      if (typeof nestedDetail === 'string') {
+        return nestedDetail;
+      }
+    }
+    return 'There was an error attempting to generate your image.';
   }
 
   removeReferenceImage() {

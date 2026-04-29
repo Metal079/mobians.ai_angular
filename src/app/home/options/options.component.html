@@ -19,7 +19,6 @@
       [class.btn-outline-warning]="queueType !== 'priority'"
       [class.btn-warning]="queueType === 'priority'"
       [class.active]="queueType === 'priority'"
-      [disabled]="!canUsePriorityQueue()"
       (click)="onQueueTypeChange('priority')">
       <i class="pi pi-bolt me-1"></i>
       Priority

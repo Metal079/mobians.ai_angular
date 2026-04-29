@@ -6,14 +6,14 @@ import { SharedService } from '../shared.service';
 import { AuthService, UserCredits } from './auth.service';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
-import { CreditsPurchaseComponent } from './credits-purchase.component';
+import { AccountCtaService } from './account-cta.service';
 
 @Component({
     selector: 'app-profile-menu',
     templateUrl: './profile-menu.component.html',
     styleUrls: ['./profile-menu.component.css'],
     standalone: true,
-    imports: [CommonModule, RouterLink, ButtonModule, CreditsPurchaseComponent]
+    imports: [CommonModule, RouterLink, ButtonModule]
 })
 export class ProfileMenuComponent implements OnInit, OnDestroy {
   @Output() loginRequest = new EventEmitter<void>();
@@ -29,7 +29,6 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   dailyStreak = 0;
   nextDailyBonusFromServer: number | null = null;
   claimingBonus = false;
-  showPurchaseDialog = false;
 
   // Daily bonus configuration
   private readonly DAILY_BASE = 30;
@@ -47,7 +46,8 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   constructor(
     private shared: SharedService, 
     private auth: AuthService,
-    private messageService: MessageService
+    private messageService: MessageService,
+    private accountCtaService: AccountCtaService
   ) {}
 
   ngOnInit() {
@@ -157,12 +157,11 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   }
 
   openPurchaseDialog() {
-    this.showPurchaseDialog = true;
-  }
-
-  onPurchaseComplete(creditsAdded: number) {
-    // Credits are already updated by the purchase component via auth service
-    // This is just for any additional handling if needed
+    this.accountCtaService.requestCreditPurchase({
+      reason: 'profile-menu',
+      currentCredits: this.credits,
+      message: 'Choose a credit pack for priority queue, and upscaling.'
+    });
   }
   
   logout() { 

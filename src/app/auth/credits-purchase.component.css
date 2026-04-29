@@ -4,6 +4,38 @@
   gap: 1.5rem;
 }
 
+.purchase-context {
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-color);
+}
+
+.context-title {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.purchase-context p {
+  margin: 0;
+  color: var(--text-color-secondary);
+  line-height: 1.35;
+}
+
+.shortage-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+  font-size: 0.9rem;
+}
+
+.shortage-line strong {
+  color: #b45309;
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;

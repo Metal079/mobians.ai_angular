@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild, ChangeDetectorRef, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MessageService } from 'primeng/api';
 import { StableDiffusionService } from '../stable-diffusion.service';
@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { environment } from 'src/environments/environment';
 import { firstValueFrom } from 'rxjs';
 import { DialogModule } from 'primeng/dialog';
+import { CreditPurchaseCtaContext } from './account-cta.service';
 
 declare var paypal: any;
 
@@ -24,8 +25,9 @@ export interface CreditPackage {
     standalone: true,
     imports: [CommonModule, DialogModule]
 })
-export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewInit {
+export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
   @Input() visible = false;
+  @Input() context: CreditPurchaseCtaContext | null = null;
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() purchaseComplete = new EventEmitter<number>();
   
@@ -33,10 +35,11 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
   
   packages: CreditPackage[] = [];
   selectedPackage: CreditPackage | null = null;
-  loading = true;
+  loading = false;
   processing = false;
   paypalReady = false;
   paypalButtonsRendered = false;
+  recommendedPackageId: string | null = null;
   
   private paypalScript: HTMLScriptElement | null = null;
 
@@ -47,8 +50,16 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
     private cdr: ChangeDetectorRef
   ) {}
 
-  ngOnInit(): void {
-    this.loadPackages();
+  ngOnInit(): void {}
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if ((changes['context'] || changes['visible']) && this.visible) {
+      if (this.packages.length === 0 && !this.loading) {
+        this.loadPackages();
+      } else if (!this.loading) {
+        this.selectRecommendedPackage();
+      }
+    }
   }
 
   ngAfterViewInit(): void {
@@ -73,11 +84,7 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
       next: (response) => {
         this.packages = response.packages || [];
         this.loading = false;
-        // Pre-select the "popular" package if available
-        const popular = this.packages.find(p => p.id === 'popular');
-        if (popular) {
-          this.selectPackage(popular);
-        }
+        this.selectRecommendedPackage();
       },
       error: (err) => {
         console.error('Failed to load packages:', err);
@@ -102,6 +109,21 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
     } else {
       // Re-render buttons for new package
       setTimeout(() => this.renderPayPalButtons(), 100);
+    }
+  }
+
+  private selectRecommendedPackage(): void {
+    const sortedPackages = [...this.packages].sort((left, right) => left.credits - right.credits);
+    const deficit = this.shortageCredits;
+    const recommended = deficit > 0
+      ? sortedPackages.find(pkg => pkg.credits >= deficit)
+      : undefined;
+    const fallback = this.packages.find(pkg => pkg.id === 'popular') || this.packages[0];
+    const packageToSelect = recommended || fallback;
+
+    this.recommendedPackageId = packageToSelect?.id || null;
+    if (packageToSelect) {
+      this.selectPackage(packageToSelect);
     }
   }
 
@@ -254,5 +276,32 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
     const baseRate = 1500 / 5; // 300 credits per dollar
     const actualRate = pkg.credits / pkg.price_usd;
     return Math.round(((actualRate - baseRate) / baseRate) * 100);
+  }
+
+  get hasPurchaseContext(): boolean {
+    return !!this.context?.message || (this.context?.requiredCredits ?? 0) > 0;
+  }
+
+  get shortageCredits(): number {
+    const requiredCredits = this.context?.requiredCredits ?? 0;
+    const currentCredits = this.context?.currentCredits ?? 0;
+    return Math.max(requiredCredits - currentCredits, 0);
+  }
+
+  get purchaseContextTitle(): string {
+    if (this.context?.reason === 'profile-menu') {
+      return 'Add credits';
+    }
+    return 'Get back to generating';
+  }
+
+  get purchaseContextMessage(): string {
+    if (this.context?.message) {
+      return this.context.message;
+    }
+    if ((this.context?.requiredCredits ?? 0) > 0) {
+      return `This request needs ${this.context?.requiredCredits} credits. You currently have ${this.context?.currentCredits ?? 0}.`;
+    }
+    return 'Choose a credit pack and keep your priority generations moving.';
   }
 }

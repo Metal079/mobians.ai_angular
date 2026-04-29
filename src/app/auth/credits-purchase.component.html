@@ -10,6 +10,19 @@
   header="Buy Credits">
 
   <div class="purchase-content">
+    @if (hasPurchaseContext) {
+      <div class="purchase-context" role="status">
+        <div class="context-title">{{ purchaseContextTitle }}</div>
+        <p>{{ purchaseContextMessage }}</p>
+        @if (shortageCredits > 0) {
+          <div class="shortage-line">
+            <span>Short by</span>
+            <strong>{{ shortageCredits | number }} credits</strong>
+          </div>
+        }
+      </div>
+    }
+
     <!-- Loading state -->
     @if (loading) {
       <div class="loading-state">
@@ -51,7 +64,7 @@
     @if (selectedPackage && !loading) {
       <div class="paypal-section">
         <div class="selected-summary">
-          <span>Selected:</span>
+          <span>{{ selectedPackage.id === recommendedPackageId ? 'Recommended:' : 'Selected:' }}</span>
           <strong>{{ selectedPackage.name }}</strong>
           <span class="price">${{ selectedPackage.price_usd | number:'1.2-2' }}</span>
         </div>

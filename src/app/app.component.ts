@@ -7,19 +7,26 @@ import { Subscription } from 'rxjs';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { LoginModalComponent } from './auth/login-modal.component';
 import { ProfileMenuComponent } from './auth/profile-menu.component';
+import { CreditsPurchaseComponent } from './auth/credits-purchase.component';
+import { AccountCtaService, CreditPurchaseCtaContext, LoginCtaContext } from './auth/account-cta.service';
 
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     standalone: true,
-    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent]
+    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent, CreditsPurchaseComponent]
 })
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;
+  loginCtaContext: LoginCtaContext | null = null;
+  creditPurchaseVisible = false;
+  creditPurchaseCtaContext: CreditPurchaseCtaContext | null = null;
   isLoggedIn = false;
   hideFloatingMenu = true;
   private sessionInvalidSub: Subscription | null = null;
+  private loginCtaSub: Subscription | null = null;
+  private creditPurchaseCtaSub: Subscription | null = null;
   private routeSub: Subscription | null = null;
   private swVersionSub: Subscription | null = null;
   private swUnrecoverableSub: Subscription | null = null;
@@ -43,7 +50,8 @@ export class AppComponent implements OnInit, OnDestroy {
     private shared: SharedService,
     private authService: AuthService,
     private router: Router,
-    private aprilFools: AprilFoolsService
+    private aprilFools: AprilFoolsService,
+    private accountCtaService: AccountCtaService
   ) {
     this.updateRouteFlags(this.router.url);
     this.checkForUpdates();
@@ -70,13 +78,34 @@ export class AppComponent implements OnInit, OnDestroy {
     // Subscribe to session invalid events to show login modal
     this.sessionInvalidSub = this.authService.sessionInvalid$.subscribe(() => {
       this.isLoggedIn = false;
+      this.loginCtaContext = {
+        reason: 'session-expired',
+        title: 'Sign in again',
+        message: 'Your session expired. Sign in again to keep using credits, priority generation, and synced account features.'
+      };
       this.loginPromptVisible = true;
+    });
+
+    this.loginCtaSub = this.accountCtaService.loginRequests$.subscribe(context => {
+      this.loginCtaContext = context;
+      this.loginPromptVisible = true;
+    });
+
+    this.creditPurchaseCtaSub = this.accountCtaService.creditPurchaseRequests$.subscribe(context => {
+      this.creditPurchaseCtaContext = context;
+      this.creditPurchaseVisible = true;
     });
   }
 
   ngOnDestroy(): void {
     if (this.sessionInvalidSub) {
       this.sessionInvalidSub.unsubscribe();
+    }
+    if (this.loginCtaSub) {
+      this.loginCtaSub.unsubscribe();
+    }
+    if (this.creditPurchaseCtaSub) {
+      this.creditPurchaseCtaSub.unsubscribe();
     }
     if (this.routeSub) {
       this.routeSub.unsubscribe();
@@ -142,6 +171,11 @@ export class AppComponent implements OnInit, OnDestroy {
       const isValid = await this.authService.validateSession();
       if (!isValid) {
         // Session is invalid - prompt login
+        this.loginCtaContext = {
+          reason: 'session-expired',
+          title: 'Sign in again',
+          message: 'Your session expired. Sign in again to keep using credits, priority generation, and synced account features.'
+        };
         this.loginPromptVisible = true;
       }
     }
@@ -251,6 +285,21 @@ export class AppComponent implements OnInit, OnDestroy {
 
   onLoginModalVisibleChange(visible: boolean) {
     this.loginPromptVisible = visible;
+    if (!visible) {
+      this.loginCtaContext = null;
+    }
+  }
+
+  openLoginPrompt(): void {
+    this.loginCtaContext = null;
+    this.loginPromptVisible = true;
+  }
+
+  onCreditPurchaseVisibleChange(visible: boolean): void {
+    this.creditPurchaseVisible = visible;
+    if (!visible) {
+      this.creditPurchaseCtaContext = null;
+    }
   }
 
   private updateRouteFlags(url: string): void {
