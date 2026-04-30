@@ -116,7 +116,6 @@ export class AdminComponent implements OnInit, OnDestroy {
   downloaderStatus: DownloaderStatus | null = null;
   downloadHistory: DownloadHistoryItem[] = [];
   loadingDownloaderStatus = false;
-  triggeringDownload = false;
   private statusPollingSubscription: Subscription | null = null;
   private initialRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -946,44 +945,6 @@ export class AdminComponent implements OnInit, OnDestroy {
           console.error('Failed to load download history', err);
         });
       }
-    });
-  }
-
-  triggerDownload(): void {
-    this.triggeringDownload = true;
-    this.sdService.triggerDownload().subscribe({
-      next: (response: any) => {
-        if (response.status === 'busy') {
-          this.messageService.add({
-            severity: 'info',
-            summary: 'Already Running',
-            detail: response.message || 'Download already in progress',
-            life: 3000
-          });
-        } else {
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Download Triggered',
-            detail: response.message || 'Download cycle started',
-            life: 3000
-          });
-        }
-        // Refresh status after a short delay
-        setTimeout(() => {
-          this.loadDownloaderStatus();
-          this.loadDownloadHistory();
-        }, 1000);
-      },
-      error: (err) => {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: err?.error?.detail || 'Failed to trigger download. Make sure the downloader service is running.',
-          life: 5000
-        });
-      }
-    }).add(() => {
-      this.triggeringDownload = false;
     });
   }
 

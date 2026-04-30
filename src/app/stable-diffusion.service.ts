@@ -265,11 +265,6 @@ export class StableDiffusionService {
     const url = `${this.apiBaseUrl}/admin/download-history?limit=${limit}`;
     return this.http.get(url);
   }
-
-  triggerDownload(): Observable<any> {
-    const url = `${this.apiBaseUrl}/admin/trigger-download`;
-    return this.http.post(url, {});
-  }
   //#endregion
 
   //#region CivitAI API calls

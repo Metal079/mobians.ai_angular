@@ -467,14 +467,6 @@
               <h3><i class="bi bi-activity"></i> Service Status</h3>
               <div class="status-actions">
                 <p-button
-                  label="Trigger Download"
-                  icon="bi bi-play-fill"
-                  styleClass="p-button-success"
-                  [loading]="triggeringDownload"
-                  [disabled]="triggeringDownload || downloaderStatus?.status === 'downloading'"
-                  (onClick)="triggerDownload()">
-                </p-button>
-                <p-button
                   label="Refresh"
                   icon="bi bi-arrow-repeat"
                   styleClass="p-button-outlined"
