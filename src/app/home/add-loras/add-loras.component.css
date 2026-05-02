@@ -492,6 +492,10 @@
 }
 
 .lora-request-rejected-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
   padding: 10px 14px;
   border-radius: 10px;
@@ -500,6 +504,10 @@
   background: color-mix(in srgb, #dc2626 15%, var(--request-card-bg));
   color: #dc2626;
   border: 1px solid color-mix(in srgb, #dc2626 40%, var(--request-border));
+}
+
+.lora-request-rejected-msg span {
+  min-width: 0;
 }
 
 .lora-request-approved-msg {

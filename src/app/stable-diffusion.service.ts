@@ -75,6 +75,20 @@ export interface RegionalPromptPreset {
   regions: RegionalPromptPresetRegion[];
 }
 
+export interface LoraSuggestionCooldown {
+  last_updated_date?: string | null;
+  rerequest_available_at?: string | null;
+  cooldown_seconds_remaining?: number;
+}
+
+export interface LoraSuggestionStatuses {
+  rejected: number[];
+  approved: number[];
+  pending: number[];
+  downloading: number[];
+  rejected_cooldowns?: Record<string, LoraSuggestionCooldown>;
+}
+
 export interface SubmitJobResponse {
   job_id: string;
   credits_used?: number;
@@ -222,9 +236,9 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
-  getAllSuggestionStatuses(): Observable<{ rejected: number[]; approved: number[]; pending: number[]; downloading: number[] }> {
+  getAllSuggestionStatuses(): Observable<LoraSuggestionStatuses> {
     const url = `${this.apiBaseUrl}/get_all_suggestion_statuses/`;
-    return this.http.get<{ rejected: number[]; approved: number[]; pending: number[]; downloading: number[] }>(url);
+    return this.http.get<LoraSuggestionStatuses>(url);
   }
 
   // Admin endpoints

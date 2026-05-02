@@ -54,6 +54,18 @@ class MessageServiceStub {
   add() {}
 }
 
+function buildSelectedLora(versionId: number) {
+  return {
+    model_version_id: versionId,
+    name: 'Test LoRA',
+    model_name: 'v1',
+    nsfw: false,
+    minor: false,
+    images: [{ url: 'https://example.com/preview.png' }],
+    base_model: 'Anima'
+  };
+}
+
 describe('AddLorasComponent', () => {
   let component: AddLorasComponent;
   let fixture: ComponentFixture<AddLorasComponent>;
@@ -113,15 +125,7 @@ describe('AddLorasComponent', () => {
   it('submits LoRA requests for Google-authenticated users without a Discord id', () => {
     spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
     sharedService.setUserDataValue({ google_user_id: 'google-user-1', user_id: 'internal-user-99' });
-    component.selectedLoRA = {
-      model_version_id: 123,
-      name: 'Test LoRA',
-      model_name: 'v1',
-      nsfw: false,
-      minor: false,
-      images: [{ url: 'https://example.com/preview.png' }],
-      base_model: 'Anima'
-    };
+    component.selectedLoRA = buildSelectedLora(123);
 
     component.requestSelectedLoRA();
 
@@ -135,5 +139,44 @@ describe('AddLorasComponent', () => {
       preview_image: 'https://example.com/preview.png',
       base_model: 'Anima'
     });
+  });
+
+  it('blocks re-requesting rejected LoRAs during the cooldown', () => {
+    const addSpy = spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
+    spyOn(TestBed.inject(MessageService) as any, 'add');
+    component.selectedLoRA = buildSelectedLora(456);
+    component.rejectedVersionIds.add('456');
+    component.rejectedCooldowns.set('456', {
+      rerequest_available_at: new Date(Date.now() + 86400000).toISOString(),
+      cooldown_seconds_remaining: 86400
+    });
+
+    component.requestSelectedLoRA();
+
+    expect(addSpy).not.toHaveBeenCalled();
+  });
+
+  it('submits rejected LoRAs after the cooldown expires', () => {
+    const addSpy = spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
+    component.selectedLoRA = buildSelectedLora(789);
+    component.rejectedVersionIds.add('789');
+    component.rejectedCooldowns.set('789', {
+      rerequest_available_at: new Date(Date.now() - 86400000).toISOString(),
+      cooldown_seconds_remaining: 0
+    });
+
+    component.requestSelectedLoRA();
+
+    expect(addSpy).toHaveBeenCalled();
+  });
+
+  it('lets the backend decide rejected LoRAs without cooldown metadata', () => {
+    const addSpy = spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
+    component.selectedLoRA = buildSelectedLora(987);
+    component.rejectedVersionIds.add('987');
+
+    component.requestSelectedLoRA();
+
+    expect(addSpy).toHaveBeenCalled();
   });
 });

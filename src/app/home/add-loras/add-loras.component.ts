@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DynamicDialogRef } from 'primeng/dynamicdialog';
 import { DynamicDialogConfig } from 'primeng/dynamicdialog';
-import { StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { LoraSuggestionCooldown, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MessageService } from 'primeng/api';
 import { SharedService } from 'src/app/shared.service';
 import { forkJoin, Observable, of } from 'rxjs';
@@ -36,6 +36,7 @@ type SearchOption = 'lora_name' | 'model_id' | 'username';
 })
 export class AddLorasComponent {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly rerequestCooldownMs = 7 * 24 * 60 * 60 * 1000;
   private isComponentDestroyed = false;
   targetBaseModel: string | null = null;
 
@@ -66,6 +67,7 @@ export class AddLorasComponent {
   pendingVersionIds: Set<string> = new Set();
   rejectedVersionIds: Set<string> = new Set();
   failedVersionIds: Set<string> = new Set();
+  rejectedCooldowns: Map<string, LoraSuggestionCooldown> = new Map();
 
   pendingSuggestions: any[] = [];
   rejectedSuggestions: any[] = [];
@@ -186,13 +188,15 @@ export class AddLorasComponent {
 
       const status = this.getLoraStatus(this.selectedLoRA);
       if (status === 'rejected') {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Rejected',
-          detail: 'This LoRA has been reviewed and rejected. It cannot be re-submitted.',
-          life: 5000
-        });
-        return;
+        if (this.isRejectedCooldownActive(this.selectedLoRA)) {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Rejected recently',
+            detail: this.getRerequestAvailabilityText(this.selectedLoRA),
+            life: 5000
+          });
+          return;
+        }
       }
       if (status === 'approved') {
         this.messageService.add({
@@ -225,7 +229,7 @@ export class AddLorasComponent {
           this.messageService.add({
             severity: 'success',
             summary: 'Success',
-            detail: 'LoRA suggestion added successfully',
+            detail: response?.detail || 'LoRA suggestion added successfully',
             life: 5000  // Here is the addition.
           });
           this.loadSuggestionStatuses();
@@ -299,7 +303,7 @@ export class AddLorasComponent {
       pending: this.stableDiffusionService.getMyLoraSuggestions('pending').pipe(catchError(() => of([]))),
       rejected: this.stableDiffusionService.getMyLoraSuggestions('rejected').pipe(catchError(() => of([]))),
       failed: this.stableDiffusionService.getMyLoraSuggestions('failed').pipe(catchError(() => of([]))),
-      globalStatuses: this.stableDiffusionService.getAllSuggestionStatuses().pipe(catchError(() => of({ rejected: [], approved: [], pending: [], downloading: [] })))
+      globalStatuses: this.stableDiffusionService.getAllSuggestionStatuses().pipe(catchError(() => of({ rejected: [], approved: [], pending: [], downloading: [], rejected_cooldowns: {} })))
     })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -318,6 +322,7 @@ export class AddLorasComponent {
           this.pendingVersionIds.clear();
           this.rejectedVersionIds.clear();
           this.failedVersionIds.clear();
+          this.rejectedCooldowns.clear();
 
           // Populate from user's own suggestions
           this.pendingSuggestions.forEach((row) => {
@@ -327,7 +332,10 @@ export class AddLorasComponent {
 
           this.rejectedSuggestions.forEach((row) => {
             const id = this.getVersionId(row);
-            if (id) this.rejectedVersionIds.add(id);
+            if (id) {
+              this.rejectedVersionIds.add(id);
+              this.rejectedCooldowns.set(id, this.toRejectedCooldown(row));
+            }
           });
 
           this.failedSuggestions.forEach((row) => {
@@ -339,6 +347,10 @@ export class AddLorasComponent {
           for (const vid of (globalStatuses.rejected || [])) {
             this.rejectedVersionIds.add(String(vid));
           }
+          const globalRejectedCooldowns = (globalStatuses.rejected_cooldowns || {}) as Record<string, LoraSuggestionCooldown>;
+          Object.entries(globalRejectedCooldowns).forEach(([id, cooldown]) => {
+            this.rejectedCooldowns.set(id, cooldown);
+          });
           for (const vid of (globalStatuses.approved || [])) {
             this.approvedVersionIds.add(String(vid));
           }
@@ -433,6 +445,50 @@ export class AddLorasComponent {
     return String(status);
   }
 
+  isRejectedCooldownActive(lora: any): boolean {
+    const id = this.getVersionId(lora);
+    if (!id) return false;
+
+    const cooldown = this.rejectedCooldowns.get(id);
+    if (typeof cooldown?.cooldown_seconds_remaining === 'number') {
+      return cooldown.cooldown_seconds_remaining > 0;
+    }
+
+    const availableAt = this.getRerequestAvailableAt(lora);
+    return availableAt ? availableAt.getTime() > Date.now() : false;
+  }
+
+  getRerequestAvailabilityText(lora: any): string {
+    const availableAt = this.getRerequestAvailableAt(lora);
+    if (!availableAt) {
+      return 'This LoRA was rejected, but you can try re-requesting it now.';
+    }
+
+    if (availableAt.getTime() <= Date.now()) {
+      return 'This LoRA is eligible to be re-requested now.';
+    }
+
+    return `This LoRA can be re-requested on ${this.formatDate(availableAt)}.`;
+  }
+
+  getRerequestAvailableAt(lora: any): Date | null {
+    const id = this.getVersionId(lora);
+    if (!id) return null;
+
+    const cooldown = this.rejectedCooldowns.get(id);
+    const availableAt = this.parseDate(cooldown?.rerequest_available_at);
+    if (availableAt) {
+      return availableAt;
+    }
+
+    const lastUpdatedAt = this.parseDate(cooldown?.last_updated_date);
+    if (!lastUpdatedAt) {
+      return null;
+    }
+
+    return new Date(lastUpdatedAt.getTime() + this.rerequestCooldownMs);
+  }
+
   private getVersionId(row: any): string | null {
     const id = row?.model_version_id ?? row?.version_id ?? row?.lora_version_id ?? row?.modelVersionId ?? row?.versionId;
     if (id === undefined || id === null || id === '') return null;
@@ -441,6 +497,31 @@ export class AddLorasComponent {
 
   private hasAuthenticatedUser(userData: any): boolean {
     return !!(userData?.user_id || userData?.discord_user_id || userData?.google_user_id);
+  }
+
+  private toRejectedCooldown(row: any): LoraSuggestionCooldown {
+    return {
+      last_updated_date: row?.last_updated_date ?? null,
+      rerequest_available_at: row?.rerequest_available_at ?? null,
+      cooldown_seconds_remaining: row?.cooldown_seconds_remaining
+    };
+  }
+
+  private parseDate(value: unknown): Date | null {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private formatDate(value: Date): string {
+    return value.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   }
 
   showError(error: any) {
