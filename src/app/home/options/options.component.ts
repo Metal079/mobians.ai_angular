@@ -57,17 +57,20 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
+  private readonly modelIdAliases = new Map<string, string>([
+    ['anima-preview3', 'Anima-baseV1'],
+  ]);
   private readonly sdxlResolutionModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
     'novaMobianXL_v20',
-    'Anima-preview3',
+    'Anima-baseV1',
   ]);
   private readonly regionalPromptingModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
     'novaMobianXL_v20',
-    'Anima-preview3',
+    'Anima-baseV1',
   ]);
 
   models_types: { [model: string]: string; } = {
@@ -75,7 +78,7 @@ export class OptionsComponent implements OnInit {
     "autismMix": "Pony",
     "novaMobianXL_v20": "Illustrious",
     "novaFurryXL_ilV140": "Illustrious",
-    "Anima-preview3": "Anima"
+    "Anima-baseV1": "Anima"
   }
 
   private readonly defaultModelId: string = "novaMobianXL_v20";
@@ -90,8 +93,13 @@ export class OptionsComponent implements OnInit {
     return available[0] || this.defaultModelId;
   }
 
-  private normalizeModelId(model: unknown): string {
+  private resolveModelAlias(model: unknown): string {
     const raw = (typeof model === 'string' ? model : '').trim();
+    return this.modelIdAliases.get(raw.toLowerCase()) || raw;
+  }
+
+  private normalizeModelId(model: unknown): string {
+    const raw = this.resolveModelAlias(model);
     if (!raw) return this.getDefaultModelId();
 
     const available = this.getAvailableModelIds();
@@ -110,18 +118,24 @@ export class OptionsComponent implements OnInit {
   }
 
   private getDefaultCfgForModel(modelId: string): number {
-    if (modelId === 'Anima-preview3') return 6;
-    return this.usesSdxlResolutionDefaults(modelId) ? 4 : 7;
+    const normalized = this.resolveModelAlias(modelId);
+    if (normalized === 'Anima-baseV1') return 4;
+    return this.usesSdxlResolutionDefaults(normalized) ? 4 : 7;
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    const normalized = this.resolveModelAlias(modelId);
     return this.sdxlResolutionModelIds.has(normalized);
   }
 
   private supportsRegionalPrompting(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    const normalized = this.resolveModelAlias(modelId);
     return this.regionalPromptingModelIds.has(normalized);
+  }
+
+  private getModelType(modelId: unknown): string {
+    const normalized = this.resolveModelAlias(modelId);
+    return this.models_types[normalized] || 'SD 1.5';
   }
 
   private disableRegionalPromptingForUnsupportedModel(modelId: unknown): void {
@@ -437,10 +451,11 @@ export class OptionsComponent implements OnInit {
 
   changeModel(event: any) {
     let selectElement = event.target as HTMLSelectElement;
-    this.generationRequest.model = selectElement.value;
-    this.disableRegionalPromptingForUnsupportedModel(selectElement.value);
+    const selectedModelId = this.normalizeModelId(selectElement.value);
+    this.generationRequest.model = selectedModelId;
+    this.disableRegionalPromptingForUnsupportedModel(selectedModelId);
 
-    this.generationRequest.guidance_scale = this.getDefaultCfgForModel(selectElement.value);
+    this.generationRequest.guidance_scale = this.getDefaultCfgForModel(selectedModelId);
 
     // Update credit cost for new model
     this.updateCreditCost();
@@ -453,7 +468,7 @@ export class OptionsComponent implements OnInit {
 
   // Queue type and credit cost methods
   updateCreditCost() {
-    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const modelType = this.getModelType(this.generationRequest.model);
     const baseCost = this.creditCosts[modelType] ?? this.creditCosts['SD 1.5'] ?? 0;
     const loraCount = Array.isArray(this.generationRequest?.loras) ? this.generationRequest.loras.length : 0;
     const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
@@ -466,7 +481,7 @@ export class OptionsComponent implements OnInit {
   }
 
   getUpscaleTooltip(): string {
-    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const modelType = this.getModelType(this.generationRequest.model);
     const cost = this.upscaleCreditCost;
     if (!this.authService.isLoggedIn()) {
       return `Upscale the image by 1.5×. Costs ${cost} credits (3× ${modelType}). Login required.`;
@@ -478,7 +493,7 @@ export class OptionsComponent implements OnInit {
   }
 
   getHiresTooltip(): string {
-    const modelType = this.models_types[this.generationRequest.model] || 'SD 1.5';
+    const modelType = this.getModelType(this.generationRequest.model);
     const cost = this.hiresCreditCost;
     if (!this.authService.isLoggedIn()) {
       return `Generate + Upscale in one step. Costs ${cost} credits (4× ${modelType}). Login required.`;
