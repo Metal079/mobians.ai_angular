@@ -57,9 +57,6 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
-  private readonly modelIdAliases = new Map<string, string>([
-    ['anima-preview3', 'Anima-baseV1'],
-  ]);
   private readonly sdxlResolutionModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
@@ -93,13 +90,8 @@ export class OptionsComponent implements OnInit {
     return available[0] || this.defaultModelId;
   }
 
-  private resolveModelAlias(model: unknown): string {
-    const raw = (typeof model === 'string' ? model : '').trim();
-    return this.modelIdAliases.get(raw.toLowerCase()) || raw;
-  }
-
   private normalizeModelId(model: unknown): string {
-    const raw = this.resolveModelAlias(model);
+    const raw = (typeof model === 'string' ? model : '').trim();
     if (!raw) return this.getDefaultModelId();
 
     const available = this.getAvailableModelIds();
@@ -118,23 +110,23 @@ export class OptionsComponent implements OnInit {
   }
 
   private getDefaultCfgForModel(modelId: string): number {
-    const normalized = this.resolveModelAlias(modelId);
+    const normalized = modelId.trim();
     if (normalized === 'Anima-baseV1') return 4;
     return this.usesSdxlResolutionDefaults(normalized) ? 4 : 7;
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
-    const normalized = this.resolveModelAlias(modelId);
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
     return this.sdxlResolutionModelIds.has(normalized);
   }
 
   private supportsRegionalPrompting(modelId: unknown): boolean {
-    const normalized = this.resolveModelAlias(modelId);
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
     return this.regionalPromptingModelIds.has(normalized);
   }
 
   private getModelType(modelId: unknown): string {
-    const normalized = this.resolveModelAlias(modelId);
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
     return this.models_types[normalized] || 'SD 1.5';
   }
 

@@ -82,12 +82,6 @@ describe('OptionsComponent', () => {
     expect((component as any).supportsRegionalPrompting('Anima-baseV1')).toBeTrue();
   });
 
-  it('maps the legacy Anima-preview3 id to Anima-baseV1', () => {
-    expect((component as any).normalizeModelId('Anima-preview3')).toBe('Anima-baseV1');
-    expect((component as any).usesSdxlResolutionDefaults('Anima-preview3')).toBeTrue();
-    expect((component as any).supportsRegionalPrompting('Anima-preview3')).toBeTrue();
-  });
-
   it('calculates Anima-baseV1 credit costs with LoRAs', () => {
     component.generationRequest.model = 'Anima-baseV1';
     component.generationRequest.loras = [{}, {}];

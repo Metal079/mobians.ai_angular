@@ -19,9 +19,6 @@ type PanelTheme = 'sonic' | 'navy' | 'eggman';
     imports: [CommonModule, FormsModule, TooltipModule, HintComponent]
 })
 export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
-  private readonly modelIdAliases = new Map<string, string>([
-    ['anima-preview3', 'Anima-baseV1'],
-  ]);
   private readonly regionalPromptingModelIds = new Set<string>([
     'autismMix',
     'novaFurryXL_ilV140',
@@ -343,13 +340,8 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
     this.workspaceExpanded = !this.workspaceExpanded;
   }
 
-  private resolveModelAlias(modelId: unknown): string {
-    const raw = typeof modelId === 'string' ? modelId.trim() : '';
-    return this.modelIdAliases.get(raw.toLowerCase()) || raw;
-  }
-
   private isRegionalPromptingSupported(): boolean {
-    const currentModel = this.resolveModelAlias(this.generationRequest?.model);
+    const currentModel = String(this.generationRequest?.model ?? '').trim();
     return this.regionalPromptingModelIds.has(currentModel);
   }
 
