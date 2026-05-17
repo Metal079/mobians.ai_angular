@@ -21,10 +21,12 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
 import { AuthService } from 'src/app/auth/auth.service';
+import { DynamicPromptingConfig } from 'src/_shared/generation-request.interface';
 import { RegionalPromptRegion, RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
 import { ImageHistoryPanelComponent } from './image-history-panel/image-history-panel.component';
 import { GenerationOptionsPanelComponent } from './generation-options-panel/generation-options-panel.component';
 import { LorasPanelComponent } from './loras-panel/loras-panel.component';
+import { DynamicPromptApplyEvent, DynamicPromptHelperComponent } from './dynamic-prompt-helper/dynamic-prompt-helper.component';
 import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
@@ -32,6 +34,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { HintComponent } from 'src/app/hint/hint.component';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { AccountCtaService } from 'src/app/auth/account-cta.service';
+import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
 
 
 @Component({
@@ -50,7 +53,8 @@ import { AccountCtaService } from 'src/app/auth/account-cta.service';
       HintComponent,
       GenerationOptionsPanelComponent,
       ImageHistoryPanelComponent,
-      LorasPanelComponent
+      LorasPanelComponent,
+      DynamicPromptHelperComponent
     ]
 })
 export class OptionsComponent implements OnInit {
@@ -210,6 +214,9 @@ export class OptionsComponent implements OnInit {
       enabled: false,
       regions: [],
     },
+    dynamic_prompting: {
+      enabled: false,
+    },
   };
   jobID: string = "";
   // Add a simple flag to indicate a pending job
@@ -281,6 +288,8 @@ export class OptionsComponent implements OnInit {
   @Output() imageModalOpen = new EventEmitter<boolean>();
   @Output() etaChange = new EventEmitter<number | undefined>();
   private readonly destroyRef = inject(DestroyRef);
+  private dynamicPromptLibraryRefreshTimer?: ReturnType<typeof setTimeout>;
+  private readonly dynamicPromptLibraryRefreshDelayMs = 750;
 
   constructor(
     private stableDiffusionService: StableDiffusionService
@@ -293,6 +302,7 @@ export class OptionsComponent implements OnInit {
     , private authService: AuthService
     , public aprilFools: AprilFoolsService
     , private accountCtaService: AccountCtaService
+    , private dynamicPromptLibraryState: DynamicPromptLibraryStateService
   ) {
     this.blobMigrationService.progress$.subscribe(
       () => {
@@ -347,6 +357,11 @@ export class OptionsComponent implements OnInit {
     });
 
     await this.loadSettings();
+
+    this.dynamicPromptLibraryState.ensureLoaded().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => this.applyDynamicPromptState(this.generationRequest.prompt),
+      error: () => {},
+    });
 
     // If model names change between deployments, users may have an invalid saved model.
     // Coerce to a valid model so generation requests never send an empty/unknown model.
@@ -428,6 +443,9 @@ export class OptionsComponent implements OnInit {
     }
     if (this.referenceImageSubscription) {
       this.referenceImageSubscription.unsubscribe();
+    }
+    if (this.dynamicPromptLibraryRefreshTimer) {
+      clearTimeout(this.dynamicPromptLibraryRefreshTimer);
     }
 
     // Revoke all object URLs to prevent memory leaks
@@ -653,6 +671,51 @@ export class OptionsComponent implements OnInit {
     this.sharedService.setPrompt(this.generationRequest.prompt);
   }
 
+  onPromptInputChange(promptValue?: string) {
+    const prompt = String(promptValue ?? this.generationRequest.prompt ?? '');
+    this.generationRequest.prompt = prompt;
+    this.applyDynamicPromptState(prompt);
+    this.queueDynamicPromptLibraryRefreshIfNeeded(prompt);
+    this.updateSharedPrompt();
+    this.saveSettings();
+  }
+
+  private applyDynamicPromptState(prompt: string) {
+    if (this.hasDynamicPromptSyntax(prompt)) {
+      this.generationRequest.dynamic_prompting = {
+        ...this.normalizeDynamicPromptingConfig(this.generationRequest.dynamic_prompting),
+        enabled: true,
+        template: prompt,
+      };
+    } else if (this.generationRequest.dynamic_prompting?.enabled || this.generationRequest.dynamic_prompting?.template) {
+      this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig(prompt);
+    }
+  }
+
+  isDynamicPromptActive(): boolean {
+    return this.hasDynamicPromptSyntax(this.generationRequest.prompt);
+  }
+
+  getDynamicPromptHighlightHtml(): string {
+    return this.highlightDynamicPromptSyntax(String(this.generationRequest.prompt || ''));
+  }
+
+  onDynamicPromptApplied(event: DynamicPromptApplyEvent) {
+    this.generationRequest.prompt = event.prompt;
+    this.generationRequest.dynamic_prompting = this.normalizeDynamicPromptingConfig(event.dynamicPrompting);
+    this.updateSharedPrompt();
+    this.saveSettings();
+
+    this.messageService.add({
+      severity: event.source === 'template' ? 'info' : 'success',
+      summary: event.source === 'template' ? 'Dynamic prompt ready' : 'Prompt inserted',
+      detail: event.source === 'template'
+        ? 'This template will expand when you generate.'
+        : 'The selected preview is now in the prompt box.',
+      life: 3000,
+    });
+  }
+
   onDarkInputFieldsChange(enabled: boolean) {
     this.darkInputFields = !!enabled;
     this.applyInputStyleToBody(this.darkInputFields);
@@ -714,6 +777,12 @@ export class OptionsComponent implements OnInit {
 
     // Save notifications toggle
     localStorage.setItem("notifications-enabled", this.enableNotifications.toString());
+
+    if (this.generationRequest.dynamic_prompting?.enabled) {
+      localStorage.setItem("dynamic-prompting", JSON.stringify(this.generationRequest.dynamic_prompting));
+    } else {
+      localStorage.removeItem("dynamic-prompting");
+    }
 
     // Save hi-res toggle (only when logged in)
     if (this.hiresEnabled && this.authService.isLoggedIn()) {
@@ -779,6 +848,18 @@ export class OptionsComponent implements OnInit {
         this.enableNotification();
       }
     }
+    if (localStorage.getItem("dynamic-prompting") != null) {
+      try {
+        this.generationRequest.dynamic_prompting = this.normalizeDynamicPromptingConfig(
+          JSON.parse(localStorage.getItem("dynamic-prompting")!)
+        );
+      } catch {
+        this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig();
+        localStorage.removeItem("dynamic-prompting");
+      }
+    } else {
+      this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig();
+    }
     if (localStorage.getItem("hires-enabled") != null) {
       this.hiresEnabled = localStorage.getItem("hires-enabled") == 'true';
     }
@@ -808,6 +889,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem('notifications-enabled');
     localStorage.removeItem('notifications-user-id');
     localStorage.removeItem('hires-enabled');
+    localStorage.removeItem('dynamic-prompting');
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
@@ -821,6 +903,7 @@ export class OptionsComponent implements OnInit {
     // Default after reset: WebP images enabled
     this.generationRequest.lossy_images = true;
     this.generationRequest.regional_prompting = { enabled: false, regions: [] };
+    this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig();
     this.enableNotifications = false;
     this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
@@ -879,6 +962,155 @@ export class OptionsComponent implements OnInit {
       enabled: !!input.enabled && regions.length > 0,
       regions,
     };
+  }
+
+  private createDisabledDynamicPromptingConfig(template?: string): DynamicPromptingConfig {
+    return {
+      enabled: false,
+      template,
+    };
+  }
+
+  private normalizeDynamicPromptingConfig(input: unknown): DynamicPromptingConfig {
+    if (!input || typeof input !== 'object') {
+      return this.createDisabledDynamicPromptingConfig();
+    }
+
+    const config = input as Partial<DynamicPromptingConfig>;
+    const normalized: DynamicPromptingConfig = {
+      enabled: config.enabled === true,
+      template: typeof config.template === 'string' ? config.template : undefined,
+      expansion_seed: this.optionalInteger(config.expansion_seed),
+      selected_preview_index: this.clampInteger(config.selected_preview_index, 0, 11, 0),
+    };
+
+    if (config.mode === 'random' || config.mode === 'combinatorial') {
+      normalized.mode = config.mode;
+    }
+    if (typeof config.wildcard_set === 'string') {
+      normalized.wildcard_set = config.wildcard_set;
+    }
+    if (config.preview_count !== undefined) {
+      normalized.preview_count = this.clampInteger(config.preview_count, 1, 12, 4);
+    }
+    if (config.max_generations !== undefined) {
+      normalized.max_generations = this.clampInteger(config.max_generations, 1, 100, 32);
+    }
+
+    if (!normalized.enabled) {
+      normalized.template = config.template;
+    }
+    return normalized;
+  }
+
+  private getDynamicPromptingForRequest(): DynamicPromptingConfig {
+    const config = this.normalizeDynamicPromptingConfig(this.generationRequest.dynamic_prompting);
+    const prompt = String(this.generationRequest.prompt || '').trim();
+    if (!prompt || !this.hasDynamicPromptSyntax(prompt)) {
+      return { ...config, enabled: false, template: prompt || config.template };
+    }
+
+    return {
+      ...config,
+      enabled: true,
+      template: prompt,
+      expansion_seed: config.expansion_seed ?? this.generationRequest.seed,
+    };
+  }
+
+  private hasDynamicPromptSyntax(value: string | undefined): boolean {
+    const prompt = String(value || '');
+    return this.hasDynamicPromptVariantSyntax(prompt)
+      || this.dynamicPromptLibraryState.hasKnownWildcardToken(prompt);
+  }
+
+  private highlightDynamicPromptSyntax(value: string): string {
+    const dynamicSyntaxPattern = /(__([-\w/]+)__|\{[^{}]*\|[^{}]*\})/g;
+    let highlighted = '';
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = dynamicSyntaxPattern.exec(value)) !== null) {
+      highlighted += this.escapeHtml(value.slice(cursor, match.index));
+      if (this.shouldHighlightDynamicPromptMatch(match)) {
+        highlighted += `<span class="dynamic-prompt-token">${this.escapeHtml(match[0])}</span>`;
+      } else {
+        highlighted += this.escapeHtml(match[0]);
+      }
+      cursor = match.index + match[0].length;
+    }
+
+    highlighted += this.escapeHtml(value.slice(cursor));
+    return highlighted || '&nbsp;';
+  }
+
+  private hasDynamicPromptVariantSyntax(value: string): boolean {
+    return /\{[^{}]*\|[^{}]*\}/.test(value);
+  }
+
+  private shouldHighlightDynamicPromptMatch(match: RegExpExecArray): boolean {
+    const wildcardId = match[2];
+    return wildcardId
+      ? this.dynamicPromptLibraryState.isKnownWildcardId(wildcardId)
+      : true;
+  }
+
+  private queueDynamicPromptLibraryRefreshIfNeeded(prompt: string): void {
+    if (!this.dynamicPromptLibraryState.loaded()) return;
+    if (!this.dynamicPromptLibraryState.hasUnknownWildcardToken(prompt)) return;
+    if (this.dynamicPromptLibraryRefreshTimer) return;
+
+    this.dynamicPromptLibraryRefreshTimer = setTimeout(() => {
+      this.dynamicPromptLibraryRefreshTimer = undefined;
+      this.dynamicPromptLibraryState.refresh().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: () => this.applyDynamicPromptState(this.generationRequest.prompt),
+        error: () => {},
+      });
+    }, this.dynamicPromptLibraryRefreshDelayMs);
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private clampInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(minimum, Math.min(maximum, Math.round(numeric)));
+  }
+
+  private optionalInteger(value: unknown): number | undefined {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return undefined;
+    return Math.round(numeric);
+  }
+
+  private shortenText(value: string, maxLength: number): string {
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+  }
+
+  private getHistoryPromptSnapshot(): string {
+    const pending = this.getPendingJob();
+    if (typeof pending?.request?.prompt === 'string' && pending.request.prompt.trim()) {
+      return pending.request.prompt;
+    }
+    return String(this.generationRequest.prompt || '');
+  }
+
+  private getHistoryPromptTemplateSnapshot(): string | undefined {
+    const pending = this.getPendingJob();
+    const template = pending?.request?.promptTemplate;
+    return typeof template === 'string' && template.trim() ? template : undefined;
+  }
+
+  private getPromptSummary(prompt: string): string {
+    return prompt.length > 50 ? `${prompt.slice(0, 50)}...` : prompt;
   }
 
   private getHistoryLorasSnapshot(): any[] {
@@ -965,6 +1197,8 @@ export class OptionsComponent implements OnInit {
     }
     this.currentSeed = this.generationRequest.seed;
 
+    const dynamicPromptingForRequest = this.getDynamicPromptingForRequest();
+
     // set reference image if there is one
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
       // Convert blob to base64 if blob exists
@@ -1006,6 +1240,7 @@ export class OptionsComponent implements OnInit {
       job_type: jobTypeForRequest,
       queue_type: queueTypeForRequest,
       regional_prompting: this.sanitizeRegionalPrompting(this.generationRequest.regional_prompting, this.generationRequest.model),
+      dynamic_prompting: dynamicPromptingForRequest,
     };
 
     this.sharedService.setGenerationRequest(this.generationRequest);
@@ -1033,7 +1268,8 @@ export class OptionsComponent implements OnInit {
 
           // Persist pending job so we can resume after refresh
           this.savePendingJob(response.job_id, {
-            prompt: requestToSend.prompt,
+            prompt: response.expanded_prompt || requestToSend.prompt,
+            promptTemplate: response.prompt_template,
             width: requestToSend.width,
             height: requestToSend.height,
             job_type: requestToSend.job_type,
@@ -1042,6 +1278,7 @@ export class OptionsComponent implements OnInit {
             queue_type: requestToSend.queue_type,
             loras: this.snapshotLoras(requestToSend.loras),
             regional_prompting: this.sanitizeRegionalPrompting(requestToSend.regional_prompting, requestToSend.model),
+            dynamic_prompting: requestToSend.dynamic_prompting,
           });
 
           this.getJob(response.job_id);
@@ -1350,6 +1587,9 @@ export class OptionsComponent implements OnInit {
     // Build MobiansImage array from downloaded blobs
     const historyLoras = this.getHistoryLorasSnapshot();
     const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
+    const historyPrompt = this.getHistoryPromptSnapshot();
+    const historyPromptTemplate = this.getHistoryPromptTemplateSnapshot();
+    const historyPromptSummary = this.getPromptSummary(historyPrompt);
 
     const generatedImages: MobiansImage[] = [];
     for (let i = 0; i < blobs.length; i++) {
@@ -1364,10 +1604,11 @@ export class OptionsComponent implements OnInit {
         UUID: uuidv4(),
         rated: false,
         timestamp: new Date(),
-        prompt: this.generationRequest.prompt,
+        prompt: historyPrompt,
+        promptTemplate: historyPromptTemplate,
         loras: historyLoras,
         regional_prompting: historyRegionalPrompting,
-        promptSummary: this.generationRequest.prompt.slice(0, 50) + '...',
+        promptSummary: historyPromptSummary,
         url: blobUrl,
         model: this.generationRequest.model,
         seed: this.currentSeed,
@@ -1440,14 +1681,17 @@ export class OptionsComponent implements OnInit {
 
         const historyLoras = this.getHistoryLorasSnapshot();
         const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
+        const historyPrompt = response.prompt || this.getHistoryPromptSnapshot();
+        const historyPromptTemplate = response.prompt_template || this.getHistoryPromptTemplateSnapshot();
+        const historyPromptSummary = this.getPromptSummary(historyPrompt);
         const generatedImages = response.result.map((base64String: string) => {
           const blob = this.blobMigrationService.base64ToBlob(base64String);
           const blobUrl = URL.createObjectURL(blob);
           return {
             blob, width: this.generationRequest.width, height: this.generationRequest.height,
             aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv4(), rated: false, timestamp: new Date(),
-            prompt: this.generationRequest.prompt, loras: historyLoras, regional_prompting: historyRegionalPrompting,
-            promptSummary: this.generationRequest.prompt.slice(0, 50) + '...', url: blobUrl,
+            prompt: historyPrompt, promptTemplate: historyPromptTemplate, loras: historyLoras, regional_prompting: historyRegionalPrompting,
+            promptSummary: historyPromptSummary, url: blobUrl,
             model: this.generationRequest.model, seed: this.currentSeed,
             negativePrompt: this.generationRequest.negative_prompt, cfg: this.generationRequest.guidance_scale,
             tags: [], syncPriority: 0, lastModified: new Date()

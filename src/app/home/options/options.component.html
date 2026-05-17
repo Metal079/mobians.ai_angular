@@ -10,7 +10,7 @@
       [class.btn-secondary]="queueType === 'free'"
       [class.active]="queueType === 'free'"
       (click)="onQueueTypeChange('free')">
-      <i class="pi pi-clock me-1"></i>
+      <i class="pi me-1"></i>
       Free Queue
     </button>
     <button
@@ -20,7 +20,7 @@
       [class.btn-warning]="queueType === 'priority'"
       [class.active]="queueType === 'priority'"
       (click)="onQueueTypeChange('priority')">
-      <i class="pi pi-bolt me-1"></i>
+      <i class="pi me-1"></i>
       Priority
       <span class="badge bg-dark ms-1">{{hiresEligible ? hiresCreditCost : creditCost}} ⚡</span>
     </button>
@@ -50,10 +50,23 @@
 
 <!-- Prompt input box and advanced options button -->
 <div class="input-button-container d-flex flex-wrap align-items-center justify-content-start">
-  <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1">
-    <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
-      (ngModelChange)="updateSharedPrompt(); saveSettings()" class="form-control resizable-textarea" placeholder="Enter Prompt"
-    aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3"></textarea>
+  <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1" [class.dynamic-prompt-input-active]="isDynamicPromptActive()">
+    <div class="prompt-textarea-shell" [class.dynamic-prompt-shell-active]="isDynamicPromptActive()">
+      @if (isDynamicPromptActive()) {
+        <div class="dynamic-prompt-highlight-layer" aria-hidden="true" [innerHTML]="getDynamicPromptHighlightHtml()"></div>
+      }
+
+      <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
+        (ngModelChange)="onPromptInputChange($event)" class="form-control resizable-textarea" [class.dynamic-prompt-textarea-active]="isDynamicPromptActive()" placeholder="Enter Prompt"
+      aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+
+      @if (isDynamicPromptActive()) {
+        <span class="dynamic-prompt-state" aria-live="polite">
+          <i class="pi pi-sparkles" aria-hidden="true"></i>
+          Dynamic
+        </span>
+      }
+    </div>
 
     @if (!hasPendingJob) {
       <button
@@ -68,7 +81,6 @@
         {{ cancelInProgress ? 'Cancelling...' : (aprilFools.isAprilFools() ? aprilFools.getCancelButtonText() : 'Cancel') }}
       </button>
     }
-
   </div>
 
   <!-- buttons that show with reference images expanded -->
@@ -115,6 +127,12 @@
 
   <!-- Buttons for Loras, Options, and Image History -->
   <div class="button-group d-flex align-items-center mt-2 mt-md-0">
+    <app-dynamic-prompt-helper
+      class="prompt-helper-inline"
+      [currentPrompt]="generationRequest.prompt"
+      [active]="isDynamicPromptActive()"
+      (promptApplied)="onDynamicPromptApplied($event)">
+    </app-dynamic-prompt-helper>
     <button class="btn btn-primary dropdown-toggle ms-2" data-bs-toggle="collapse" href="#collapseExample" role="button"
       aria-expanded="false" aria-controls="collapseExample" (click)="toggleOptions()">
       Options

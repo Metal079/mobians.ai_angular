@@ -28,6 +28,7 @@
             ],
             "styles": [
               "src/styles.css",
+              "primeicons/primeicons.css",
               "primeflex/primeflex.css",
               "bootstrap-icons/font/bootstrap-icons.css"
             ],
@@ -149,6 +150,7 @@
             ],
             "styles": [
               "src/styles.css",
+              "primeicons/primeicons.css",
               "primeflex/primeflex.css",
               "bootstrap-icons/font/bootstrap-icons.css"
             ],

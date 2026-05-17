@@ -91,15 +91,231 @@ export interface LoraSuggestionStatuses {
 
 export interface SubmitJobResponse {
   job_id: string;
+  prompt_template?: string;
+  expanded_prompt?: string;
   credits_used?: number;
   credits_remaining?: number;
 }
+
+export type DynamicPromptMode = 'random' | 'combinatorial';
+
+export interface DynamicPromptCategory {
+  id: string;
+  label: string;
+  token: string;
+  description: string;
+  examples: string[];
+}
+
+export interface DynamicPromptStarterTemplate {
+  id: string;
+  name: string;
+  description: string;
+  template: string;
+}
+
+export interface DynamicPromptSyntaxExample {
+  label: string;
+  template: string;
+}
+
+export interface DynamicPromptLibraryResponse {
+  wildcard_set: string;
+  categories: DynamicPromptCategory[];
+  starter_templates: DynamicPromptStarterTemplate[];
+  syntax_examples: DynamicPromptSyntaxExample[];
+  defaults: {
+    mode?: DynamicPromptMode;
+    preview_count: number;
+    max_generations?: number;
+  };
+}
+
+export interface DynamicPromptPreviewRequest {
+  template: string;
+  mode?: DynamicPromptMode;
+  seed?: number;
+  preview_count?: number;
+  max_generations?: number;
+}
+
+export interface DynamicPromptPreviewResponse {
+  template: string;
+  previews: string[];
+  seed: number;
+  mode: DynamicPromptMode;
+  wildcard_set: string;
+}
+
+export interface DynamicPromptAdminItem {
+  value: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface DynamicPromptAdminCategory extends DynamicPromptCategory {
+  items: DynamicPromptAdminItem[];
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface DynamicPromptAdminStarterTemplate extends DynamicPromptStarterTemplate {
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface DynamicPromptAdminLibraryResponse {
+  wildcard_set: string;
+  categories: DynamicPromptAdminCategory[];
+  starter_templates: DynamicPromptAdminStarterTemplate[];
+}
+
+export interface DynamicPromptAdminLibraryUpdate {
+  categories: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    token?: string;
+    display_order?: number;
+    is_active?: boolean;
+    entries: string[];
+  }>;
+  starter_templates: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    template: string;
+    display_order?: number;
+    is_active?: boolean;
+  }>;
+}
+
+export type DynamicPromptTemplateStatus = 'private' | 'pending' | 'approved' | 'rejected' | 'hidden';
+export type DynamicPromptTemplateSort = 'new' | 'top' | 'popular';
+
+export interface DynamicPromptCommunityTemplate {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  template: string;
+  tags: string[];
+  status: DynamicPromptTemplateStatus;
+  rejection_reason?: string | null;
+  source_template_id?: string | null;
+  source_snapshot_updated_at?: string | null;
+  upvote_count: number;
+  import_count: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  hidden_at?: string | null;
+  author_display_name: string;
+  has_upvoted: boolean;
+  has_imported: boolean;
+  owned_template_id?: string | null;
+  preview_samples?: string[];
+  preview_error?: string;
+}
+
+export interface DynamicPromptCommunityTemplatePayload {
+  title: string;
+  description?: string;
+  template: string;
+  tags?: string[];
+}
+
+export interface DynamicPromptCommunityTemplateUpdate {
+  title?: string;
+  description?: string;
+  template?: string;
+  tags?: string[];
+}
+
+export interface DynamicPromptTemplateListResponse {
+  templates: DynamicPromptCommunityTemplate[];
+  page?: number;
+  page_size?: number;
+  sort?: DynamicPromptTemplateSort;
+  status?: DynamicPromptTemplateStatus | 'all';
+}
+
+export interface DynamicPromptTemplateResponse {
+  template: DynamicPromptCommunityTemplate;
+  preview_samples?: string[];
+}
+
+export interface DynamicPromptTemplateListFilters {
+  search?: string;
+  tags?: string[];
+  sort?: DynamicPromptTemplateSort;
+  page?: number;
+  page_size?: number;
+}
+
+export type DynamicPromptCustomCategoryStatus = 'private' | 'public' | 'hidden';
+export type DynamicPromptCustomCategorySort = 'new' | 'top' | 'popular';
+
+export interface DynamicPromptCustomCategory {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  token: string;
+  tags: string[];
+  status: DynamicPromptCustomCategoryStatus;
+  source_category_id?: string | null;
+  source_snapshot_updated_at?: string | null;
+  upvote_count: number;
+  import_count: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+  author_display_name: string;
+  has_upvoted: boolean;
+  has_imported: boolean;
+  owned_category_id?: string | null;
+  entries: string[];
+  examples: string[];
+  item_count: number;
+}
+
+export interface DynamicPromptCustomCategoryPayload {
+  title: string;
+  description?: string;
+  entries: string[];
+  tags?: string[];
+}
+
+export interface DynamicPromptCustomCategoryListResponse {
+  categories: DynamicPromptCustomCategory[];
+  page?: number;
+  page_size?: number;
+  sort?: DynamicPromptCustomCategorySort;
+  status?: DynamicPromptCustomCategoryStatus | 'all';
+}
+
+export interface DynamicPromptCustomCategoryResponse {
+  category: DynamicPromptCustomCategory;
+}
+
+export interface DynamicPromptCustomCategoryListFilters {
+  search?: string;
+  tags?: string[];
+  sort?: DynamicPromptCustomCategorySort;
+  page?: number;
+  page_size?: number;
+}
+
+export type AdminDynamicPromptCategoryStatus = 'public' | 'hidden' | 'all';
 
 export interface JobStatusResponse {
   status?: 'pending' | 'completed' | 'failed' | 'error' | 'cancelled';
   queue_position?: number;
   eta?: number;
   result?: string[];
+  prompt?: string;
+  prompt_template?: string;
   message?: string;
   refund?: {
     credits_refunded: number;
@@ -221,6 +437,139 @@ export class StableDiffusionService {
     return this.http.get<RegionalPromptPreset[]>(url);
   }
 
+  getDynamicPromptLibrary(): Observable<DynamicPromptLibraryResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/library`;
+    return this.http.get<DynamicPromptLibraryResponse>(url);
+  }
+
+  previewDynamicPrompt(data: DynamicPromptPreviewRequest): Observable<DynamicPromptPreviewResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/preview`;
+    return this.http.post<DynamicPromptPreviewResponse>(url, data);
+  }
+
+  getUserDynamicPromptTemplates(status: DynamicPromptTemplateStatus | 'all' = 'all'): Observable<DynamicPromptTemplateListResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates?status=${encodeURIComponent(status)}`;
+    return this.http.get<DynamicPromptTemplateListResponse>(url);
+  }
+
+  createUserDynamicPromptTemplate(data: DynamicPromptCommunityTemplatePayload): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, data);
+  }
+
+  updateUserDynamicPromptTemplate(templateId: string, data: DynamicPromptCommunityTemplateUpdate): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates/${encodeURIComponent(templateId)}`;
+    return this.http.put<DynamicPromptTemplateResponse>(url, data);
+  }
+
+  deleteUserDynamicPromptTemplate(templateId: string): Observable<{ success: boolean }> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates/${encodeURIComponent(templateId)}`;
+    return this.http.delete<{ success: boolean }>(url);
+  }
+
+  shareUserDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates/${encodeURIComponent(templateId)}/share`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  unshareUserDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/templates/${encodeURIComponent(templateId)}/unshare`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  listDynamicPromptTemplates(filters: DynamicPromptTemplateListFilters = {}): Observable<DynamicPromptTemplateListResponse> {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.sort) params.set('sort', filters.sort);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.page_size) params.set('page_size', String(filters.page_size));
+    for (const tag of filters.tags || []) {
+      params.append('tags', tag);
+    }
+    const query = params.toString();
+    const url = `${this.apiBaseUrl}/dynamic-prompts/templates${query ? `?${query}` : ''}`;
+    return this.http.get<DynamicPromptTemplateListResponse>(url);
+  }
+
+  getDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/templates/${encodeURIComponent(templateId)}`;
+    return this.http.get<DynamicPromptTemplateResponse>(url);
+  }
+
+  upvoteDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/templates/${encodeURIComponent(templateId)}/upvote`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  removeDynamicPromptTemplateUpvote(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/templates/${encodeURIComponent(templateId)}/upvote`;
+    return this.http.delete<DynamicPromptTemplateResponse>(url);
+  }
+
+  importDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/templates/${encodeURIComponent(templateId)}/import`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  getUserDynamicPromptCategories(status: DynamicPromptCustomCategoryStatus | 'all' = 'all'): Observable<DynamicPromptCustomCategoryListResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories?status=${encodeURIComponent(status)}`;
+    return this.http.get<DynamicPromptCustomCategoryListResponse>(url);
+  }
+
+  createUserDynamicPromptCategory(data: DynamicPromptCustomCategoryPayload): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, data);
+  }
+
+  updateUserDynamicPromptCategory(categoryId: string, data: DynamicPromptCustomCategoryPayload): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories/${encodeURIComponent(categoryId)}`;
+    return this.http.put<DynamicPromptCustomCategoryResponse>(url, data);
+  }
+
+  deleteUserDynamicPromptCategory(categoryId: string): Observable<{ success: boolean }> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories/${encodeURIComponent(categoryId)}`;
+    return this.http.delete<{ success: boolean }>(url);
+  }
+
+  shareUserDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/share`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
+  }
+
+  unshareUserDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/user/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/unshare`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
+  }
+
+  listDynamicPromptCategories(filters: DynamicPromptCustomCategoryListFilters = {}): Observable<DynamicPromptCustomCategoryListResponse> {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.sort) params.set('sort', filters.sort);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.page_size) params.set('page_size', String(filters.page_size));
+    for (const tag of filters.tags || []) {
+      params.append('tags', tag);
+    }
+    const query = params.toString();
+    const url = `${this.apiBaseUrl}/dynamic-prompts/categories${query ? `?${query}` : ''}`;
+    return this.http.get<DynamicPromptCustomCategoryListResponse>(url);
+  }
+
+  upvoteDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/upvote`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
+  }
+
+  removeDynamicPromptCategoryUpvote(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/upvote`;
+    return this.http.delete<DynamicPromptCustomCategoryResponse>(url);
+  }
+
+  importDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/import`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
+  }
+
   syncRegionalPromptPresets(data: { presets: RegionalPromptPreset[] }): Observable<{ success: boolean; synced_count: number }> {
     const url = `${this.apiBaseUrl}/regional-presets`;
     return this.http.post<{ success: boolean; synced_count: number }>(url, data);
@@ -278,6 +627,56 @@ export class StableDiffusionService {
   getDownloadHistory(limit: number = 20): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/download-history?limit=${limit}`;
     return this.http.get(url);
+  }
+
+  getAdminDynamicPromptLibrary(): Observable<DynamicPromptAdminLibraryResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/library`;
+    return this.http.get<DynamicPromptAdminLibraryResponse>(url);
+  }
+
+  updateAdminDynamicPromptLibrary(data: DynamicPromptAdminLibraryUpdate): Observable<DynamicPromptAdminLibraryResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/library`;
+    return this.http.put<DynamicPromptAdminLibraryResponse>(url, data);
+  }
+
+  getAdminDynamicPromptTemplates(status: DynamicPromptTemplateStatus | 'all' = 'approved'): Observable<DynamicPromptTemplateListResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/templates?status=${encodeURIComponent(status)}`;
+    return this.http.get<DynamicPromptTemplateListResponse>(url);
+  }
+
+  approveAdminDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/templates/${encodeURIComponent(templateId)}/approve`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  rejectAdminDynamicPromptTemplate(templateId: string, reason: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/templates/${encodeURIComponent(templateId)}/reject`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, { reason });
+  }
+
+  hideAdminDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/templates/${encodeURIComponent(templateId)}/hide`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  restoreAdminDynamicPromptTemplate(templateId: string): Observable<DynamicPromptTemplateResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/templates/${encodeURIComponent(templateId)}/restore`;
+    return this.http.post<DynamicPromptTemplateResponse>(url, {});
+  }
+
+  getAdminDynamicPromptCategories(status: AdminDynamicPromptCategoryStatus = 'public'): Observable<DynamicPromptCustomCategoryListResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/categories?status=${encodeURIComponent(status)}`;
+    return this.http.get<DynamicPromptCustomCategoryListResponse>(url);
+  }
+
+  hideAdminDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/hide`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
+  }
+
+  restoreAdminDynamicPromptCategory(categoryId: string): Observable<DynamicPromptCustomCategoryResponse> {
+    const url = `${this.apiBaseUrl}/admin/dynamic-prompts/categories/${encodeURIComponent(categoryId)}/restore`;
+    return this.http.post<DynamicPromptCustomCategoryResponse>(url, {});
   }
   //#endregion
 

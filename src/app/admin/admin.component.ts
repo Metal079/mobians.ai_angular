@@ -2,7 +2,15 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angula
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { StableDiffusionService } from '../stable-diffusion.service';
+import {
+  AdminDynamicPromptCategoryStatus,
+  DynamicPromptAdminCategory,
+  DynamicPromptAdminLibraryResponse,
+  DynamicPromptCommunityTemplate,
+  DynamicPromptCustomCategory,
+  DynamicPromptTemplateStatus,
+  StableDiffusionService,
+} from '../stable-diffusion.service';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
@@ -45,6 +53,8 @@ interface DownloadHistoryItem {
   version_id: number;
   downloaded_at: string;
 }
+
+type CommunityModerationContentType = 'templates' | 'categories';
 
 @Component({
     selector: 'app-admin',
@@ -116,6 +126,39 @@ export class AdminComponent implements OnInit, OnDestroy {
   downloaderStatus: DownloaderStatus | null = null;
   downloadHistory: DownloadHistoryItem[] = [];
   loadingDownloaderStatus = false;
+  dynamicPromptLibrary: DynamicPromptAdminLibraryResponse | null = null;
+  selectedDynamicCategoryId = '';
+  dynamicCategoryEntriesText: Record<string, string> = {};
+  loadingDynamicPromptLibrary = false;
+  savingDynamicPromptLibrary = false;
+  communityModerationContentType: CommunityModerationContentType = 'templates';
+  communityModerationContentTypeOptions = [
+    { label: 'Templates', value: 'templates' },
+    { label: 'Categories', value: 'categories' },
+  ];
+  communityPromptTemplates: DynamicPromptCommunityTemplate[] = [];
+  communityPromptStatus: DynamicPromptTemplateStatus | 'all' = 'approved';
+  communityPromptStatusOptions = [
+    { label: 'Shared', value: 'approved' },
+    { label: 'Pending', value: 'pending' },
+    { label: 'Hidden', value: 'hidden' },
+    { label: 'Rejected', value: 'rejected' },
+    { label: 'All', value: 'all' },
+  ];
+  communityCategories: DynamicPromptCustomCategory[] = [];
+  communityCategoryStatus: AdminDynamicPromptCategoryStatus = 'public';
+  communityCategoryStatusOptions = [
+    { label: 'Shared', value: 'public' },
+    { label: 'Hidden', value: 'hidden' },
+    { label: 'All', value: 'all' },
+  ];
+  loadingCommunityPrompts = false;
+  loadingCommunityCategories = false;
+  processingCommunityPrompt: Record<string, boolean> = {};
+  processingCommunityCategory: Record<string, boolean> = {};
+  rejectPromptDialogVisible = false;
+  rejectPromptReason = '';
+  rejectPromptTarget: DynamicPromptCommunityTemplate | null = null;
   private statusPollingSubscription: Subscription | null = null;
   private initialRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -144,6 +187,7 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.reloadAll();
     this.loadDownloaderStatus();
     this.loadDownloadHistory();
+    this.loadDynamicPromptLibrary();
     this.scheduleInitialLoadRecovery();
     // Poll downloader status every 10 seconds
     this.statusPollingSubscription = interval(10000).subscribe(() => {
@@ -948,6 +992,538 @@ export class AdminComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadDynamicPromptLibrary(): void {
+    this.loadingDynamicPromptLibrary = true;
+    this.sdService.getAdminDynamicPromptLibrary().subscribe({
+      next: (library) => {
+        this.runInView(() => {
+          this.dynamicPromptLibrary = library;
+          this.dynamicCategoryEntriesText = {};
+          for (const category of library.categories || []) {
+            this.dynamicCategoryEntriesText[category.id] = (category.items || [])
+              .filter((item) => item.is_active)
+              .map((item) => item.value)
+              .join('\n');
+          }
+          if (!this.selectedDynamicCategoryId && library.categories?.length) {
+            this.selectedDynamicCategoryId = library.categories[0].id;
+          }
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          console.error('Failed to load dynamic prompt library', err);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Prompt Library Error',
+            detail: 'Could not load dynamic prompt library.',
+            life: 4000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.loadingDynamicPromptLibrary = false;
+      });
+    });
+  }
+
+  selectDynamicCategory(categoryId: string): void {
+    this.selectedDynamicCategoryId = categoryId;
+  }
+
+  get selectedDynamicCategory(): DynamicPromptAdminCategory | undefined {
+    return this.dynamicPromptLibrary?.categories.find((category) => category.id === this.selectedDynamicCategoryId);
+  }
+
+  getDynamicCategoryEntries(category: DynamicPromptAdminCategory | undefined): string {
+    return category ? this.dynamicCategoryEntriesText[category.id] || '' : '';
+  }
+
+  setDynamicCategoryEntries(category: DynamicPromptAdminCategory | undefined, value: string): void {
+    if (!category) return;
+    this.dynamicCategoryEntriesText[category.id] = value;
+  }
+
+  saveDynamicPromptLibrary(): void {
+    const library = this.dynamicPromptLibrary;
+    if (!library) return;
+
+    this.savingDynamicPromptLibrary = true;
+    this.sdService.updateAdminDynamicPromptLibrary({
+      categories: library.categories.map((category) => ({
+        id: category.id,
+        label: category.label,
+        description: category.description,
+        token: category.token,
+        display_order: category.display_order,
+        is_active: category.is_active,
+        entries: this.getDynamicCategoryEntries(category)
+          .split(/\r?\n/)
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      })),
+      starter_templates: library.starter_templates.map((starter) => ({
+        id: starter.id,
+        name: starter.name,
+        description: starter.description,
+        template: starter.template,
+        display_order: starter.display_order,
+        is_active: starter.is_active,
+      })),
+    }).subscribe({
+      next: (updatedLibrary) => {
+        this.runInView(() => {
+          this.dynamicPromptLibrary = updatedLibrary;
+          this.dynamicCategoryEntriesText = {};
+          for (const category of updatedLibrary.categories || []) {
+            this.dynamicCategoryEntriesText[category.id] = (category.items || [])
+              .filter((item) => item.is_active)
+              .map((item) => item.value)
+              .join('\n');
+          }
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Prompt Library Saved',
+            detail: 'Dynamic prompt options are updated.',
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          console.error('Failed to save dynamic prompt library', err);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Save Failed',
+            detail: 'Could not save dynamic prompt library.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.savingDynamicPromptLibrary = false;
+      });
+    });
+  }
+
+  loadCommunityPromptTemplates(): void {
+    this.loadingCommunityPrompts = true;
+    this.sdService.getAdminDynamicPromptTemplates(this.communityPromptStatus).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.communityPromptTemplates = response.templates || [];
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          console.error('Failed to load community prompt templates', err);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Community Templates Error',
+            detail: err?.error?.detail || 'Could not load shared templates.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.loadingCommunityPrompts = false;
+      });
+    });
+  }
+
+  onCommunityPromptStatusChange(status: DynamicPromptTemplateStatus | 'all'): void {
+    this.communityPromptStatus = status;
+    this.loadCommunityPromptTemplates();
+  }
+
+  loadCommunityCategories(): void {
+    this.loadingCommunityCategories = true;
+    this.sdService.getAdminDynamicPromptCategories(this.communityCategoryStatus).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.communityCategories = response.categories || [];
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          console.error('Failed to load community categories', err);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Community Categories Error',
+            detail: err?.error?.detail || 'Could not load shared categories.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.loadingCommunityCategories = false;
+      });
+    });
+  }
+
+  onCommunityCategoryStatusChange(status: AdminDynamicPromptCategoryStatus): void {
+    this.communityCategoryStatus = status;
+    this.loadCommunityCategories();
+  }
+
+  onCommunityModerationContentTypeChange(contentType: CommunityModerationContentType): void {
+    this.communityModerationContentType = contentType;
+    if (this.adminTab === 4) {
+      this.loadActiveCommunityModerationContent();
+    }
+  }
+
+  isCommunityPromptProcessing(template: DynamicPromptCommunityTemplate): boolean {
+    return !!this.processingCommunityPrompt[template.id];
+  }
+
+  isCommunityCategoryProcessing(category: DynamicPromptCustomCategory): boolean {
+    return !!this.processingCommunityCategory[category.id];
+  }
+
+  approveCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.confirmationService.confirm({
+      message: `Approve "${template.title}" for the public prompt gallery?`,
+      header: 'Approve Prompt Template',
+      icon: 'bi bi-check-circle',
+      accept: () => this.doApproveCommunityPrompt(template),
+    });
+  }
+
+  private doApproveCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.processingCommunityPrompt[template.id] = true;
+    this.sdService.approveAdminDynamicPromptTemplate(template.id).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityPromptReviewUpdate(response.template);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Prompt Approved',
+            detail: `${response.template.title} is now public.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Approval Failed',
+            detail: err?.error?.detail || 'Could not approve prompt template.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityPrompt[template.id] = false;
+      });
+    });
+  }
+
+  openRejectCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.rejectPromptTarget = template;
+    this.rejectPromptReason = '';
+    this.rejectPromptDialogVisible = true;
+  }
+
+  closeRejectCommunityPrompt(): void {
+    this.rejectPromptDialogVisible = false;
+    this.rejectPromptTarget = null;
+    this.rejectPromptReason = '';
+  }
+
+  confirmRejectCommunityPrompt(): void {
+    const template = this.rejectPromptTarget;
+    const reason = this.rejectPromptReason.trim();
+    if (!template) return;
+    if (reason.length < 3) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Reason Required',
+        detail: 'Add a short rejection reason before sending.',
+        life: 3000,
+      });
+      return;
+    }
+
+    this.processingCommunityPrompt[template.id] = true;
+    this.sdService.rejectAdminDynamicPromptTemplate(template.id, reason).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityPromptReviewUpdate(response.template);
+          this.closeRejectCommunityPrompt();
+          this.messageService.add({
+            severity: 'info',
+            summary: 'Prompt Rejected',
+            detail: `${response.template.title} was sent back to the creator.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Rejection Failed',
+            detail: err?.error?.detail || 'Could not reject prompt template.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityPrompt[template.id] = false;
+      });
+    });
+  }
+
+  restoreCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.confirmationService.confirm({
+      message: `Restore "${template.title}" to its previous moderation state?`,
+      header: 'Restore Prompt Template',
+      icon: 'bi bi-arrow-counterclockwise',
+      accept: () => this.doRestoreCommunityPrompt(template),
+    });
+  }
+
+  private doRestoreCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.processingCommunityPrompt[template.id] = true;
+    this.sdService.restoreAdminDynamicPromptTemplate(template.id).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityPromptReviewUpdate(response.template);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Prompt Restored',
+            detail: `${response.template.title} is visible again.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Restore Failed',
+            detail: err?.error?.detail || 'Could not restore prompt template.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityPrompt[template.id] = false;
+      });
+    });
+  }
+
+  hideCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.confirmationService.confirm({
+      message: `Hide "${template.title}" from users?`,
+      header: 'Hide Prompt Template',
+      icon: 'bi bi-eye-slash',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => this.doHideCommunityPrompt(template),
+    });
+  }
+
+  private doHideCommunityPrompt(template: DynamicPromptCommunityTemplate): void {
+    this.processingCommunityPrompt[template.id] = true;
+    this.sdService.hideAdminDynamicPromptTemplate(template.id).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityPromptReviewUpdate(response.template);
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Prompt Hidden',
+            detail: `${response.template.title} is hidden from community discovery.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Hide Failed',
+            detail: err?.error?.detail || 'Could not hide prompt template.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityPrompt[template.id] = false;
+      });
+    });
+  }
+
+  private applyCommunityPromptReviewUpdate(template: DynamicPromptCommunityTemplate): void {
+    if (this.communityPromptStatus !== 'all' && template.status !== this.communityPromptStatus) {
+      this.communityPromptTemplates = this.communityPromptTemplates.filter((item) => item.id !== template.id);
+      return;
+    }
+    const existingIndex = this.communityPromptTemplates.findIndex((item) => item.id === template.id);
+    if (existingIndex >= 0) {
+      this.communityPromptTemplates = this.communityPromptTemplates.map((item) => item.id === template.id ? template : item);
+      return;
+    }
+    this.communityPromptTemplates = [template, ...this.communityPromptTemplates];
+  }
+
+  hideCommunityCategory(category: DynamicPromptCustomCategory): void {
+    this.confirmationService.confirm({
+      message: `Hide "${category.title}" from users?`,
+      header: 'Hide Category',
+      icon: 'bi bi-eye-slash',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => this.doHideCommunityCategory(category),
+    });
+  }
+
+  private doHideCommunityCategory(category: DynamicPromptCustomCategory): void {
+    this.processingCommunityCategory[category.id] = true;
+    this.sdService.hideAdminDynamicPromptCategory(category.id).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityCategoryReviewUpdate(response.category);
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Category Hidden',
+            detail: `${response.category.title} is hidden from community discovery.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Hide Failed',
+            detail: err?.error?.detail || 'Could not hide category.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityCategory[category.id] = false;
+      });
+    });
+  }
+
+  restoreCommunityCategory(category: DynamicPromptCustomCategory): void {
+    this.confirmationService.confirm({
+      message: `Restore "${category.title}" to the community list?`,
+      header: 'Restore Category',
+      icon: 'bi bi-arrow-counterclockwise',
+      accept: () => this.doRestoreCommunityCategory(category),
+    });
+  }
+
+  private doRestoreCommunityCategory(category: DynamicPromptCustomCategory): void {
+    this.processingCommunityCategory[category.id] = true;
+    this.sdService.restoreAdminDynamicPromptCategory(category.id).subscribe({
+      next: (response) => {
+        this.runInView(() => {
+          this.applyCommunityCategoryReviewUpdate(response.category);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Category Restored',
+            detail: `${response.category.title} is visible again.`,
+            life: 3000,
+          });
+        });
+      },
+      error: (err) => {
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Restore Failed',
+            detail: err?.error?.detail || 'Could not restore category.',
+            life: 5000,
+          });
+        });
+      },
+    }).add(() => {
+      this.runInView(() => {
+        this.processingCommunityCategory[category.id] = false;
+      });
+    });
+  }
+
+  private applyCommunityCategoryReviewUpdate(category: DynamicPromptCustomCategory): void {
+    if (this.communityCategoryStatus !== 'all' && category.status !== this.communityCategoryStatus) {
+      this.communityCategories = this.communityCategories.filter((item) => item.id !== category.id);
+      return;
+    }
+    const existingIndex = this.communityCategories.findIndex((item) => item.id === category.id);
+    if (existingIndex >= 0) {
+      this.communityCategories = this.communityCategories.map((item) => item.id === category.id ? category : item);
+      return;
+    }
+    this.communityCategories = [category, ...this.communityCategories];
+  }
+
+  get communityModerationCount(): number {
+    return this.communityModerationContentType === 'templates'
+      ? this.communityPromptTemplates.length
+      : this.communityCategories.length;
+  }
+
+  get communityModerationTypeLabel(): string {
+    return this.communityModerationContentType === 'templates' ? 'templates' : 'categories';
+  }
+
+  getCommunityPromptStatusLabel(status: string): string {
+    switch (status) {
+      case 'approved': return 'Shared';
+      case 'pending': return 'Pending';
+      case 'rejected': return 'Rejected';
+      case 'hidden': return 'Hidden';
+      default: return status;
+    }
+  }
+
+  getCommunityCategoryStatusLabel(status: string): string {
+    switch (status) {
+      case 'public': return 'Shared';
+      case 'hidden': return 'Hidden';
+      default: return status;
+    }
+  }
+
+  getCommunityPromptStatusSeverity(status: string): 'success' | 'warn' | 'danger' | 'secondary' | 'info' | 'contrast' | undefined {
+    switch (status) {
+      case 'approved': return 'success';
+      case 'pending': return 'warn';
+      case 'rejected': return 'danger';
+      case 'hidden': return 'secondary';
+      default: return 'info';
+    }
+  }
+
+  getCommunityCategoryStatusSeverity(status: string): 'success' | 'warn' | 'danger' | 'secondary' | 'info' | 'contrast' | undefined {
+    switch (status) {
+      case 'public': return 'success';
+      case 'hidden': return 'secondary';
+      default: return 'info';
+    }
+  }
+
+  private loadActiveCommunityModerationContent(): void {
+    if (this.communityModerationContentType === 'templates') {
+      this.loadCommunityPromptTemplates();
+      return;
+    }
+    this.loadCommunityCategories();
+  }
+
   onAdminTabChange(event: unknown): void {
     const nextTab = this.parseTabValue(event);
     this.adminTab = nextTab;
@@ -968,6 +1544,18 @@ export class AdminComponent implements OnInit, OnDestroy {
       }
       if (this.downloadHistory.length === 0) {
         this.loadDownloadHistory();
+      }
+    }
+
+    if (nextTab === 3 && !this.loadingDynamicPromptLibrary && !this.dynamicPromptLibrary) {
+      this.loadDynamicPromptLibrary();
+    }
+
+    if (nextTab === 4) {
+      const shouldLoadTemplates = this.communityModerationContentType === 'templates' && !this.loadingCommunityPrompts && this.communityPromptTemplates.length === 0;
+      const shouldLoadCategories = this.communityModerationContentType === 'categories' && !this.loadingCommunityCategories && this.communityCategories.length === 0;
+      if (shouldLoadTemplates || shouldLoadCategories) {
+        this.loadActiveCommunityModerationContent();
       }
     }
   }
