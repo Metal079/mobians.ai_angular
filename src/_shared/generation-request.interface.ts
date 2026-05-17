@@ -1,5 +1,18 @@
 import { RegionalPromptingConfig } from './regional-prompting.interface';
 
+export type DynamicPromptMode = 'random' | 'combinatorial';
+
+export interface DynamicPromptingConfig {
+  enabled: boolean;
+  mode?: DynamicPromptMode;
+  template?: string;
+  wildcard_set?: string;
+  preview_count?: number;
+  max_generations?: number;
+  expansion_seed?: number;
+  selected_preview_index?: number;
+}
+
 export interface GenerationRequest {
     prompt: string;
     image?: string;
@@ -20,5 +33,6 @@ export interface GenerationRequest {
     fast_pass_code?: string;
     loras?: any[];
     regional_prompting?: RegionalPromptingConfig;
+    dynamic_prompting?: DynamicPromptingConfig;
   }
   

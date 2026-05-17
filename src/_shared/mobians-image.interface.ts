@@ -11,6 +11,7 @@ export interface MobiansImage {
     timestamp?: Date;
     prompt?: string;
     promptSummary?: string;
+    promptTemplate?: string;
     loras?: any[];
     regional_prompting?: RegionalPromptingConfig;
     thumbnailUrl?: string;
@@ -37,7 +38,7 @@ export interface ImageTag {
   
 // Used just for the image history
 export type MobiansImageMetadata = Pick<MobiansImage, 
-  'UUID' | 'prompt' | 'promptSummary' | 'timestamp' | 'aspectRatio' | 
+  'UUID' | 'prompt' | 'promptSummary' | 'promptTemplate' | 'timestamp' | 'aspectRatio' | 
   'width' | 'height' | 'favorite' | 'loras' | 'regional_prompting' | 'tags' | 'model' | 'seed' | 
   'negativePrompt' | 'cfg' | 'syncPriority' | 'lastModified'
 >;
