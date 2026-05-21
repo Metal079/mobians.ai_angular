@@ -4,6 +4,9 @@
   --admin-text: #ffffff;
   --admin-muted-text: rgba(255, 255, 255, 0.92);
   --admin-subtle-text: rgba(255, 255, 255, 0.78);
+  --admin-input-bg: #ffffff;
+  --admin-input-text: #0f172a;
+  --admin-input-muted: rgba(15, 23, 42, 0.62);
   --admin-card-bg: #2b86e9;
   --admin-panel-bg: #249de8;
   --admin-border: #2286d3;
@@ -15,6 +18,9 @@
   --admin-text: var(--theme-surface-text, #e6eef8);
   --admin-muted-text: rgba(230, 238, 248, 0.72);
   --admin-subtle-text: rgba(230, 238, 248, 0.56);
+  --admin-input-bg: var(--theme-surface-bg, #112a4d);
+  --admin-input-text: var(--theme-surface-text, #e6eef8);
+  --admin-input-muted: rgba(230, 238, 248, 0.62);
   --admin-card-bg: var(--theme-surface-bg, #112a4d);
   --admin-panel-bg: var(--theme-surface-alt-bg, #0d2344);
   --admin-border: var(--theme-border, #1c3a60);
@@ -244,31 +250,82 @@
   max-width: 250px;
 }
 
-.search-input > i {
+:host ::ng-deep .search-input > i {
   position: absolute;
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--admin-subtle-text) !important;
+  color: var(--admin-input-muted) !important;
+  z-index: 1;
 }
 
-.search-input input {
-  background: var(--admin-card-bg);
-  border: 1px solid var(--admin-border);
+:host ::ng-deep .search-input .p-inputtext,
+:host ::ng-deep .search-input input {
+  background: var(--admin-input-bg) !important;
+  border: 1px solid var(--admin-border) !important;
   border-radius: 6px;
-  padding: 0.5rem 0.75rem 0.5rem 2rem;
-  color: var(--admin-text);
+  padding: 0.5rem 2.2rem 0.5rem 2rem;
+  color: var(--admin-input-text) !important;
   width: 100%;
 }
 
-.search-input input:focus {
+.clear-search-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--admin-input-muted);
+  cursor: pointer;
+  padding: 0;
+  z-index: 1;
+}
+
+.clear-search-btn:hover,
+.clear-search-btn:focus-visible {
+  background: rgba(15, 23, 42, 0.12);
+  color: var(--admin-input-text);
+}
+
+.clear-search-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.clear-search-btn:disabled:hover,
+.clear-search-btn:disabled:focus-visible {
+  background: transparent;
+  color: var(--admin-input-muted);
+  outline: none;
+}
+
+.clear-search-btn:focus-visible {
+  outline: 1px solid var(--theme-primary, #6366f1);
+  outline-offset: 1px;
+}
+
+.clear-search-btn i {
+  color: inherit !important;
+  font-size: 0.72rem;
+}
+
+:host ::ng-deep .search-input .p-inputtext:focus,
+:host ::ng-deep .search-input input:focus {
   outline: none;
   border-color: var(--theme-primary, #6366f1);
   box-shadow: 0 0 0 0.12rem rgba(255, 255, 255, 0.35);
 }
 
-.search-input input::placeholder {
-  color: var(--admin-subtle-text);
+:host ::ng-deep .search-input .p-inputtext::placeholder,
+:host ::ng-deep .search-input input::placeholder {
+  color: var(--admin-input-muted);
   opacity: 1;
 }
 
@@ -305,6 +362,12 @@
 
 :host ::ng-deep .admin-table .p-datatable-table {
   min-width: 1050px;
+}
+
+:host ::ng-deep .suggestion-table .p-datatable-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
 }
 
 :host ::ng-deep .admin-table .p-column-title {
@@ -470,6 +533,11 @@
   font-weight: 600;
   color: var(--admin-text);
   word-break: break-word;
+}
+
+.suggestion-name-cell .lora-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .version-text {
