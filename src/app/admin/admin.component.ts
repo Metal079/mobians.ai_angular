@@ -14,7 +14,7 @@ import {
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
-import { interval, Subscription } from 'rxjs';
+import { finalize, interval, Subscription } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
@@ -345,37 +345,58 @@ export class AdminComponent implements OnInit, OnDestroy {
       message: `Are you sure you want to approve "${s.name}"? This will add it to the active LoRA list.`,
       header: 'Confirm Approval',
       icon: 'pi pi-check-circle',
+      acceptLabel: 'Approve',
+      rejectLabel: 'Cancel',
+      acceptButtonStyleClass: 'p-button-success',
+      rejectButtonStyleClass: 'p-button-outlined',
       accept: () => this.doApproveSuggestion(s)
+    });
+  }
+
+  private setSuggestionProcessingState(suggKey: string | number, isProcessing: boolean): void {
+    this.runInView(() => {
+      if (isProcessing) {
+        this.processingSuggestion = {
+          ...this.processingSuggestion,
+          [suggKey]: true,
+        };
+        return;
+      }
+
+      const { [suggKey]: _removed, ...remaining } = this.processingSuggestion;
+      this.processingSuggestion = remaining;
     });
   }
 
   private doApproveSuggestion(s: any): void {
     const suggKey = s.id || s.name;
-    this.processingSuggestion[suggKey] = true;
-    
-    this.sdService.approveSuggestion(s.id).subscribe({
+    this.setSuggestionProcessingState(suggKey, true);
+
+    this.sdService.approveSuggestion(s.id).pipe(
+      finalize(() => this.setSuggestionProcessingState(suggKey, false))
+    ).subscribe({
       next: (response) => {
-        this.loraSuggestions = this.loraSuggestions.filter(x => x.id !== s.id);
-        this.filterSuggestions();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Approved',
-          detail: response.message || `${s.name} has been approved`,
-          life: 3000
+        this.runInView(() => {
+          this.loraSuggestions = this.loraSuggestions.filter(x => x.id !== s.id);
+          this.filterSuggestions();
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Approved',
+            detail: response.message || `${s.name} has been approved`,
+            life: 3000
+          });
+          this.loadAllLoras();
         });
-        // Reload LoRAs to show the newly approved one
-        this.loadAllLoras();
       },
       error: (err) => {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: err?.error?.detail || 'Failed to approve suggestion',
-          life: 5000
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: err?.error?.detail || 'Failed to approve suggestion',
+            life: 5000
+          });
         });
-      },
-      complete: () => {
-        this.processingSuggestion[suggKey] = false;
       }
     });
   }
@@ -388,7 +409,10 @@ export class AdminComponent implements OnInit, OnDestroy {
       message: `Are you sure you want to reject "${s.name}"? This action cannot be undone.`,
       header: 'Confirm Rejection',
       icon: 'pi pi-times-circle',
+      acceptLabel: 'Reject',
+      rejectLabel: 'Cancel',
       acceptButtonStyleClass: 'p-button-danger',
+      rejectButtonStyleClass: 'p-button-outlined',
       accept: () => this.doRejectSuggestion(s)
     });
   }
@@ -404,29 +428,32 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   private doRejectSuggestion(s: any): void {
     const suggKey = s.id || s.name;
-    this.processingSuggestion[suggKey] = true;
-    
-    this.sdService.rejectSuggestion(s.id).subscribe({
+    this.setSuggestionProcessingState(suggKey, true);
+
+    this.sdService.rejectSuggestion(s.id).pipe(
+      finalize(() => this.setSuggestionProcessingState(suggKey, false))
+    ).subscribe({
       next: (response) => {
-        this.loraSuggestions = this.loraSuggestions.filter(x => x.id !== s.id);
-        this.filterSuggestions();
-        this.messageService.add({
-          severity: 'info',
-          summary: 'Rejected',
-          detail: response.message || `${s.name} has been rejected`,
-          life: 3000
+        this.runInView(() => {
+          this.loraSuggestions = this.loraSuggestions.filter(x => x.id !== s.id);
+          this.filterSuggestions();
+          this.messageService.add({
+            severity: 'info',
+            summary: 'Rejected',
+            detail: response.message || `${s.name} has been rejected`,
+            life: 3000
+          });
         });
       },
       error: (err) => {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: err?.error?.detail || 'Failed to reject suggestion',
-          life: 5000
+        this.runInView(() => {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: err?.error?.detail || 'Failed to reject suggestion',
+            life: 5000
+          });
         });
-      },
-      complete: () => {
-        this.processingSuggestion[suggKey] = false;
       }
     });
   }

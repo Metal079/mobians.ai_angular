@@ -81,6 +81,9 @@
             <span class="p-input-icon-left search-input">
               <i class="bi bi-search"></i>
               <input type="text" pInputText placeholder="Search name or version..." [ngModel]="loraSearch" (ngModelChange)="onLoraSearchChange($event)" />
+              <button type="button" class="clear-search-btn" aria-label="Clear All LoRAs search" [disabled]="!loraSearch" (click)="onLoraSearchChange('')">
+                <i class="bi bi-x-lg"></i>
+              </button>
             </span>
             <p-multiSelect [options]="loraBaseModelOptions" [(ngModel)]="selectedBaseModels" placeholder="Base model(s)" (onChange)="filterAllLoras()" [showToggleAll]="false" [display]="'chip'" styleClass="filter-multiselect"></p-multiSelect>
             <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
@@ -309,6 +312,9 @@
             <span class="p-input-icon-left search-input">
               <i class="bi bi-search"></i>
               <input type="text" pInputText placeholder="Search name or version..." [ngModel]="suggSearch" (ngModelChange)="onSuggSearchChange($event)" />
+              <button type="button" class="clear-search-btn" aria-label="Clear LoRA suggestions search" [disabled]="!suggSearch" (click)="onSuggSearchChange('')">
+                <i class="bi bi-x-lg"></i>
+              </button>
             </span>
             <span class="p-input-icon-left search-input">
               <i class="bi bi-person"></i>
@@ -331,7 +337,7 @@
           dataKey="id"
           [expandedRowKeys]="expandedRowKeysSuggestions"
           [rowTrackBy]="trackById.bind(this)"
-          styleClass="admin-table"
+          styleClass="admin-table suggestion-table"
           >
           <ng-template pTemplate="expandedrow" let-row>
             <tr>
@@ -396,7 +402,7 @@
             <tr>
               <th style="width: 3rem"></th>
               <th style="width: 72px">Preview</th>
-              <th>Name</th>
+              <th class="suggestion-name-header">Name</th>
               <th class="col-hide-sm">Version</th>
               <th class="col-hide-sm">Base Model</th>
               <th class="col-hide-sm" style="width: 80px">CivitAI</th>
@@ -419,7 +425,7 @@
                   </div>
                 }
               </td>
-              <td>
+              <td class="suggestion-name-cell">
                 <span class="lora-name">{{ row.name }}</span>
               </td>
               <td class="col-hide-sm">
