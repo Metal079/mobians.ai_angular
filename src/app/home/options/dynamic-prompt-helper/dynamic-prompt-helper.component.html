@@ -1,0 +1,455 @@
+<button
+  #launcherButton
+  type="button"
+  class="btn btn-outline-primary dynamic-helper-launch"
+  [class.active]="active()"
+  [disabled]="disabled()"
+  aria-haspopup="dialog"
+  (click)="openDialog()">
+  <i class="pi pi-sparkles" aria-hidden="true"></i>
+  <span>Prompt Ideas</span>
+</button>
+
+<p-dialog
+  header="Prompt Ideas"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [modal]="true"
+  [dismissableMask]="true"
+  closeAriaLabel="Close Prompt Ideas"
+  [style]="dialogStyle"
+  [contentStyle]="dialogContentStyle"
+  styleClass="dynamic-prompt-dialog">
+  <div class="dynamic-helper-shell">
+    @if (loadingLibrary()) {
+      <div class="helper-status" role="status">Loading prompt ideas...</div>
+    } @else {
+      <div class="helper-toolbar" aria-label="Dynamic prompt controls">
+        <button class="btn btn-sm helper-action helper-secondary-action" type="button" [disabled]="loadingPreview()" (click)="shufflePreview()">
+          <i class="pi pi-sync" aria-hidden="true"></i>
+          Shuffle Examples
+        </button>
+        <button class="btn btn-sm helper-action helper-help-action" type="button" aria-label="Open prompt ideas tutorial" (click)="openTutorial()">
+          <i class="pi pi-question-circle" aria-hidden="true"></i>
+          How this works
+        </button>
+      </div>
+
+      <div class="helper-tabs" role="tablist" aria-label="Prompt idea views">
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'starters'" [class.active]="activePanel() === 'starters'" (click)="selectPanel('starters')">
+          <i class="pi pi-bolt" aria-hidden="true"></i>
+          Starters
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'community'" [class.active]="activePanel() === 'community'" (click)="selectPanel('community')">
+          <i class="pi pi-users" aria-hidden="true"></i>
+          Community
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="activePanel() === 'mine'" [class.active]="activePanel() === 'mine'" (click)="selectPanel('mine')">
+          <i class="pi pi-bookmark" aria-hidden="true"></i>
+          Mine
+        </button>
+      </div>
+
+      @if (helperMessage()) {
+        <div class="helper-status" role="status">{{ helperMessage() }}</div>
+      }
+
+      @if (activePanel() === 'starters') {
+        <div class="helper-layout">
+          <section class="helper-section" aria-labelledby="starterTemplatesTitle">
+            <div class="section-head">
+              <h3 id="starterTemplatesTitle">Starters</h3>
+            </div>
+            <div class="starter-list">
+              @for (starter of starterTemplates(); track starter.id) {
+                <button
+                  type="button"
+                  class="starter-button"
+                  [class.active]="selectedTemplateId() === starter.id"
+                  (click)="selectStarter(starter)">
+                  <strong>{{ starter.name }}</strong>
+                  <span>{{ starter.description }}</span>
+                </button>
+              }
+            </div>
+
+            <div class="category-group" aria-label="Wildcard categories">
+              @for (category of categories(); track category.id) {
+                <button class="category-chip" type="button" (click)="insertCategory(category)">
+                  {{ category.label }}
+                </button>
+              }
+            </div>
+          </section>
+
+          <section class="helper-section main-editor" aria-labelledby="templateTitle">
+            <div class="section-head">
+              <h3 id="templateTitle">Template</h3>
+              <button class="btn btn-sm btn-success" type="button" [disabled]="!templateText().trim()" (click)="applyTemplate()">
+                Use Template
+              </button>
+            </div>
+            <textarea
+              class="form-control template-textarea"
+              rows="5"
+              [value]="templateText()"
+              aria-label="Dynamic prompt template"
+              (input)="onTemplateInput($event)"></textarea>
+
+            @if (syntaxExamples().length > 0) {
+              <div class="syntax-example-panel" aria-labelledby="syntaxExamplesTitle">
+                <div class="syntax-example-title" id="syntaxExamplesTitle">
+                  <i class="pi pi-lightbulb" aria-hidden="true"></i>
+                  <span>Syntax examples</span>
+                </div>
+                <div class="example-row">
+                  @for (example of syntaxExamples(); track example.label) {
+                    <button
+                      class="example-button"
+                      type="button"
+                      [attr.aria-label]="'Use syntax example: ' + example.label"
+                      (click)="useSyntaxExample(example.template)">
+                      <strong>{{ example.label }}</strong>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="preview-feedback" aria-live="polite">
+              @if (errorMessage()) {
+                <div class="helper-error" role="alert">{{ errorMessage() }}</div>
+              } @else if (loadingPreview() && !previews().length) {
+                <div class="helper-status" role="status">Building previews...</div>
+              }
+            </div>
+
+            <div class="preview-output-panel" aria-labelledby="exampleOutputsTitle">
+              <div class="preview-output-head">
+                <div class="preview-output-title" id="exampleOutputsTitle">
+                  <i class="pi pi-list-check" aria-hidden="true"></i>
+                  <span>Example outputs</span>
+                </div>
+                @if (loadingPreview() && previews().length > 0) {
+                  <div class="preview-refresh-indicator" role="status">Refreshing...</div>
+                }
+              </div>
+              <div class="preview-list" aria-live="polite">
+              @if (!loadingPreview() && previews().length === 0 && !errorMessage()) {
+                <div class="helper-status" role="status">Example outputs update automatically as you type.</div>
+              } @else {
+                @for (preview of previews(); track previewIndex; let previewIndex = $index) {
+                  <article class="preview-item">
+                    <p>{{ preview }}</p>
+                    <div class="preview-actions">
+                      <button class="btn btn-sm btn-outline-primary" type="button" (click)="applyPreview(preview)">Use Exact</button>
+                      <button class="btn btn-sm btn-primary" type="button" (click)="applyTemplate()">Use Dynamic</button>
+                    </div>
+                  </article>
+                }
+              }
+              </div>
+            </div>
+          </section>
+        </div>
+      } @else if (activePanel() === 'community') {
+        <section class="helper-section community-panel" aria-labelledby="communityTemplatesTitle">
+          <div class="section-head community-search-head">
+            <h3 id="communityTemplatesTitle">Community Prompts</h3>
+            <div class="community-search">
+              <input class="form-control form-control-sm" type="search" placeholder="Search templates and categories" [value]="communitySearch()" (input)="onCommunitySearchInput($event)">
+              <button class="btn btn-sm btn-outline-primary" type="button" [disabled]="loadingCommunity() || loadingCommunityCategories()" (click)="searchCommunity()">
+                <i class="pi pi-search" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          @if (errorMessage()) {
+            <div class="helper-error" role="alert">{{ errorMessage() }}</div>
+          }
+          @if (loadingCommunity()) {
+            <div class="helper-status" role="status">Loading community templates...</div>
+          } @else if (filteredCommunityTemplates().length === 0) {
+            <div class="helper-status" role="status">{{ communitySearch().trim() ? 'No community templates match this search.' : 'No shared community templates found.' }}</div>
+          } @else {
+            <div class="community-template-list">
+              @for (template of filteredCommunityTemplates(); track template.id) {
+                <article class="community-template-card community-vote-card">
+                  <button
+                    class="community-vote-rail"
+                    type="button"
+                    [class.active]="template.has_upvoted"
+                    [attr.aria-pressed]="template.has_upvoted"
+                    [attr.aria-label]="template.has_upvoted ? 'Remove upvote from ' + template.title : 'Upvote ' + template.title"
+                    (click)="toggleUpvote(template)">
+                    <i class="pi pi-chevron-up" aria-hidden="true"></i>
+                    <span class="community-vote-count">{{ template.upvote_count }}</span>
+                    <span class="community-vote-label">Upvote</span>
+                  </button>
+                  <div class="template-card-main">
+                    <h4>{{ template.title }}</h4>
+                    <p>{{ template.description || template.template }}</p>
+                    <div class="template-meta">
+                      <span><i class="pi pi-download" aria-hidden="true"></i>{{ template.import_count }}</span>
+                      @for (tag of template.tags; track tag) {
+                        <span class="template-tag">{{ tag }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="template-card-actions">
+                    <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
+                    <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
+                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="template.has_imported" (click)="importTemplate(template)">
+                      <i class="pi pi-download" aria-hidden="true"></i>
+                      {{ template.has_imported ? 'Imported' : 'Import' }}
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+
+          <div class="section-head community-category-head">
+            <h3 id="communityCategoriesTitle">Community Categories</h3>
+            <button class="btn btn-sm btn-outline-primary" type="button" [disabled]="loadingCommunityCategories()" (click)="loadCommunityCategories()">
+              <i class="pi pi-refresh" aria-hidden="true"></i>
+            </button>
+          </div>
+          @if (loadingCommunityCategories()) {
+            <div class="helper-status" role="status">Loading shared categories...</div>
+          } @else if (filteredCommunityCategories().length === 0) {
+            <div class="helper-status" role="status">{{ communitySearch().trim() ? 'No community categories match this search.' : 'No shared categories found.' }}</div>
+          } @else {
+            <div class="community-template-list" aria-labelledby="communityCategoriesTitle">
+              @for (category of filteredCommunityCategories(); track category.id) {
+                <article class="community-template-card category-card community-vote-card">
+                  <button
+                    class="community-vote-rail"
+                    type="button"
+                    [class.active]="category.has_upvoted"
+                    [attr.aria-pressed]="category.has_upvoted"
+                    [attr.aria-label]="category.has_upvoted ? 'Remove upvote from ' + category.title : 'Upvote ' + category.title"
+                    (click)="toggleCategoryUpvote(category)">
+                    <i class="pi pi-chevron-up" aria-hidden="true"></i>
+                    <span class="community-vote-count">{{ category.upvote_count }}</span>
+                    <span class="community-vote-label">Upvote</span>
+                  </button>
+                  <div class="template-card-main">
+                    <h4>{{ category.title }}</h4>
+                    <p>{{ category.description || 'Custom prompt choices shared by the community.' }}</p>
+                    <code class="category-token">{{ category.token }}</code>
+                    @if (category.examples.length) {
+                      <div class="category-preview-list" aria-label="Category examples">
+                        @for (example of category.examples; track example) {
+                          <span>{{ example }}</span>
+                        }
+                      </div>
+                    }
+                    <div class="template-meta">
+                      <span><i class="pi pi-list" aria-hidden="true"></i>{{ category.item_count }}</span>
+                      <span><i class="pi pi-download" aria-hidden="true"></i>{{ category.import_count }}</span>
+                      @for (tag of category.tags; track tag) {
+                        <span class="template-tag">{{ tag }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="template-card-actions">
+                    <button class="btn btn-sm btn-primary" type="button" (click)="insertCustomCategory(category)">Insert</button>
+                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="category.has_imported" (click)="importCategory(category)">
+                      <i class="pi pi-download" aria-hidden="true"></i>
+                      {{ category.has_imported ? 'Imported' : 'Import' }}
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      } @else {
+        <div class="mine-layout">
+          <section class="helper-section save-template-panel" aria-labelledby="saveTemplateTitle">
+            <div class="section-head">
+              <h3 id="saveTemplateTitle">{{ editingTemplateId() ? 'Edit Template' : 'Save Template' }}</h3>
+              <div class="template-editor-actions">
+                @if (editingTemplateId()) {
+                  <button class="btn btn-sm editor-secondary-action" type="button" (click)="resetTemplateEditor()">New</button>
+                }
+                <button class="btn btn-sm btn-success" type="button" [disabled]="!canSaveTemplate()" (click)="saveCurrentTemplate()">
+                  <i class="pi pi-save" aria-hidden="true"></i>
+                  {{ editingTemplateId() ? 'Update' : 'Save' }}
+                </button>
+              </div>
+            </div>
+            <input class="form-control form-control-sm" type="text" placeholder="Template title" [value]="saveTitle()" (input)="onSaveTitleInput($event)">
+            <textarea class="form-control form-control-sm template-body-input" rows="7" placeholder="Template prompt" [value]="templateText()" (input)="onTemplateInput($event)"></textarea>
+            <textarea class="form-control form-control-sm" rows="2" placeholder="Description" [value]="saveDescription()" (input)="onSaveDescriptionInput($event)"></textarea>
+          </section>
+
+          <section class="helper-section save-template-panel" aria-labelledby="saveCategoryTitle">
+            <div class="section-head">
+              <h3 id="saveCategoryTitle">Custom Category</h3>
+              <div class="category-editor-actions">
+                @if (editingCategoryId()) {
+                  <button class="btn btn-sm editor-secondary-action" type="button" (click)="resetCategoryEditor()">New</button>
+                }
+                <button class="btn btn-sm btn-success" type="button" [disabled]="!canSaveCategory()" (click)="saveCustomCategory()">
+                  <i class="pi pi-save" aria-hidden="true"></i>
+                  {{ editingCategoryId() ? 'Update' : 'Save' }}
+                </button>
+              </div>
+            </div>
+            <input class="form-control form-control-sm" type="text" placeholder="Category name" [value]="categoryTitle()" (input)="onCategoryTitleInput($event)">
+            <textarea class="form-control form-control-sm" rows="2" placeholder="Description" [value]="categoryDescription()" (input)="onCategoryDescriptionInput($event)"></textarea>
+            <textarea class="form-control form-control-sm" rows="6" placeholder="One prompt idea per line" [value]="categoryEntries()" (input)="onCategoryEntriesInput($event)"></textarea>
+          </section>
+
+          <section class="helper-section community-panel" aria-labelledby="myTemplatesTitle">
+            <div class="section-head">
+              <h3 id="myTemplatesTitle">My Templates</h3>
+              <button class="btn btn-sm btn-outline-primary" type="button" [disabled]="loadingMine()" (click)="loadMyTemplates()">
+                <i class="pi pi-refresh" aria-hidden="true"></i>
+              </button>
+            </div>
+            @if (errorMessage()) {
+              <div class="helper-error" role="alert">{{ errorMessage() }}</div>
+            }
+            @if (loadingMine()) {
+              <div class="helper-status" role="status">Loading saved templates...</div>
+            } @else if (myTemplates().length === 0) {
+              <div class="helper-status" role="status">Saved and imported templates will appear here.</div>
+            } @else {
+              <div class="community-template-list">
+                @for (template of myTemplates(); track template.id) {
+                  <article class="community-template-card">
+                    <div class="template-card-main">
+                      <h4>{{ template.title }}</h4>
+                      <p>{{ template.description || template.template }}</p>
+                      <div class="template-meta">
+                        <span class="status-pill">{{ templateStatusLabel(template) }}</span>
+                        @for (tag of template.tags; track tag) {
+                          <span class="template-tag">{{ tag }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="template-card-actions">
+                      <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
+                      <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
+                      <button class="btn btn-sm btn-outline-primary" type="button" (click)="editTemplate(template)">Edit</button>
+                      <button class="btn btn-sm btn-outline-success" type="button" (click)="shareTemplate(template)">
+                        {{ isTemplateShared(template) ? 'Unshare' : 'Share' }}
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" type="button" (click)="deleteTemplate(template)">
+                        <i class="pi pi-trash" aria-hidden="true"></i>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+
+          <section class="helper-section community-panel" aria-labelledby="myCategoriesTitle">
+            <div class="section-head">
+              <h3 id="myCategoriesTitle">My Categories</h3>
+              <button class="btn btn-sm btn-outline-primary" type="button" [disabled]="loadingMyCategories()" (click)="loadMyCategories()">
+                <i class="pi pi-refresh" aria-hidden="true"></i>
+              </button>
+            </div>
+            @if (errorMessage()) {
+              <div class="helper-error" role="alert">{{ errorMessage() }}</div>
+            }
+            @if (loadingMyCategories()) {
+              <div class="helper-status" role="status">Loading custom categories...</div>
+            } @else if (myCategories().length === 0) {
+              <div class="helper-status" role="status">Create reusable categories to build your own prompt library.</div>
+            } @else {
+              <div class="community-template-list">
+                @for (category of myCategories(); track category.id) {
+                  <article class="community-template-card category-card">
+                    <div class="template-card-main">
+                      <h4>{{ category.title }}</h4>
+                      <p>{{ category.description || category.token }}</p>
+                      <code class="category-token">{{ category.token }}</code>
+                      @if (category.examples.length) {
+                        <div class="category-preview-list" aria-label="Category examples">
+                          @for (example of category.examples; track example) {
+                            <span>{{ example }}</span>
+                          }
+                        </div>
+                      }
+                      <div class="template-meta">
+                        <span class="status-pill">{{ category.status }}</span>
+                        <span><i class="pi pi-list" aria-hidden="true"></i>{{ category.item_count }}</span>
+                        @for (tag of category.tags; track tag) {
+                          <span class="template-tag">{{ tag }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="template-card-actions">
+                      <button class="btn btn-sm btn-primary" type="button" (click)="insertCustomCategory(category)">Insert</button>
+                      <button class="btn btn-sm btn-outline-primary" type="button" (click)="editCustomCategory(category)">Edit</button>
+                      <button class="btn btn-sm btn-outline-success" type="button" (click)="shareCustomCategory(category)">
+                        {{ category.status === 'public' ? 'Unshare' : 'Share' }}
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" type="button" (click)="deleteCustomCategory(category)">
+                        <i class="pi pi-trash" aria-hidden="true"></i>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+        </div>
+      }
+    }
+  </div>
+</p-dialog>
+
+
+<p-dialog
+  header="How Prompt Ideas Work"
+  [visible]="tutorialVisible()"
+  (visibleChange)="onTutorialVisibleChange($event)"
+  [modal]="true"
+  [dismissableMask]="true"
+  closeAriaLabel="Close prompt ideas tutorial"
+  [style]="tutorialStyle"
+  styleClass="dynamic-prompt-tutorial">
+  <div class="tutorial-body">
+    <p class="tutorial-intro">
+      Prompt Ideas help you make one prompt that can turn into several different finished prompts.
+      You can preview the possibilities first, then choose whether to keep it flexible or use one exact result.
+    </p>
+
+    <div class="tutorial-step-list">
+      <article>
+        <h3>1. Pick a starting point</h3>
+        <p>Choose a starter, add category chips like Characters or Scenes, or type your own idea.</p>
+      </article>
+      <article>
+        <h3>2. Preview examples</h3>
+        <p>Example outputs appear automatically as you pick a starter or edit the template, and Shuffle Examples refreshes them.</p>
+      </article>
+      <article>
+        <h3>3. Choose how to use it</h3>
+        <p>Use Exact copies one preview into the prompt box. Use Dynamic keeps the choices, so the site picks a version when you generate.</p>
+      </article>
+    </div>
+
+    <div class="tutorial-example">
+      <span>Example</span>
+      <code>__mobian/characters__ in &#123;sunset beach|neon city&#125;, __mobian/styles__</code>
+      <p>This means: pick a character, pick one of those locations, then add a style.</p>
+    </div>
+
+    <p class="tutorial-note">
+      The category chips add the special-looking parts for you, so you do not need to memorize the format.
+    </p>
+
+    <div class="tutorial-actions">
+      <button class="btn btn-primary" type="button" (click)="closeTutorial()">Back to Prompt Ideas</button>
+    </div>
+  </div>
+</p-dialog>

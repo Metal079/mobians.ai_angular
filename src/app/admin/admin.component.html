@@ -7,7 +7,7 @@
         </a>
         <div class="header-text">
           <h1>Admin Panel</h1>
-          <p>Manage LoRAs and review suggestions</p>
+          <p>Manage LoRAs, prompt content, and review suggestions</p>
         </div>
       </div>
       <div class="header-right">
@@ -57,6 +57,20 @@
             <span class="tab-badge" [ngClass]="{'success': downloaderStatus?.status === 'idle', 'warning': downloaderStatus?.status === 'downloading', 'danger': downloaderStatus?.status === 'error' || downloaderStatus?.status === 'offline'}">
               {{ downloaderStatus?.status || 'unknown' }}
             </span>
+          </div>
+        </p-tab>
+        <p-tab [value]="3">
+          <div class="tab-header">
+            <i class="bi bi-stars"></i>
+            <span>Prompt Library</span>
+            <span class="tab-badge">{{ dynamicPromptLibrary?.categories?.length || 0 }}</span>
+          </div>
+        </p-tab>
+        <p-tab [value]="4">
+          <div class="tab-header">
+            <i class="bi bi-shield-check"></i>
+            <span>Community Content</span>
+            <span class="tab-badge">{{ communityModerationCount }}</span>
           </div>
         </p-tab>
       </p-tablist>
@@ -573,6 +587,329 @@
           </div>
         </div>
       </p-tabpanel>
+
+      <p-tabpanel [value]="3">
+        <div class="prompt-library-section">
+          <div class="tab-actions">
+            <div class="prompt-library-title">
+              <h3><i class="bi bi-stars"></i> Dynamic Prompt Library</h3>
+              <span>{{ dynamicPromptLibrary?.wildcard_set || 'mobians-v1' }}</span>
+            </div>
+            <div class="prompt-library-actions">
+              <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" [loading]="loadingDynamicPromptLibrary" (onClick)="loadDynamicPromptLibrary()"></p-button>
+              <p-button label="Save" icon="bi bi-check-lg" styleClass="p-button-success" [loading]="savingDynamicPromptLibrary" [disabled]="!dynamicPromptLibrary" (onClick)="saveDynamicPromptLibrary()"></p-button>
+            </div>
+          </div>
+
+          @if (loadingDynamicPromptLibrary && !dynamicPromptLibrary) {
+            <div class="empty-state prompt-library-loading">
+              <p-progressSpinner strokeWidth="4"></p-progressSpinner>
+              <p>Loading prompt library...</p>
+            </div>
+          }
+
+          @if (dynamicPromptLibrary) {
+            <div class="prompt-library-grid">
+              <aside class="prompt-category-list" aria-label="Dynamic prompt categories">
+                @for (category of dynamicPromptLibrary.categories; track category.id) {
+                  <button
+                    type="button"
+                    class="prompt-category-button"
+                    [class.active]="selectedDynamicCategoryId === category.id"
+                    (click)="selectDynamicCategory(category.id)">
+                    <span>{{ category.label }}</span>
+                    <small>{{ category.items.length }} items</small>
+                  </button>
+                }
+              </aside>
+
+              <section class="prompt-category-editor">
+                @if (selectedDynamicCategory; as category) {
+                  <div class="editor-card">
+                    <div class="editor-card-header">
+                      <h3>{{ category.label }}</h3>
+                      <div class="toggle-item compact-toggle">
+                        <span class="toggle-label">Active</span>
+                        <p-toggleswitch [(ngModel)]="category.is_active"></p-toggleswitch>
+                      </div>
+                    </div>
+                    <div class="editor-grid">
+                      <label>
+                        <span>Label</span>
+                        <input type="text" pInputText [(ngModel)]="category.label" />
+                      </label>
+                      <label>
+                        <span>Token</span>
+                        <input type="text" pInputText [(ngModel)]="category.token" />
+                      </label>
+                      <label class="full-width">
+                        <span>Description</span>
+                        <input type="text" pInputText [(ngModel)]="category.description" />
+                      </label>
+                      <label class="full-width">
+                        <span>Items</span>
+                        <textarea
+                          rows="14"
+                          [ngModel]="getDynamicCategoryEntries(category)"
+                          (ngModelChange)="setDynamicCategoryEntries(category, $event)"></textarea>
+                      </label>
+                    </div>
+                  </div>
+                }
+              </section>
+            </div>
+
+            <div class="starter-template-editor">
+              <div class="section-title-row">
+                <h3><i class="bi bi-journal-text"></i> Starter Templates</h3>
+              </div>
+              <div class="starter-template-list">
+                @for (starter of dynamicPromptLibrary.starter_templates; track starter.id) {
+                  <div class="starter-editor-card">
+                    <div class="editor-card-header">
+                      <input type="text" pInputText [(ngModel)]="starter.name" />
+                      <div class="toggle-item compact-toggle">
+                        <span class="toggle-label">Active</span>
+                        <p-toggleswitch [(ngModel)]="starter.is_active"></p-toggleswitch>
+                      </div>
+                    </div>
+                    <input type="text" pInputText [(ngModel)]="starter.description" />
+                    <textarea rows="3" [(ngModel)]="starter.template"></textarea>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </p-tabpanel>
+
+      <p-tabpanel [value]="4">
+        <div class="community-moderation-section">
+          <div class="tab-actions">
+            <div class="prompt-library-title">
+              <h3><i class="bi bi-shield-check"></i> Community Content Moderation</h3>
+              <span>{{ communityModerationCount }} {{ communityModerationTypeLabel }}</span>
+            </div>
+            <div class="community-moderation-actions">
+              <p-selectButton
+                [options]="communityModerationContentTypeOptions"
+                [(ngModel)]="communityModerationContentType"
+                (ngModelChange)="onCommunityModerationContentTypeChange($event)"
+                optionLabel="label"
+                optionValue="value"
+                styleClass="filter-btn-group community-content-toggle"></p-selectButton>
+              @if (communityModerationContentType === 'templates') {
+                <p-selectButton
+                  [options]="communityPromptStatusOptions"
+                  [(ngModel)]="communityPromptStatus"
+                  (ngModelChange)="onCommunityPromptStatusChange($event)"
+                  optionLabel="label"
+                  optionValue="value"
+                  styleClass="filter-btn-group"></p-selectButton>
+              } @else {
+                <p-selectButton
+                  [options]="communityCategoryStatusOptions"
+                  [(ngModel)]="communityCategoryStatus"
+                  (ngModelChange)="onCommunityCategoryStatusChange($event)"
+                  optionLabel="label"
+                  optionValue="value"
+                  styleClass="filter-btn-group"></p-selectButton>
+              }
+              <p-button
+                label="Refresh"
+                icon="bi bi-arrow-repeat"
+                styleClass="p-button-outlined"
+                [loading]="communityModerationContentType === 'templates' ? loadingCommunityPrompts : loadingCommunityCategories"
+                (onClick)="communityModerationContentType === 'templates' ? loadCommunityPromptTemplates() : loadCommunityCategories()"></p-button>
+            </div>
+          </div>
+
+          @if (communityModerationContentType === 'templates') {
+            <p-table
+              [value]="communityPromptTemplates"
+              [loading]="loadingCommunityPrompts"
+              [paginator]="true"
+              [rows]="10"
+              [rowsPerPageOptions]="[10,20,50]"
+              [responsiveLayout]="'stack'"
+              [breakpoint]="'768px'"
+              dataKey="id"
+              [rowTrackBy]="trackById.bind(this)"
+              styleClass="admin-table community-content-table">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>Template</th>
+                  <th style="width: 130px">Status</th>
+                  <th style="width: 130px">Engagement</th>
+                  <th style="width: 190px">Moderation</th>
+                  <th style="width: 320px">Actions</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-template>
+                <tr>
+                  <td>
+                    <span class="p-column-title">Template</span>
+                    <div class="community-content-title-cell">
+                      <strong>{{ template.title }}</strong>
+                      <p>{{ template.description || template.template }}</p>
+                      <code>{{ template.template }}</code>
+                      @if (template.preview_samples?.length) {
+                        <div class="community-preview-samples" aria-label="Preview samples">
+                          @for (preview of template.preview_samples; track $index) {
+                            <span>{{ preview }}</span>
+                          }
+                        </div>
+                      }
+                      @if (template.rejection_reason) {
+                        <div class="community-rejection-reason">{{ template.rejection_reason }}</div>
+                      }
+                      @if (template.tags.length) {
+                        <div class="community-content-tags">
+                          @for (tag of template.tags; track tag) {
+                            <span>{{ tag }}</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Status</span>
+                    <p-tag [value]="getCommunityPromptStatusLabel(template.status)" [severity]="getCommunityPromptStatusSeverity(template.status)"></p-tag>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Engagement</span>
+                    <div class="community-content-counts">
+                      <span><i class="bi bi-hand-thumbs-up"></i>{{ template.upvote_count }}</span>
+                      <span><i class="bi bi-download"></i>{{ template.import_count }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Moderation</span>
+                    <div class="community-content-meta">
+                      <span>{{ template.author_display_name }}</span>
+                      <small>{{ formatDate(template.approved_at || template.submitted_at || template.updated_at || template.created_at || null) }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Actions</span>
+                    <div class="action-buttons community-review-buttons">
+                      @if (template.status === 'pending') {
+                        <p-button icon="bi bi-check-lg" label="Approve" styleClass="p-button-success p-button-sm" [disabled]="isCommunityPromptProcessing(template)" [loading]="isCommunityPromptProcessing(template)" (onClick)="approveCommunityPrompt(template)"></p-button>
+                        <p-button icon="bi bi-x-lg" label="Reject" styleClass="p-button-danger p-button-outlined p-button-sm" [disabled]="isCommunityPromptProcessing(template)" [loading]="isCommunityPromptProcessing(template)" (onClick)="openRejectCommunityPrompt(template)"></p-button>
+                      }
+                      @if (template.status !== 'hidden') {
+                        <p-button icon="bi bi-eye-slash" label="Hide" styleClass="p-button-outlined p-button-sm" [disabled]="isCommunityPromptProcessing(template)" [loading]="isCommunityPromptProcessing(template)" (onClick)="hideCommunityPrompt(template)"></p-button>
+                      }
+                      @if (template.status === 'hidden') {
+                        <p-button icon="bi bi-arrow-counterclockwise" label="Restore" styleClass="p-button-outlined p-button-sm" [disabled]="isCommunityPromptProcessing(template)" [loading]="isCommunityPromptProcessing(template)" (onClick)="restoreCommunityPrompt(template)"></p-button>
+                      }
+                      <p-button icon="bi bi-info-circle" styleClass="p-button-text p-button-rounded p-button-sm" pTooltip="View Details" tooltipPosition="top" (onClick)="openDetailsDialog('Community Template', template)"></p-button>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage">
+                <tr>
+                  <td colspan="5">
+                    <div class="empty-state success">
+                      <i class="bi bi-check-circle"></i>
+                      <p>No community templates in this view</p>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+          } @else {
+            <p-table
+              [value]="communityCategories"
+              [loading]="loadingCommunityCategories"
+              [paginator]="true"
+              [rows]="10"
+              [rowsPerPageOptions]="[10,20,50]"
+              [responsiveLayout]="'stack'"
+              [breakpoint]="'768px'"
+              dataKey="id"
+              [rowTrackBy]="trackById.bind(this)"
+              styleClass="admin-table community-content-table">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>Category</th>
+                  <th style="width: 130px">Status</th>
+                  <th style="width: 130px">Engagement</th>
+                  <th style="width: 190px">Updated</th>
+                  <th style="width: 260px">Actions</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-category>
+                <tr>
+                  <td>
+                    <span class="p-column-title">Category</span>
+                    <div class="community-content-title-cell">
+                      <strong>{{ category.title }}</strong>
+                      <p>{{ category.description || 'No description provided.' }}</p>
+                      <code>{{ category.token }}</code>
+                      @if (category.examples?.length) {
+                        <div class="community-preview-samples" aria-label="Sample entries">
+                          @for (example of category.examples; track $index) {
+                            <span>{{ example }}</span>
+                          }
+                        </div>
+                      }
+                      @if (category.tags.length) {
+                        <div class="community-content-tags">
+                          @for (tag of category.tags; track tag) {
+                            <span>{{ tag }}</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Status</span>
+                    <p-tag [value]="getCommunityCategoryStatusLabel(category.status)" [severity]="getCommunityCategoryStatusSeverity(category.status)"></p-tag>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Engagement</span>
+                    <div class="community-content-counts">
+                      <span><i class="bi bi-hand-thumbs-up"></i>{{ category.upvote_count }}</span>
+                      <span><i class="bi bi-download"></i>{{ category.import_count }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Updated</span>
+                    <div class="community-content-meta">
+                      <span>{{ category.author_display_name }}</span>
+                      <small>{{ formatDate(category.updated_at || category.created_at || null) }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Actions</span>
+                    <div class="action-buttons community-review-buttons">
+                      @if (category.status !== 'hidden') {
+                        <p-button icon="bi bi-eye-slash" label="Hide" styleClass="p-button-outlined p-button-sm" [disabled]="isCommunityCategoryProcessing(category)" [loading]="isCommunityCategoryProcessing(category)" (onClick)="hideCommunityCategory(category)"></p-button>
+                      }
+                      @if (category.status === 'hidden') {
+                        <p-button icon="bi bi-arrow-counterclockwise" label="Restore" styleClass="p-button-outlined p-button-sm" [disabled]="isCommunityCategoryProcessing(category)" [loading]="isCommunityCategoryProcessing(category)" (onClick)="restoreCommunityCategory(category)"></p-button>
+                      }
+                      <p-button icon="bi bi-info-circle" styleClass="p-button-text p-button-rounded p-button-sm" pTooltip="View Details" tooltipPosition="top" (onClick)="openDetailsDialog('Community Category', category)"></p-button>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="emptymessage">
+                <tr>
+                  <td colspan="5">
+                    <div class="empty-state success">
+                      <i class="bi bi-check-circle"></i>
+                      <p>No community categories in this view</p>
+                    </div>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+          }
+        </div>
+      </p-tabpanel>
     </p-tabpanels>
   </p-tabs>
   </div>
@@ -580,6 +917,19 @@
   <!-- Details Dialog -->
   <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [style]="{width: '90vw', maxWidth: '700px'}" [header]="detailsDialogTitle" styleClass="details-dialog">
     <pre class="details-json">{{ detailsJson }}</pre>
+  </p-dialog>
+
+  <p-dialog [(visible)]="rejectPromptDialogVisible" [modal]="true" [style]="{width: '90vw', maxWidth: '520px'}" header="Reject Prompt Template" styleClass="details-dialog">
+    <div class="reject-prompt-dialog-body">
+      <label>
+        <span>Reason</span>
+        <textarea rows="4" [(ngModel)]="rejectPromptReason" placeholder="Briefly explain what needs to change"></textarea>
+      </label>
+      <div class="reject-prompt-dialog-actions">
+        <p-button label="Cancel" styleClass="p-button-text" (onClick)="closeRejectCommunityPrompt()"></p-button>
+        <p-button label="Reject" icon="bi bi-x-lg" styleClass="p-button-danger" [disabled]="!rejectPromptReason.trim() || !rejectPromptTarget" [loading]="!!rejectPromptTarget && isCommunityPromptProcessing(rejectPromptTarget)" (onClick)="confirmRejectCommunityPrompt()"></p-button>
+      </div>
+    </div>
   </p-dialog>
 
   <!-- Image Preview Dialog -->

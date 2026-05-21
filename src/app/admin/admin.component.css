@@ -802,6 +802,110 @@
   align-items: center;
 }
 
+.community-moderation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+:host ::ng-deep .community-content-toggle .p-button {
+  min-width: 104px;
+}
+
+.community-content-title-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.community-content-title-cell strong {
+  color: var(--admin-text);
+  font-size: 0.95rem;
+}
+
+.community-content-title-cell p {
+  margin: 0;
+  color: var(--admin-muted-text);
+}
+
+.community-content-title-cell code {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(11, 18, 32, 0.26);
+  color: #dbeafe;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.community-preview-samples,
+.community-content-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.community-preview-samples span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.18);
+  color: var(--admin-text);
+  font-size: 0.75rem;
+}
+
+.community-content-tags span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--admin-text);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+
+.community-rejection-reason {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+  font-size: 0.78rem;
+}
+
+.community-content-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.community-content-counts span,
+.community-content-meta span,
+.community-content-meta small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.community-content-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.community-content-meta small {
+  color: var(--admin-muted-text);
+}
+
+.community-review-buttons {
+  flex-wrap: wrap;
+}
+
 /* Empty State */
 .empty-state {
   display: flex;
@@ -1109,6 +1213,11 @@
     flex-direction: column;
     padding: 0.5rem;
   }
+
+  .community-moderation-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
   
   .search-filters {
     width: 100%;
@@ -1145,6 +1254,16 @@
     border: none !important;
     padding: 0.25rem 0;
   }
+
+  .community-content-counts {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .community-review-buttons {
+    width: 100%;
+  }
   
   .col-hide-sm { display: none !important; }
   
@@ -1161,4 +1280,5 @@
     flex-direction: column;
     gap: 0.75rem;
   }
+
 }

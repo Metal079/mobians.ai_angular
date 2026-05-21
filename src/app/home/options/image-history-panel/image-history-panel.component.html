@@ -84,6 +84,12 @@
                           <span class="info-label">Prompt</span>
                           <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
                         </div>
+                        @if (image.promptTemplate) {
+                          <div class="info-line">
+                            <span class="info-label">Template</span>
+                            <span class="info-value">{{ image.promptTemplate }}</span>
+                          </div>
+                        }
                       </div>
                     }
                   </div>
@@ -285,6 +291,12 @@
                               <span class="info-label">Prompt</span>
                               <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
                             </div>
+                            @if (image.promptTemplate) {
+                              <div class="info-line">
+                                <span class="info-label">Template</span>
+                                <span class="info-value">{{ image.promptTemplate }}</span>
+                              </div>
+                            }
                           </div>
                         }
                       </div>
