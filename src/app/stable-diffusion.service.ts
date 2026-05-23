@@ -242,9 +242,17 @@ export interface DynamicPromptTemplateListResponse {
   status?: DynamicPromptTemplateStatus | 'all';
 }
 
+export interface DynamicPromptVoteReward {
+  creator_credits_awarded: number;
+  voter_credits_awarded: number;
+  voter_balance_after?: number | null;
+  voter_reward_skipped_reason?: string | null;
+}
+
 export interface DynamicPromptTemplateResponse {
   template: DynamicPromptCommunityTemplate;
   preview_samples?: string[];
+  vote_reward?: DynamicPromptVoteReward | null;
 }
 
 export interface DynamicPromptTemplateListFilters {
@@ -298,6 +306,7 @@ export interface DynamicPromptCustomCategoryListResponse {
 
 export interface DynamicPromptCustomCategoryResponse {
   category: DynamicPromptCustomCategory;
+  vote_reward?: DynamicPromptVoteReward | null;
 }
 
 export interface DynamicPromptCustomCategoryListFilters {

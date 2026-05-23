@@ -125,6 +125,46 @@ class StableDiffusionServiceStub {
     });
   }
 
+  upvoteDynamicPromptTemplate(templateId?: unknown) {
+    return of({
+      template: {
+        id: templateId as string,
+        user_id: 'creator-user',
+        title: 'Community Template',
+        description: '',
+        template: 'A hero',
+        tags: [],
+        status: 'approved',
+        author_display_name: 'Creator',
+        upvote_count: 1,
+        import_count: 0,
+        has_upvoted: true,
+        has_imported: false,
+        preview_samples: [],
+      },
+    });
+  }
+
+  removeDynamicPromptTemplateUpvote(templateId?: unknown) {
+    return of({
+      template: {
+        id: templateId as string,
+        user_id: 'creator-user',
+        title: 'Community Template',
+        description: '',
+        template: 'A hero',
+        tags: [],
+        status: 'approved',
+        author_display_name: 'Creator',
+        upvote_count: 0,
+        import_count: 0,
+        has_upvoted: false,
+        has_imported: false,
+        preview_samples: [],
+      },
+    });
+  }
+
   shareUserDynamicPromptCategory() {
     return of({ category: { id: 'category-1', status: 'public' } });
   }
@@ -159,18 +199,65 @@ class StableDiffusionServiceStub {
       },
     });
   }
+
+  upvoteDynamicPromptCategory(categoryId?: unknown) {
+    return of({
+      category: {
+        id: categoryId as string,
+        user_id: 'creator-user',
+        title: 'Community Category',
+        description: '',
+        token: '__creator/category__',
+        tags: [],
+        status: 'public',
+        upvote_count: 1,
+        import_count: 0,
+        author_display_name: 'Creator',
+        has_upvoted: true,
+        has_imported: false,
+        entries: [],
+        examples: [],
+        item_count: 0,
+      },
+    });
+  }
+
+  removeDynamicPromptCategoryUpvote(categoryId?: unknown) {
+    return of({
+      category: {
+        id: categoryId as string,
+        user_id: 'creator-user',
+        title: 'Community Category',
+        description: '',
+        token: '__creator/category__',
+        tags: [],
+        status: 'public',
+        upvote_count: 0,
+        import_count: 0,
+        author_display_name: 'Creator',
+        has_upvoted: false,
+        has_imported: false,
+        entries: [],
+        examples: [],
+        item_count: 0,
+      },
+    });
+  }
 }
 
 class AuthServiceStub {
   isLoggedIn() {
     return true;
   }
+
+  updateCredits(_credits: number) {}
 }
 
 describe('DynamicPromptHelperComponent', () => {
   let component: DynamicPromptHelperComponent;
   let fixture: ComponentFixture<DynamicPromptHelperComponent>;
   let stableDiffusionService: StableDiffusionServiceStub;
+  let authService: AuthServiceStub;
   let sharedService: SharedService;
 
   beforeEach(async () => {
@@ -187,6 +274,7 @@ describe('DynamicPromptHelperComponent', () => {
     fixture = TestBed.createComponent(DynamicPromptHelperComponent);
     component = fixture.componentInstance;
     stableDiffusionService = TestBed.inject(StableDiffusionService) as unknown as StableDiffusionServiceStub;
+    authService = TestBed.inject(AuthService) as unknown as AuthServiceStub;
     sharedService = TestBed.inject(SharedService);
     sharedService.setUserData({ user_id: 'user-1', token: 'token' });
   });
@@ -436,6 +524,109 @@ describe('DynamicPromptHelperComponent', () => {
   it('labels community authors, including the current user', () => {
     expect(component.communityAuthorLabel('Metal', 'user-1')).toBe('Created by you');
     expect(component.communityAuthorLabel('Metal', 'user-2')).toBe('Created by Metal');
+  });
+
+  it('updates credits when a template upvote returns voter reward metadata', () => {
+    const updateCreditsSpy = spyOn(authService, 'updateCredits');
+    const template = {
+      id: 'template-1',
+      user_id: 'creator-user',
+      title: 'Community Template',
+      description: '',
+      template: 'A hero',
+      tags: [],
+      status: 'approved',
+      author_display_name: 'Creator',
+      upvote_count: 0,
+      import_count: 0,
+      has_upvoted: false,
+      has_imported: false,
+      preview_samples: [],
+    } as any;
+    spyOn(stableDiffusionService, 'upvoteDynamicPromptTemplate').and.returnValue(of({
+      template: { ...template, upvote_count: 1, has_upvoted: true },
+      vote_reward: {
+        creator_credits_awarded: 100,
+        voter_credits_awarded: 10,
+        voter_balance_after: 310,
+      },
+    } as any));
+    component.communityTemplates.set([template]);
+
+    component.toggleUpvote(template);
+
+    expect(updateCreditsSpy).toHaveBeenCalledOnceWith(310);
+    expect(component.communityTemplates()[0].has_upvoted).toBeTrue();
+    expect(component.helperMessage()).toBe('Vote recorded. You earned 10 credits.');
+  });
+
+  it('does not update credits when an upvote has no voter reward balance', () => {
+    const updateCreditsSpy = spyOn(authService, 'updateCredits');
+    const category = {
+      id: 'category-1',
+      user_id: 'creator-user',
+      title: 'Community Category',
+      description: '',
+      token: '__creator/category__',
+      tags: [],
+      status: 'public',
+      upvote_count: 0,
+      import_count: 0,
+      author_display_name: 'Creator',
+      has_upvoted: false,
+      has_imported: false,
+      entries: [],
+      examples: [],
+      item_count: 0,
+    } as any;
+    spyOn(stableDiffusionService, 'upvoteDynamicPromptCategory').and.returnValue(of({
+      category: { ...category, upvote_count: 1, has_upvoted: true },
+      vote_reward: {
+        creator_credits_awarded: 100,
+        voter_credits_awarded: 0,
+        voter_balance_after: null,
+        voter_reward_skipped_reason: 'daily_cap_reached',
+      },
+    } as any));
+    component.communityCategories.set([category]);
+
+    component.toggleCategoryUpvote(category);
+
+    expect(updateCreditsSpy).not.toHaveBeenCalled();
+    expect(component.communityCategories()[0].has_upvoted).toBeTrue();
+  });
+
+  it('does not update credits when removing a vote', () => {
+    const updateCreditsSpy = spyOn(authService, 'updateCredits');
+    const template = {
+      id: 'template-1',
+      user_id: 'creator-user',
+      title: 'Community Template',
+      description: '',
+      template: 'A hero',
+      tags: [],
+      status: 'approved',
+      author_display_name: 'Creator',
+      upvote_count: 1,
+      import_count: 0,
+      has_upvoted: true,
+      has_imported: false,
+      preview_samples: [],
+    } as any;
+    spyOn(stableDiffusionService, 'removeDynamicPromptTemplateUpvote').and.returnValue(of({
+      template: { ...template, upvote_count: 0, has_upvoted: false },
+      vote_reward: {
+        creator_credits_awarded: 0,
+        voter_credits_awarded: 10,
+        voter_balance_after: 320,
+      },
+    } as any));
+    component.communityTemplates.set([template]);
+
+    component.toggleUpvote(template);
+
+    expect(updateCreditsSpy).not.toHaveBeenCalled();
+    expect(component.communityTemplates()[0].has_upvoted).toBeFalse();
   });
 
   it('does not delete a category when confirmation is cancelled', () => {

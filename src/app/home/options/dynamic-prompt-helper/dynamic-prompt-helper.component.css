@@ -358,6 +358,35 @@
   width: min(100%, 18rem);
 }
 
+.community-credit-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid rgba(255, 210, 94, 0.35);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  background: color-mix(in srgb, var(--theme-surface-bg) 84%, #ffd45e 16%);
+  color: var(--theme-surface-text);
+}
+
+.community-credit-note i {
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+  color: #d99418;
+  font-size: 0.92rem;
+}
+
+.community-credit-note p {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+.community-credit-note strong {
+  font-weight: 900;
+}
+
 .community-template-list {
   display: grid;
   gap: 0.6rem;
@@ -726,6 +755,10 @@
 
   .community-search {
     width: 100%;
+  }
+
+  .community-credit-note {
+    padding: 0.55rem 0.6rem;
   }
 
   .template-card-actions {

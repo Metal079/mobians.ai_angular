@@ -21,6 +21,7 @@ import {
   DynamicPromptCategory,
   DynamicPromptCustomCategory,
   DynamicPromptStarterTemplate,
+  DynamicPromptVoteReward,
   StableDiffusionService,
 } from 'src/app/stable-diffusion.service';
 import { DynamicPromptingConfig } from 'src/_shared/generation-request.interface';
@@ -653,7 +654,12 @@ export class DynamicPromptHelperComponent implements OnDestroy {
       ? this.stableDiffusionService.removeDynamicPromptTemplateUpvote(template.id)
       : this.stableDiffusionService.upvoteDynamicPromptTemplate(template.id);
     request.subscribe({
-      next: (response) => this.replaceCommunityTemplate(response.template),
+      next: (response) => {
+        this.replaceCommunityTemplate(response.template);
+        if (!template.has_upvoted) {
+          this.applyVoteReward(response.vote_reward);
+        }
+      },
       error: (error: unknown) => this.errorMessage.set(this.extractErrorMessage(error)),
     });
   }
@@ -684,9 +690,25 @@ export class DynamicPromptHelperComponent implements OnDestroy {
       ? this.stableDiffusionService.removeDynamicPromptCategoryUpvote(category.id)
       : this.stableDiffusionService.upvoteDynamicPromptCategory(category.id);
     request.subscribe({
-      next: (response) => this.replaceCommunityCategory(response.category),
+      next: (response) => {
+        this.replaceCommunityCategory(response.category);
+        if (!category.has_upvoted) {
+          this.applyVoteReward(response.vote_reward);
+        }
+      },
       error: (error: unknown) => this.errorMessage.set(this.extractErrorMessage(error)),
     });
+  }
+
+  private applyVoteReward(voteReward: DynamicPromptVoteReward | null | undefined): void {
+    if (typeof voteReward?.voter_balance_after !== 'number') {
+      return;
+    }
+
+    this.authService.updateCredits(voteReward.voter_balance_after);
+    if (voteReward.voter_credits_awarded > 0) {
+      this.helperMessage.set(`Vote recorded. You earned ${voteReward.voter_credits_awarded} credits.`);
+    }
   }
 
   importCategory(category: DynamicPromptCustomCategory): void {
