@@ -208,11 +208,26 @@ export class DynamicPromptHelperComponent implements OnDestroy {
   }
 
   insertCategory(category: DynamicPromptCategory): void {
-    const currentTemplate = this.templateText().trim();
-    const separator = currentTemplate ? ', ' : '';
-    this.templateText.set(`${currentTemplate}${separator}${category.token}`);
+    this.appendTokenToTemplate(category.token);
     this.errorMessage.set('');
     this.schedulePreviewRefresh();
+  }
+
+  insertTemplateToken(template: { token?: string; title?: string; name?: string }): void {
+    const token = String(template.token || '').trim();
+    if (!token) return;
+    this.activePanel.set('starters');
+    this.selectedTemplateId.set('');
+    this.appendTokenToTemplate(token);
+    this.errorMessage.set('');
+    this.helperMessage.set(`${template.title || template.name || 'Template'} token was added to the template.`);
+    this.schedulePreviewRefresh();
+  }
+
+  private appendTokenToTemplate(token: string): void {
+    const currentTemplate = this.templateText().trim();
+    const separator = currentTemplate ? ', ' : '';
+    this.templateText.set(`${currentTemplate}${separator}${token}`);
   }
 
   useSyntaxExample(template: string): void {

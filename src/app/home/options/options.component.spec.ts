@@ -20,21 +20,21 @@ const dynamicPromptLibraryResponse: DynamicPromptLibraryResponse = {
     {
       id: 'mobian/characters',
       label: 'Characters',
-      token: '__mobian/characters__',
+      token: '_mobian/characters_',
       description: 'Character ideas',
       examples: ['Sonic'],
     },
     {
       id: 'mobian/poses',
       label: 'Poses',
-      token: '__mobian/poses__',
+      token: '_mobian/poses_',
       description: 'Pose ideas',
       examples: ['heroic pose'],
     },
     {
       id: 'sonicfan/mood-ideas',
       label: 'Mood Ideas',
-      token: '__sonicfan/mood-ideas__',
+      token: '_sonicfan/mood-ideas_',
       description: 'Custom mood ideas',
       examples: ['confident smile'],
     },
@@ -194,7 +194,7 @@ describe('OptionsComponent', () => {
   });
 
   it('auto-enables dynamic prompting for known wildcard tokens', () => {
-    component.generationRequest.prompt = 'A portrait of __mobian/characters__';
+    component.generationRequest.prompt = 'A portrait of _mobian/characters_';
     component.generationRequest.dynamic_prompting = { enabled: false };
 
     component.onPromptInputChange();
@@ -203,11 +203,23 @@ describe('OptionsComponent', () => {
     expect(component.isDynamicPromptActive()).toBeTrue();
     expect(component.generationRequest.dynamic_prompting?.enabled).toBeTrue();
     expect(config.enabled).toBeTrue();
-    expect(config.template).toBe('A portrait of __mobian/characters__');
+    expect(config.template).toBe('A portrait of _mobian/characters_');
+  });
+
+  it('auto-enables dynamic prompting for typed template tokens', () => {
+    component.generationRequest.prompt = 'A portrait from __mobian/character-spotlight__';
+    component.generationRequest.dynamic_prompting = { enabled: false };
+
+    component.onPromptInputChange();
+    const config = (component as any).getDynamicPromptingForRequest();
+
+    expect(component.isDynamicPromptActive()).toBeTrue();
+    expect(config.enabled).toBeTrue();
+    expect(config.template).toBe('A portrait from __mobian/character-spotlight__');
   });
 
   it('treats legacy custom category alias tokens as unknown wildcards', () => {
-    component.generationRequest.prompt = 'A portrait with __custom/bffde430-c3d5-4f9f-9560-0b1049c9e143__';
+    component.generationRequest.prompt = 'A portrait with _custom/bffde430-c3d5-4f9f-9560-0b1049c9e143_';
     component.generationRequest.dynamic_prompting = { enabled: false };
 
     const config = (component as any).getDynamicPromptingForRequest();
@@ -215,12 +227,12 @@ describe('OptionsComponent', () => {
 
     expect(component.isDynamicPromptActive()).toBeFalse();
     expect(config.enabled).toBeFalse();
-    expect(highlighted).toContain('__custom/bffde430-c3d5-4f9f-9560-0b1049c9e143__');
-    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">__custom/bffde430-c3d5-4f9f-9560-0b1049c9e143__</span>');
+    expect(highlighted).toContain('_custom/bffde430-c3d5-4f9f-9560-0b1049c9e143_');
+    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">_custom/bffde430-c3d5-4f9f-9560-0b1049c9e143_</span>');
   });
 
   it('keeps unknown wildcard tokens inactive when they are the only syntax', () => {
-    component.generationRequest.prompt = 'A portrait of __mobian/not-real__';
+    component.generationRequest.prompt = 'A portrait of _mobian/not-real_';
     component.generationRequest.dynamic_prompting = { enabled: false };
 
     const config = (component as any).getDynamicPromptingForRequest();
@@ -228,28 +240,41 @@ describe('OptionsComponent', () => {
 
     expect(component.isDynamicPromptActive()).toBeFalse();
     expect(config.enabled).toBeFalse();
-    expect(highlighted).toContain('__mobian/not-real__');
-    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">__mobian/not-real__</span>');
+    expect(highlighted).toContain('_mobian/not-real_');
+    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">_mobian/not-real_</span>');
   });
 
   it('highlights only dynamic prompt syntax tokens', () => {
-    component.generationRequest.prompt = 'A <hero> {heroic|playful} with __mobian/characters__';
+    component.generationRequest.prompt = 'A <hero> {heroic|playful} with _mobian/characters_ and __mobian/character-spotlight__';
 
     const highlighted = component.getDynamicPromptHighlightHtml();
 
     expect(highlighted).toContain('A &lt;hero&gt; ');
     expect(highlighted).toContain('<span class="dynamic-prompt-token">{heroic|playful}</span>');
-    expect(highlighted).toContain('<span class="dynamic-prompt-token">__mobian/characters__</span>');
+    expect(highlighted).toContain('<span class="dynamic-prompt-token">_mobian/characters_</span>');
+    expect(highlighted).toContain('<span class="dynamic-prompt-token">__mobian/character-spotlight__</span>');
     expect(highlighted).not.toContain('<span class="dynamic-prompt-token">A &lt;hero&gt;</span>');
   });
 
   it('highlights known wildcard tokens while leaving unknown tokens normal', () => {
-    component.generationRequest.prompt = '__mobian/characters__ and __mobian/not-real__';
+    component.generationRequest.prompt = '_mobian/characters_ and _mobian/not-real_';
 
     const highlighted = component.getDynamicPromptHighlightHtml();
 
-    expect(highlighted).toContain('<span class="dynamic-prompt-token">__mobian/characters__</span>');
-    expect(highlighted).toContain(' and __mobian/not-real__');
-    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">__mobian/not-real__</span>');
+    expect(highlighted).toContain('<span class="dynamic-prompt-token">_mobian/characters_</span>');
+    expect(highlighted).toContain(' and _mobian/not-real_');
+    expect(highlighted).not.toContain('<span class="dynamic-prompt-token">_mobian/not-real_</span>');
+  });
+
+  it('migrates stored category prompts to single underscore syntax once', async () => {
+    localStorage.setItem('prompt-input', 'A portrait of __mobian/characters__');
+    localStorage.setItem('dynamic-prompting', JSON.stringify({ enabled: true, template: '__mobian/poses__' }));
+    localStorage.removeItem('mobians:dynamic-prompt-category-syntax-v2');
+
+    await component.loadSettings();
+
+    expect(component.generationRequest.prompt).toBe('A portrait of _mobian/characters_');
+    expect(component.generationRequest.dynamic_prompting.template).toBe('_mobian/poses_');
+    expect(localStorage.getItem('mobians:dynamic-prompt-category-syntax-v2')).toBe('done');
   });
 });

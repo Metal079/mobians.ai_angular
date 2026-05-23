@@ -69,6 +69,7 @@
                   (click)="selectStarter(starter)">
                   <strong>{{ starter.name }}</strong>
                   <span>{{ starter.description }}</span>
+                  <code class="category-token">{{ starter.token }}</code>
                 </button>
               }
             </div>
@@ -193,6 +194,7 @@
                     <h4>{{ template.title }}</h4>
                     <div class="template-author">{{ communityAuthorLabel(template.author_display_name, template.user_id) }}</div>
                     <p>{{ template.description || template.template }}</p>
+                    <code class="category-token">{{ template.token }}</code>
                     <div class="template-meta">
                       <span><i class="pi pi-download" aria-hidden="true"></i>{{ template.import_count }}</span>
                       @for (tag of template.tags; track tag) {
@@ -203,6 +205,7 @@
                   <div class="template-card-actions">
                     <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
                     <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
+                    <button class="btn btn-sm btn-outline-primary" type="button" (click)="insertTemplateToken(template)">Insert Token</button>
                     <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canImportTemplate(template)" (click)="importTemplate(template)">
                       <i class="pi pi-download" aria-hidden="true"></i>
                       {{ templateImportLabel(template) }}
@@ -332,6 +335,7 @@
                         <div class="template-author">{{ importedTemplateSourceLabel(template) }}</div>
                       }
                       <p>{{ template.description || template.template }}</p>
+                      <code class="category-token">{{ template.token }}</code>
                       <div class="template-meta">
                         <span class="status-pill">{{ templateStatusLabel(template) }}</span>
                         @for (tag of template.tags; track tag) {
@@ -342,6 +346,7 @@
                     <div class="template-card-actions">
                       <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
                       <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
+                      <button class="btn btn-sm btn-outline-primary" type="button" (click)="insertTemplateToken(template)">Insert Token</button>
                       <button class="btn btn-sm btn-outline-primary" type="button" (click)="editTemplate(template)">Edit</button>
                       <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canShareTemplate(template)" (click)="shareTemplate(template)">
                         {{ templateShareLabel(template) }}
@@ -449,7 +454,7 @@
 
     <div class="tutorial-example">
       <span>Example</span>
-      <code>__mobian/characters__ in &#123;sunset beach|neon city&#125;, __mobian/styles__</code>
+      <code>_mobian/characters_ in &#123;sunset beach|neon city&#125;, _mobian/styles_</code>
       <p>This means: pick a character, pick one of those locations, then add a style.</p>
     </div>
 

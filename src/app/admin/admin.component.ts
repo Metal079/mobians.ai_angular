@@ -1094,6 +1094,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         id: starter.id,
         name: starter.name,
         description: starter.description,
+        token: starter.token,
         template: starter.template,
         display_order: starter.display_order,
         is_active: starter.is_active,

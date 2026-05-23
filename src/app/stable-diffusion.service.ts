@@ -111,6 +111,7 @@ export interface DynamicPromptStarterTemplate {
   id: string;
   name: string;
   description: string;
+  token?: string;
   template: string;
 }
 
@@ -184,6 +185,7 @@ export interface DynamicPromptAdminLibraryUpdate {
     id: string;
     name: string;
     description?: string;
+    token?: string;
     template: string;
     display_order?: number;
     is_active?: boolean;
@@ -199,6 +201,7 @@ export interface DynamicPromptCommunityTemplate {
   title: string;
   description: string;
   template: string;
+  token?: string;
   tags: string[];
   status: DynamicPromptTemplateStatus;
   rejection_reason?: string | null;

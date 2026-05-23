@@ -184,7 +184,7 @@ class StableDiffusionServiceStub {
         user_id: 'user-1',
         title: 'Imported Category',
         description: '',
-        token: '__user/imported__',
+        token: '_user/imported_',
         tags: [],
         status: 'private',
         source_category_id: categoryId as string,
@@ -207,7 +207,7 @@ class StableDiffusionServiceStub {
         user_id: 'creator-user',
         title: 'Community Category',
         description: '',
-        token: '__creator/category__',
+        token: '_creator/category_',
         tags: [],
         status: 'public',
         upvote_count: 1,
@@ -229,7 +229,7 @@ class StableDiffusionServiceStub {
         user_id: 'creator-user',
         title: 'Community Category',
         description: '',
-        token: '__creator/category__',
+        token: '_creator/category_',
         tags: [],
         status: 'public',
         upvote_count: 0,
@@ -426,7 +426,7 @@ describe('DynamicPromptHelperComponent', () => {
       id: 'category-1',
       title: 'Mood Ideas',
       description: '',
-      token: '__user/mood-ideas__',
+      token: '_user/mood-ideas_',
       tags: [],
       status: 'private',
       entries: [],
@@ -453,7 +453,7 @@ describe('DynamicPromptHelperComponent', () => {
       user_id: 'user-1',
       title: 'Imported Category',
       description: '',
-      token: '__user/imported__',
+      token: '_user/imported_',
       tags: [],
       status: 'private',
       source_category_id: 'community-category-1',
@@ -504,7 +504,7 @@ describe('DynamicPromptHelperComponent', () => {
       user_id: 'user-1',
       title: 'Mood Ideas',
       description: '',
-      token: '__user/mood-ideas__',
+      token: '_user/mood-ideas_',
       tags: [],
       status: 'public',
       entries: ['heroic'],
@@ -567,7 +567,7 @@ describe('DynamicPromptHelperComponent', () => {
       user_id: 'creator-user',
       title: 'Community Category',
       description: '',
-      token: '__creator/category__',
+      token: '_creator/category_',
       tags: [],
       status: 'public',
       upvote_count: 0,
@@ -637,7 +637,7 @@ describe('DynamicPromptHelperComponent', () => {
       id: 'category-1',
       title: 'Mood Ideas',
       description: '',
-      token: '__user/mood-ideas__',
+      token: '_user/mood-ideas_',
       tags: [],
       status: 'private',
       entries: [],
@@ -697,6 +697,22 @@ describe('DynamicPromptHelperComponent', () => {
     expect(component.saveTitle()).toBe('');
     expect(component.saveDescription()).toBe('');
     expect(component.templateText()).toBe('A {heroic|playful} hero');
+  });
+
+  it('inserts a saved template token into the editor', () => {
+    component.activePanel.set('community');
+    component.selectedTemplateId.set('starter-1');
+    component.templateText.set('base prompt');
+
+    component.insertTemplateToken({
+      title: 'Quality Starter',
+      token: '__user/quality-starter__',
+    });
+
+    expect(component.activePanel()).toBe('starters');
+    expect(component.selectedTemplateId()).toBe('');
+    expect(component.templateText()).toBe('base prompt, __user/quality-starter__');
+    expect(component.helperMessage()).toBe('Quality Starter token was added to the template.');
   });
 
   it('edits a saved template body through the template editor', () => {
@@ -926,7 +942,7 @@ describe('DynamicPromptHelperComponent', () => {
         id: 'category-1',
         title: 'Hero Poses',
         description: 'Pose ideas for heroes',
-        token: '__hero/poses__',
+        token: '_hero/poses_',
         tags: ['pose'],
         examples: ['hero landing'],
         author_display_name: 'Metal',
@@ -935,7 +951,7 @@ describe('DynamicPromptHelperComponent', () => {
         id: 'category-2',
         title: 'Villain Scenes',
         description: 'Scene ideas for villains',
-        token: '__villain/scenes__',
+        token: '_villain/scenes_',
         tags: ['scene'],
         examples: ['villain throne room'],
         author_display_name: 'Metal',
@@ -1013,7 +1029,7 @@ describe('DynamicPromptHelperComponent', () => {
       id: 'owned-category-1',
       title: 'Imported Category',
       description: '',
-      token: '__user/imported__',
+      token: '_user/imported_',
       tags: [],
       status: 'private',
       entries: [],

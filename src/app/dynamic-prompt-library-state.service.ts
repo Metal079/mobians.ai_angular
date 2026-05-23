@@ -39,7 +39,7 @@ export class DynamicPromptLibraryStateService {
 
   hasKnownWildcardToken(value: string | undefined): boolean {
     const prompt = String(value || '');
-    const wildcardPattern = /__([-\w/]+)__/g;
+    const wildcardPattern = /(?<!_)_([A-Za-z0-9](?:[-\w/]*[A-Za-z0-9])?)_(?!_)/g;
     let match: RegExpExecArray | null;
     while ((match = wildcardPattern.exec(prompt)) !== null) {
       if (this.isKnownWildcardId(match[1])) {
@@ -51,7 +51,7 @@ export class DynamicPromptLibraryStateService {
 
   hasUnknownWildcardToken(value: string | undefined): boolean {
     const prompt = String(value || '');
-    const wildcardPattern = /__([-\w/]+)__/g;
+    const wildcardPattern = /(?<!_)_([A-Za-z0-9](?:[-\w/]*[A-Za-z0-9])?)_(?!_)/g;
     let match: RegExpExecArray | null;
     while ((match = wildcardPattern.exec(prompt)) !== null) {
       if (!this.isKnownWildcardId(match[1])) {

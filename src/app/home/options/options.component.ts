@@ -239,6 +239,7 @@ export class OptionsComponent implements OnInit {
   // Persistence keys
   private readonly pendingJobKey = 'mobians:pending-job';
   private readonly queueEtaKey = 'mobians:queue-eta';
+  private readonly dynamicPromptCategorySyntaxMigrationKey = 'mobians:dynamic-prompt-category-syntax-v2';
   private readonly pendingMaxAgeMs = 24 * 60 * 60 * 1000; // 24h max age for pending jobs
 
   // Queue type and credits
@@ -786,6 +787,8 @@ export class OptionsComponent implements OnInit {
 
   // Load session storage info of changed settings
   async loadSettings() {
+    this.migrateStoredDynamicPromptCategorySyntax();
+
     // Load other settings as before
     if (localStorage.getItem("prompt-input") != null) {
       this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
@@ -1013,11 +1016,12 @@ export class OptionsComponent implements OnInit {
   private hasDynamicPromptSyntax(value: string | undefined): boolean {
     const prompt = String(value || '');
     return this.hasDynamicPromptVariantSyntax(prompt)
-      || this.dynamicPromptLibraryState.hasKnownWildcardToken(prompt);
+      || this.dynamicPromptLibraryState.hasKnownWildcardToken(prompt)
+      || this.hasDynamicPromptTemplateToken(prompt);
   }
 
   private highlightDynamicPromptSyntax(value: string): string {
-    const dynamicSyntaxPattern = /(__([-\w/]+)__|\{[^{}]*\|[^{}]*\})/g;
+    const dynamicSyntaxPattern = /(__([-\w/]+)__|(?<!_)_([A-Za-z0-9](?:[-\w/]*[A-Za-z0-9])?)_(?!_)|\{[^{}]*\|[^{}]*\})/g;
     let highlighted = '';
     let cursor = 0;
     let match: RegExpExecArray | null;
@@ -1040,11 +1044,15 @@ export class OptionsComponent implements OnInit {
     return /\{[^{}]*\|[^{}]*\}/.test(value);
   }
 
+  private hasDynamicPromptTemplateToken(value: string): boolean {
+    return /__([-\w/]+)__/.test(value);
+  }
+
   private shouldHighlightDynamicPromptMatch(match: RegExpExecArray): boolean {
-    const wildcardId = match[2];
-    return wildcardId
-      ? this.dynamicPromptLibraryState.isKnownWildcardId(wildcardId)
-      : true;
+    const templateId = match[2];
+    if (templateId) return true;
+    const wildcardId = match[3];
+    return wildcardId ? this.dynamicPromptLibraryState.isKnownWildcardId(wildcardId) : true;
   }
 
   private queueDynamicPromptLibraryRefreshIfNeeded(prompt: string): void {
@@ -1068,6 +1076,35 @@ export class OptionsComponent implements OnInit {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  private migrateStoredDynamicPromptCategorySyntax(): void {
+    if (localStorage.getItem(this.dynamicPromptCategorySyntaxMigrationKey) === 'done') return;
+
+    const migrateText = (value: string | null): string | null => {
+      if (value == null) return value;
+      return value.replace(/__([-\w/]+)__/g, '_$1_');
+    };
+
+    const storedPrompt = localStorage.getItem('prompt-input');
+    if (storedPrompt != null) {
+      localStorage.setItem('prompt-input', migrateText(storedPrompt) || '');
+    }
+
+    const storedDynamicPrompting = localStorage.getItem('dynamic-prompting');
+    if (storedDynamicPrompting != null) {
+      try {
+        const parsed = JSON.parse(storedDynamicPrompting);
+        if (parsed && typeof parsed.template === 'string') {
+          parsed.template = migrateText(parsed.template);
+          localStorage.setItem('dynamic-prompting', JSON.stringify(parsed));
+        }
+      } catch {
+        localStorage.removeItem('dynamic-prompting');
+      }
+    }
+
+    localStorage.setItem(this.dynamicPromptCategorySyntaxMigrationKey, 'done');
   }
 
   private clampInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
