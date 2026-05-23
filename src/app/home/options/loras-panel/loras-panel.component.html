@@ -47,12 +47,14 @@
 
       <!-- Full-Sized Image Dialog -->
       <p-dialog [visible]="displayModal" (visibleChange)="onLoraPreviewVisibleChange($event)" [modal]="true"
-        [closable]="true" [style]="{width: 'auto'}">
+        [closable]="true" [style]="{width: 'auto', maxWidth: '95vw'}" styleClass="lora-preview-dialog">
         <ng-template pTemplate="header">
           <h5>Full Lora Preview</h5>
         </ng-template>
         <ng-template pTemplate="content">
-          <img [src]="selectedImageUrl" alt="Full Lora Preview" class="img-fluid">
+          <div class="lora-preview-container">
+            <img [src]="selectedImageUrl" alt="Full Lora Preview" class="lora-preview-image">
+          </div>
         </ng-template>
       </p-dialog>
 

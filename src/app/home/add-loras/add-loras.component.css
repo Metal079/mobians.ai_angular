@@ -367,6 +367,30 @@
   color: var(--request-muted);
 }
 
+:host ::ng-deep .request-lora-preview-dialog .p-dialog-content {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.request-lora-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  max-height: calc(100dvh - 8rem);
+}
+
+.request-lora-preview-image {
+  display: block;
+  max-width: min(95vw, 1200px);
+  max-height: calc(100dvh - 8rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
 .lora-card-title-wrap {
   min-width: 0;
   flex: 1 1 auto;

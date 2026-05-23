@@ -195,7 +195,11 @@
     </div>
   }
 
-  <p-dialog header="Preview Image" [(visible)]="showImageDialog" [draggable]="false" (onHide)="showImageDialog = false">
-    <img [src]="imageToShow" alt="Expanded Preview" style="width: 100%;" />
+  <p-dialog header="Preview Image" [(visible)]="showImageDialog" [draggable]="false"
+    [style]="{width: 'auto', maxWidth: '95vw'}" styleClass="request-lora-preview-dialog"
+    (onHide)="showImageDialog = false">
+    <div class="request-lora-preview-container">
+      <img [src]="imageToShow" alt="Expanded Preview" class="request-lora-preview-image" />
+    </div>
   </p-dialog>
 </div>

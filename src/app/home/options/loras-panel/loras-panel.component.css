@@ -74,6 +74,30 @@
   background: none;
 }
 
+:host ::ng-deep .lora-preview-dialog .p-dialog-content {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.lora-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  max-height: calc(100dvh - 8rem);
+}
+
+.lora-preview-image {
+  display: block;
+  max-width: min(95vw, 1200px);
+  max-height: calc(100dvh - 8rem);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
 @keyframes lora-image-shimmer {
   0% {
     background-position: 200% 0;
@@ -354,6 +378,15 @@
 @media (max-width: 480px) {
   #lorasCollapse {
     margin-left: 0;
+  }
+
+  :host ::ng-deep .lora-preview-dialog .p-dialog-content {
+    padding: 0.75rem;
+  }
+
+  .lora-preview-container,
+  .lora-preview-image {
+    max-height: calc(100dvh - 6rem);
   }
 
   #lorasDropdown {
