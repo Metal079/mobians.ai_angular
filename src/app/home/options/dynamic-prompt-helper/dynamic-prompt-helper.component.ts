@@ -5,10 +5,12 @@ import {
   ElementRef,
   OnDestroy,
   computed,
+  effect,
   inject,
   input,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { DialogModule } from 'primeng/dialog';
@@ -94,6 +96,31 @@ export class DynamicPromptHelperComponent implements OnDestroy {
   readonly categoryEntries = signal('');
   readonly helperMessage = signal('');
   readonly errorMessage = signal('');
+
+  private readonly syncCurrentPromptToTemplate = effect(() => {
+    const prompt = this.currentPrompt();
+    const currentTemplate = untracked(() => this.templateText());
+
+    if (prompt === currentTemplate) {
+      return;
+    }
+
+    this.templateText.set(prompt);
+    this.selectedTemplateId.set('');
+    this.lastPreviewedTemplate = '';
+    this.errorMessage.set('');
+
+    if (untracked(() => this.dialogVisible())) {
+      this.schedulePreviewRefresh();
+      return;
+    }
+
+    this.clearScheduledPreviewRefresh();
+    this.loadingPreview.set(false);
+    if (!prompt.trim()) {
+      this.previews.set([]);
+    }
+  });
 
   readonly starterTemplates = computed(() => this.library()?.starter_templates ?? []);
   readonly categories = computed(() => this.library()?.categories ?? []);

@@ -313,6 +313,19 @@ describe('DynamicPromptHelperComponent', () => {
     expect(applied?.dynamicPrompting.expansion_seed).toBeUndefined();
   });
 
+  it('syncs the template editor when the bound prompt changes', () => {
+    fixture.componentRef.setInput('currentPrompt', 'A {red|blue} hero');
+    fixture.detectChanges();
+
+    expect(component.templateText()).toBe('A {red|blue} hero');
+
+    fixture.componentRef.setInput('currentPrompt', 'A {gold|silver} hero');
+    fixture.detectChanges();
+
+    expect(component.templateText()).toBe('A {gold|silver} hero');
+    expect(component.selectedTemplateId()).toBe('');
+  });
+
   it('can reopen the tutorial after it has been closed', () => {
     component.tutorialVisible.set(true);
 
@@ -546,18 +559,18 @@ describe('DynamicPromptHelperComponent', () => {
     spyOn(stableDiffusionService, 'upvoteDynamicPromptTemplate').and.returnValue(of({
       template: { ...template, upvote_count: 1, has_upvoted: true },
       vote_reward: {
-        creator_credits_awarded: 100,
-        voter_credits_awarded: 10,
-        voter_balance_after: 310,
+        creator_credits_awarded: 50,
+        voter_credits_awarded: 15,
+        voter_balance_after: 315,
       },
     } as any));
     component.communityTemplates.set([template]);
 
     component.toggleUpvote(template);
 
-    expect(updateCreditsSpy).toHaveBeenCalledOnceWith(310);
+    expect(updateCreditsSpy).toHaveBeenCalledOnceWith(315);
     expect(component.communityTemplates()[0].has_upvoted).toBeTrue();
-    expect(component.helperMessage()).toBe('Vote recorded. You earned 10 credits.');
+    expect(component.helperMessage()).toBe('Vote recorded. You earned 15 credits.');
   });
 
   it('does not update credits when an upvote has no voter reward balance', () => {
@@ -582,7 +595,7 @@ describe('DynamicPromptHelperComponent', () => {
     spyOn(stableDiffusionService, 'upvoteDynamicPromptCategory').and.returnValue(of({
       category: { ...category, upvote_count: 1, has_upvoted: true },
       vote_reward: {
-        creator_credits_awarded: 100,
+        creator_credits_awarded: 50,
         voter_credits_awarded: 0,
         voter_balance_after: null,
         voter_reward_skipped_reason: 'daily_cap_reached',
@@ -617,7 +630,7 @@ describe('DynamicPromptHelperComponent', () => {
       template: { ...template, upvote_count: 0, has_upvoted: false },
       vote_reward: {
         creator_credits_awarded: 0,
-        voter_credits_awarded: 10,
+        voter_credits_awarded: 15,
         voter_balance_after: 320,
       },
     } as any));
