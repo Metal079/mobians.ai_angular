@@ -187,6 +187,7 @@
                   </button>
                   <div class="template-card-main">
                     <h4>{{ template.title }}</h4>
+                    <div class="template-author">{{ communityAuthorLabel(template.author_display_name, template.user_id) }}</div>
                     <p>{{ template.description || template.template }}</p>
                     <div class="template-meta">
                       <span><i class="pi pi-download" aria-hidden="true"></i>{{ template.import_count }}</span>
@@ -198,9 +199,9 @@
                   <div class="template-card-actions">
                     <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
                     <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
-                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="template.has_imported" (click)="importTemplate(template)">
+                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canImportTemplate(template)" (click)="importTemplate(template)">
                       <i class="pi pi-download" aria-hidden="true"></i>
-                      {{ template.has_imported ? 'Imported' : 'Import' }}
+                      {{ templateImportLabel(template) }}
                     </button>
                   </div>
                 </article>
@@ -235,6 +236,7 @@
                   </button>
                   <div class="template-card-main">
                     <h4>{{ category.title }}</h4>
+                    <div class="template-author">{{ communityAuthorLabel(category.author_display_name, category.user_id) }}</div>
                     <p>{{ category.description || 'Custom prompt choices shared by the community.' }}</p>
                     <code class="category-token">{{ category.token }}</code>
                     @if (category.examples.length) {
@@ -254,9 +256,9 @@
                   </div>
                   <div class="template-card-actions">
                     <button class="btn btn-sm btn-primary" type="button" (click)="insertCustomCategory(category)">Insert</button>
-                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="category.has_imported" (click)="importCategory(category)">
+                    <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canImportCategory(category)" (click)="importCategory(category)">
                       <i class="pi pi-download" aria-hidden="true"></i>
-                      {{ category.has_imported ? 'Imported' : 'Import' }}
+                      {{ categoryImportLabel(category) }}
                     </button>
                   </div>
                 </article>
@@ -322,6 +324,9 @@
                   <article class="community-template-card">
                     <div class="template-card-main">
                       <h4>{{ template.title }}</h4>
+                      @if (template.source_template_id) {
+                        <div class="template-author">{{ importedTemplateSourceLabel(template) }}</div>
+                      }
                       <p>{{ template.description || template.template }}</p>
                       <div class="template-meta">
                         <span class="status-pill">{{ templateStatusLabel(template) }}</span>
@@ -334,8 +339,8 @@
                       <button class="btn btn-sm btn-outline-primary" type="button" (click)="previewTemplate(template)">Preview</button>
                       <button class="btn btn-sm btn-primary" type="button" (click)="applyCommunityTemplate(template)">Use Dynamic</button>
                       <button class="btn btn-sm btn-outline-primary" type="button" (click)="editTemplate(template)">Edit</button>
-                      <button class="btn btn-sm btn-outline-success" type="button" (click)="shareTemplate(template)">
-                        {{ isTemplateShared(template) ? 'Unshare' : 'Share' }}
+                      <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canShareTemplate(template)" (click)="shareTemplate(template)">
+                        {{ templateShareLabel(template) }}
                       </button>
                       <button class="btn btn-sm btn-outline-danger" type="button" (click)="deleteTemplate(template)">
                         <i class="pi pi-trash" aria-hidden="true"></i>
@@ -388,8 +393,8 @@
                     <div class="template-card-actions">
                       <button class="btn btn-sm btn-primary" type="button" (click)="insertCustomCategory(category)">Insert</button>
                       <button class="btn btn-sm btn-outline-primary" type="button" (click)="editCustomCategory(category)">Edit</button>
-                      <button class="btn btn-sm btn-outline-success" type="button" (click)="shareCustomCategory(category)">
-                        {{ category.status === 'public' ? 'Unshare' : 'Share' }}
+                      <button class="btn btn-sm btn-outline-success" type="button" [disabled]="!canShareCategory(category)" (click)="shareCustomCategory(category)">
+                        {{ categoryShareLabel(category) }}
                       </button>
                       <button class="btn btn-sm btn-outline-danger" type="button" (click)="deleteCustomCategory(category)">
                         <i class="pi pi-trash" aria-hidden="true"></i>

@@ -15,6 +15,7 @@ import { DialogModule } from 'primeng/dialog';
 import { AccountCtaService } from 'src/app/auth/account-cta.service';
 import { AuthService } from 'src/app/auth/auth.service';
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
+import { SharedService } from 'src/app/shared.service';
 import {
   DynamicPromptCommunityTemplate,
   DynamicPromptCategory,
@@ -49,6 +50,7 @@ export class DynamicPromptHelperComponent implements OnDestroy {
   private readonly dynamicPromptLibraryState = inject(DynamicPromptLibraryStateService);
   private readonly authService = inject(AuthService);
   private readonly accountCtaService = inject(AccountCtaService);
+  private readonly sharedService = inject(SharedService);
   private readonly launcherButton = viewChild<ElementRef<HTMLButtonElement>>('launcherButton');
   private readonly tutorialStorageKey = 'mobians:dynamic-prompt-tutorial-seen';
   private readonly autoPreviewDelayMs = 350;
@@ -438,6 +440,9 @@ export class DynamicPromptHelperComponent implements OnDestroy {
     const request = editingId
       ? this.stableDiffusionService.updateUserDynamicPromptTemplate(editingId, payload)
       : this.stableDiffusionService.createUserDynamicPromptTemplate(payload);
+    const wasImportedTemplate = editingId
+      ? this.myTemplates().find((item) => item.id === editingId)?.source_template_id
+      : null;
 
     request.subscribe({
       next: (response) => {
@@ -450,7 +455,13 @@ export class DynamicPromptHelperComponent implements OnDestroy {
         this.editingTemplateId.set('');
         this.saveTitle.set('');
         this.saveDescription.set('');
-        this.helperMessage.set(editingId ? 'Template updated.' : 'Saved to Mine. Share it when it is ready for the community.');
+        this.helperMessage.set(
+          editingId
+            ? (wasImportedTemplate && !savedTemplate.source_template_id
+                ? 'Template updated. It is now your own version and can be shared.'
+                : 'Template updated.')
+            : 'Saved to Mine. Share it when it is ready for the community.'
+        );
         this.savingTemplate.set(false);
       },
       error: (error: unknown) => {
@@ -549,6 +560,10 @@ export class DynamicPromptHelperComponent implements OnDestroy {
 
   shareCustomCategory(category: DynamicPromptCustomCategory): void {
     if (!this.ensureLoggedIn('Sign in to share custom categories.')) return;
+    if (!this.canShareCategory(category)) {
+      this.errorMessage.set('Imported categories cannot be shared to the community.');
+      return;
+    }
     const action = category.status === 'public' ? 'make private again' : 'share with the community';
     if (!window.confirm(`Are you sure you want to ${action} "${category.title}"?`)) {
       return;
@@ -607,6 +622,10 @@ export class DynamicPromptHelperComponent implements OnDestroy {
 
   shareTemplate(template: DynamicPromptCommunityTemplate): void {
     if (!this.ensureLoggedIn('Sign in to share templates with the community.')) return;
+    if (!this.canShareTemplate(template)) {
+      this.errorMessage.set('Imported templates cannot be shared to the community.');
+      return;
+    }
     const action = this.isTemplateShared(template) ? 'make private again' : 'share with the community';
     if (!window.confirm(`Are you sure you want to ${action} "${template.title}"?`)) {
       return;
@@ -641,6 +660,10 @@ export class DynamicPromptHelperComponent implements OnDestroy {
 
   importTemplate(template: DynamicPromptCommunityTemplate): void {
     if (!this.ensureLoggedIn('Sign in to import community templates.')) return;
+    if (!this.canImportTemplate(template)) {
+      this.errorMessage.set(this.templateImportBlockedMessage(template));
+      return;
+    }
     this.stableDiffusionService.importDynamicPromptTemplate(template.id).subscribe({
       next: (response) => {
         const nextTemplates = this.myTemplates().some((item) => item.id === response.template.id)
@@ -668,6 +691,10 @@ export class DynamicPromptHelperComponent implements OnDestroy {
 
   importCategory(category: DynamicPromptCustomCategory): void {
     if (!this.ensureLoggedIn('Sign in to import community categories.')) return;
+    if (!this.canImportCategory(category)) {
+      this.errorMessage.set(this.categoryImportBlockedMessage(category));
+      return;
+    }
     this.stableDiffusionService.importDynamicPromptCategory(category.id).subscribe({
       next: (response) => {
         const nextCategories = this.myCategories().some((item) => item.id === response.category.id)
@@ -687,8 +714,94 @@ export class DynamicPromptHelperComponent implements OnDestroy {
     return template.status === 'approved';
   }
 
+  isOwnedByCurrentUser(userId: string | null | undefined): boolean {
+    const currentUserId = this.sharedService.getUserDataValue()?.user_id;
+    return !!userId && !!currentUserId && userId === currentUserId;
+  }
+
+  canImportTemplate(template: DynamicPromptCommunityTemplate): boolean {
+    return !template.has_imported && !this.isOwnedByCurrentUser(template.user_id) && !template.source_template_id;
+  }
+
+  canImportCategory(category: DynamicPromptCustomCategory): boolean {
+    return !category.has_imported && !this.isOwnedByCurrentUser(category.user_id) && !category.source_category_id;
+  }
+
+  canShareTemplate(template: DynamicPromptCommunityTemplate): boolean {
+    return this.isTemplateShared(template) || !template.source_template_id;
+  }
+
+  canShareCategory(category: DynamicPromptCustomCategory): boolean {
+    return category.status === 'public' || !category.source_category_id;
+  }
+
+  templateImportLabel(template: DynamicPromptCommunityTemplate): string {
+    if (this.isOwnedByCurrentUser(template.user_id)) {
+      return 'Yours';
+    }
+    if (template.source_template_id) {
+      return 'Imported Copy';
+    }
+    return template.has_imported ? 'Imported' : 'Import';
+  }
+
+  categoryImportLabel(category: DynamicPromptCustomCategory): string {
+    if (this.isOwnedByCurrentUser(category.user_id)) {
+      return 'Yours';
+    }
+    if (category.source_category_id) {
+      return 'Imported Copy';
+    }
+    return category.has_imported ? 'Imported' : 'Import';
+  }
+
+  templateShareLabel(template: DynamicPromptCommunityTemplate): string {
+    if (this.isTemplateShared(template)) {
+      return 'Unshare';
+    }
+    return template.source_template_id ? 'Imported Copy' : 'Share';
+  }
+
+  categoryShareLabel(category: DynamicPromptCustomCategory): string {
+    if (category.status === 'public') {
+      return 'Unshare';
+    }
+    return category.source_category_id ? 'Imported Copy' : 'Share';
+  }
+
+  communityAuthorLabel(authorDisplayName: string | null | undefined, userId: string | null | undefined): string {
+    if (this.isOwnedByCurrentUser(userId)) {
+      return 'Created by you';
+    }
+    return `Created by ${authorDisplayName?.trim() || 'Mobians user'}`;
+  }
+
+  importedTemplateSourceLabel(template: DynamicPromptCommunityTemplate): string {
+    return `Imported from ${template.source_author_display_name?.trim() || 'Mobians user'}`;
+  }
+
   templateStatusLabel(template: DynamicPromptCommunityTemplate): string {
     return this.isTemplateShared(template) ? 'public' : template.status;
+  }
+
+  private templateImportBlockedMessage(template: DynamicPromptCommunityTemplate): string {
+    if (this.isOwnedByCurrentUser(template.user_id)) {
+      return 'You cannot import your own template.';
+    }
+    if (template.source_template_id) {
+      return 'Imported community templates cannot be imported again.';
+    }
+    return 'Template already imported.';
+  }
+
+  private categoryImportBlockedMessage(category: DynamicPromptCustomCategory): string {
+    if (this.isOwnedByCurrentUser(category.user_id)) {
+      return 'You cannot import your own category.';
+    }
+    if (category.source_category_id) {
+      return 'Imported community categories cannot be imported again.';
+    }
+    return 'Category already imported.';
   }
 
   private loadLibrary(forceRefresh = false): void {
@@ -756,7 +869,6 @@ export class DynamicPromptHelperComponent implements OnDestroy {
   }
 
   private syncCommunityTemplateImports(myTemplates: DynamicPromptCommunityTemplate[]): void {
-    const ownedTemplateIds = new Set(myTemplates.map((item) => item.id));
     const importedTemplateIdsBySource = new Map(
       myTemplates
         .filter((item) => item.source_template_id)
@@ -764,8 +876,7 @@ export class DynamicPromptHelperComponent implements OnDestroy {
     );
 
     this.communityTemplates.update((templates) => templates.map((template) => {
-      const syncedOwnedId = importedTemplateIdsBySource.get(template.id)
-        ?? (template.owned_template_id && ownedTemplateIds.has(template.owned_template_id) ? template.owned_template_id : null);
+      const syncedOwnedId = importedTemplateIdsBySource.get(template.id) ?? null;
 
       if (syncedOwnedId) {
         return template.has_imported && template.owned_template_id === syncedOwnedId
@@ -780,7 +891,6 @@ export class DynamicPromptHelperComponent implements OnDestroy {
   }
 
   private syncCommunityCategoryImports(myCategories: DynamicPromptCustomCategory[]): void {
-    const ownedCategoryIds = new Set(myCategories.map((item) => item.id));
     const importedCategoryIdsBySource = new Map(
       myCategories
         .filter((item) => item.source_category_id)
@@ -788,8 +898,7 @@ export class DynamicPromptHelperComponent implements OnDestroy {
     );
 
     this.communityCategories.update((categories) => categories.map((category) => {
-      const syncedOwnedId = importedCategoryIdsBySource.get(category.id)
-        ?? (category.owned_category_id && ownedCategoryIds.has(category.owned_category_id) ? category.owned_category_id : null);
+      const syncedOwnedId = importedCategoryIdsBySource.get(category.id) ?? null;
 
       if (syncedOwnedId) {
         return category.has_imported && category.owned_category_id === syncedOwnedId

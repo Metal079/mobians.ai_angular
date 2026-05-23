@@ -455,6 +455,14 @@
   line-height: 1.25;
 }
 
+.template-author {
+  color: var(--theme-surface-text);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.78;
+}
+
 .template-card-main p {
   margin: 0;
   opacity: 0.86;

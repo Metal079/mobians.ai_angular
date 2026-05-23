@@ -7,6 +7,7 @@ import {
   StableDiffusionService,
 } from 'src/app/stable-diffusion.service';
 import { AuthService } from 'src/app/auth/auth.service';
+import { SharedService } from 'src/app/shared.service';
 
 import { DynamicPromptApplyEvent, DynamicPromptHelperComponent } from './dynamic-prompt-helper.component';
 
@@ -73,6 +74,7 @@ class StableDiffusionServiceStub {
     return of({
       template: {
         id: templateId as string,
+        user_id: 'user-1',
         title: payload.title,
         description: payload.description,
         template: payload.template,
@@ -101,6 +103,28 @@ class StableDiffusionServiceStub {
     return of({ success: true });
   }
 
+  importDynamicPromptTemplate(templateId?: unknown) {
+    return of({
+      template: {
+        id: 'imported-template',
+        user_id: 'user-1',
+        title: 'Imported Template',
+        description: '',
+        template: 'A hero',
+        tags: [],
+        status: 'private',
+        source_template_id: templateId as string,
+        author_display_name: 'User',
+        upvote_count: 0,
+        import_count: 0,
+        has_upvoted: false,
+        has_imported: false,
+        preview_samples: [],
+        examples: [],
+      },
+    });
+  }
+
   shareUserDynamicPromptCategory() {
     return of({ category: { id: 'category-1', status: 'public' } });
   }
@@ -111,6 +135,29 @@ class StableDiffusionServiceStub {
 
   deleteUserDynamicPromptCategory(_categoryId?: unknown) {
     return of({ success: true });
+  }
+
+  importDynamicPromptCategory(categoryId?: unknown) {
+    return of({
+      category: {
+        id: 'imported-category',
+        user_id: 'user-1',
+        title: 'Imported Category',
+        description: '',
+        token: '__user/imported__',
+        tags: [],
+        status: 'private',
+        source_category_id: categoryId as string,
+        upvote_count: 0,
+        import_count: 0,
+        author_display_name: 'User',
+        has_upvoted: false,
+        has_imported: false,
+        entries: [],
+        examples: [],
+        item_count: 0,
+      },
+    });
   }
 }
 
@@ -124,6 +171,7 @@ describe('DynamicPromptHelperComponent', () => {
   let component: DynamicPromptHelperComponent;
   let fixture: ComponentFixture<DynamicPromptHelperComponent>;
   let stableDiffusionService: StableDiffusionServiceStub;
+  let sharedService: SharedService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -139,6 +187,8 @@ describe('DynamicPromptHelperComponent', () => {
     fixture = TestBed.createComponent(DynamicPromptHelperComponent);
     component = fixture.componentInstance;
     stableDiffusionService = TestBed.inject(StableDiffusionService) as unknown as StableDiffusionServiceStub;
+    sharedService = TestBed.inject(SharedService);
+    sharedService.setUserData({ user_id: 'user-1', token: 'token' });
   });
 
   it('should create', () => {
@@ -253,6 +303,33 @@ describe('DynamicPromptHelperComponent', () => {
     expect(component.helperMessage()).toBe('Template is private again.');
   });
 
+  it('does not share an imported template copy with the community', () => {
+    const confirmSpy = spyOn(window, 'confirm');
+    const shareSpy = spyOn(stableDiffusionService, 'shareUserDynamicPromptTemplate').and.callThrough();
+
+    component.shareTemplate({
+      id: 'template-1',
+      user_id: 'user-1',
+      title: 'Imported Template',
+      description: '',
+      template: 'A hero',
+      tags: [],
+      status: 'private',
+      source_template_id: 'community-template-1',
+      author_display_name: 'User',
+      upvote_count: 0,
+      import_count: 0,
+      has_upvoted: false,
+      has_imported: false,
+      preview_samples: [],
+      examples: [],
+    } as any);
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(shareSpy).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toBe('Imported templates cannot be shared to the community.');
+  });
+
   it('does not share a category when confirmation is cancelled', () => {
     const confirmSpy = spyOn(window, 'confirm').and.returnValue(false);
     const shareSpy = spyOn(stableDiffusionService, 'shareUserDynamicPromptCategory').and.callThrough();
@@ -277,6 +354,88 @@ describe('DynamicPromptHelperComponent', () => {
 
     expect(confirmSpy).toHaveBeenCalled();
     expect(shareSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not share an imported category copy with the community', () => {
+    const confirmSpy = spyOn(window, 'confirm');
+    const shareSpy = spyOn(stableDiffusionService, 'shareUserDynamicPromptCategory').and.callThrough();
+
+    component.shareCustomCategory({
+      id: 'category-1',
+      user_id: 'user-1',
+      title: 'Imported Category',
+      description: '',
+      token: '__user/imported__',
+      tags: [],
+      status: 'private',
+      source_category_id: 'community-category-1',
+      entries: ['heroic'],
+      examples: [],
+      item_count: 1,
+      upvote_count: 0,
+      import_count: 0,
+      author_display_name: 'User',
+      has_upvoted: false,
+      has_imported: false,
+    } as any);
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(shareSpy).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toBe('Imported categories cannot be shared to the community.');
+  });
+
+  it('does not import your own community template', () => {
+    const importSpy = spyOn(stableDiffusionService, 'importDynamicPromptTemplate').and.callThrough();
+
+    component.importTemplate({
+      id: 'template-1',
+      user_id: 'user-1',
+      title: 'Heroic Starter',
+      description: '',
+      template: 'A hero',
+      tags: [],
+      status: 'approved',
+      author_display_name: 'User',
+      upvote_count: 0,
+      import_count: 0,
+      has_upvoted: false,
+      has_imported: false,
+      preview_samples: [],
+      examples: [],
+    } as any);
+
+    expect(importSpy).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toBe('You cannot import your own template.');
+  });
+
+  it('does not import your own community category', () => {
+    const importSpy = spyOn(stableDiffusionService, 'importDynamicPromptCategory').and.callThrough();
+
+    component.importCategory({
+      id: 'category-1',
+      user_id: 'user-1',
+      title: 'Mood Ideas',
+      description: '',
+      token: '__user/mood-ideas__',
+      tags: [],
+      status: 'public',
+      entries: ['heroic'],
+      examples: [],
+      item_count: 1,
+      upvote_count: 0,
+      import_count: 0,
+      author_display_name: 'User',
+      has_upvoted: false,
+      has_imported: false,
+    } as any);
+
+    expect(importSpy).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toBe('You cannot import your own category.');
+  });
+
+  it('labels community authors, including the current user', () => {
+    expect(component.communityAuthorLabel('Metal', 'user-1')).toBe('Created by you');
+    expect(component.communityAuthorLabel('Metal', 'user-2')).toBe('Created by Metal');
   });
 
   it('does not delete a category when confirmation is cancelled', () => {
@@ -382,6 +541,84 @@ describe('DynamicPromptHelperComponent', () => {
     expect(component.myTemplates()[0].template).toBe('A {heroic|playful} hero');
     expect(component.editingTemplateId()).toBe('');
     expect(component.helperMessage()).toBe('Template updated.');
+  });
+
+  it('shows imported source info for imported templates in Mine', () => {
+    expect(component.importedTemplateSourceLabel({
+      id: 'template-1',
+      user_id: 'user-1',
+      title: 'Imported Template',
+      description: '',
+      template: 'A hero',
+      tags: [],
+      status: 'private',
+      source_template_id: 'community-template-1',
+      source_author_display_name: 'Original Creator',
+      author_display_name: 'User',
+      upvote_count: 0,
+      import_count: 0,
+      has_upvoted: false,
+      has_imported: false,
+      preview_samples: [],
+      examples: [],
+    } as any)).toBe('Imported from Original Creator');
+  });
+
+  it('makes an imported template shareable after editing detaches it', () => {
+    spyOn(stableDiffusionService, 'updateUserDynamicPromptTemplate').and.returnValue(of({
+      template: {
+        id: 'template-1',
+        user_id: 'user-1',
+        title: 'Remixed Template',
+        description: 'Updated description',
+        template: 'A {heroic|playful} hero',
+        tags: ['remix'],
+        status: 'private',
+        source_template_id: null,
+        source_author_display_name: null,
+        author_display_name: 'User',
+        upvote_count: 0,
+        import_count: 0,
+        has_upvoted: false,
+        has_imported: false,
+        preview_samples: [],
+        examples: [],
+      },
+    } as any));
+
+    component.myTemplates.set([
+      {
+        id: 'template-1',
+        user_id: 'user-1',
+        title: 'Imported Template',
+        description: 'Old description',
+        template: 'A hero',
+        tags: [],
+        status: 'private',
+        source_template_id: 'community-template-1',
+        source_author_display_name: 'Original Creator',
+      } as any,
+    ]);
+    component.communityTemplates.set([
+      {
+        id: 'community-template-1',
+        title: 'Community Template',
+        has_imported: true,
+        owned_template_id: 'template-1',
+      } as any,
+    ]);
+
+    component.editTemplate(component.myTemplates()[0]);
+    component.saveTitle.set('Remixed Template');
+    component.saveDescription.set('Updated description');
+    component.templateText.set('A {heroic|playful} hero');
+    component.saveCurrentTemplate();
+
+    expect(component.myTemplates()[0].source_template_id).toBeNull();
+    expect(component.canShareTemplate(component.myTemplates()[0])).toBeTrue();
+    expect(component.communityTemplates()[0].has_imported).toBeFalse();
+    expect(component.communityTemplates()[0].owned_template_id).toBeNull();
+    expect(component.helperMessage()).toBe('Template updated. It is now your own version and can be shared.');
   });
 
   it('clears template editor state when starting a new saved template', () => {

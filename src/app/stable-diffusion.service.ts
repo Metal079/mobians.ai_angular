@@ -212,6 +212,7 @@ export interface DynamicPromptCommunityTemplate {
   approved_at?: string | null;
   hidden_at?: string | null;
   author_display_name: string;
+  source_author_display_name?: string | null;
   has_upvoted: boolean;
   has_imported: boolean;
   owned_template_id?: string | null;
