@@ -106,7 +106,7 @@
           dataKey="id"
           [expandedRowKeys]="expandedRowKeysLoras"
           [rowTrackBy]="trackById.bind(this)"
-          styleClass="admin-table"
+          styleClass="admin-table all-loras-table"
           >
           <ng-template pTemplate="expandedrow" let-row>
             <tr>
@@ -209,13 +209,13 @@
               <th style="width: 3rem"></th>
               <th style="width: 72px">Preview</th>
               <th>Name</th>
-              <th class="col-hide-sm">Version</th>
-              <th class="col-hide-sm">Base Model</th>
-              <th class="col-hide-sm">Uses</th>
+              <th class="col-hide-sm " style="width: 180px">Version</th>
+              <th class="col-hide-sm" style="width: 88px">Base Model</th>
+              <th class="col-hide-sm" style="width: 80px">Uses</th>
               <th class="col-hide-sm" style="width: 80px">CivitAI</th>
-              <th class="col-hide-sm" style="width: 100px">Active</th>
-              <th class="col-hide-sm" style="width: 100px">NSFW</th>
-              <th class="col-hide-sm" style="width: 140px">Actions</th>
+              <th class="col-hide-sm" style="width: 80px">Active</th>
+              <th class="col-hide-sm" style="width: 80px">NSFW</th>
+              <th class="col-hide-sm" style="width: 80px">Actions</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-row>
@@ -406,11 +406,11 @@
               <th style="width: 3rem"></th>
               <th style="width: 72px">Preview</th>
               <th class="suggestion-name-header">Name</th>
-              <th class="col-hide-sm">Version</th>
-              <th class="col-hide-sm">Base Model</th>
+              <th class="col-hide-sm" style="width: 180px">Version</th>
+              <th class="col-hide-sm" style="width: 80px">Base Model</th>
               <th class="col-hide-sm" style="width: 80px">CivitAI</th>
-              <th class="col-hide-sm">Submitted By</th>
-              <th class="col-hide-sm" style="width: 260px">Actions</th>
+              <th class="col-hide-sm" style="width: 80px">Submitted By</th>
+              <th class="col-hide-sm" style="width: 130px">Actions</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-row>

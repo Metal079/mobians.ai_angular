@@ -386,6 +386,16 @@
   min-width: 1050px;
 }
 
+:host ::ng-deep .all-loras-table .p-datatable-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+:host ::ng-deep .all-loras-table .p-datatable-tbody > tr > td {
+  white-space: normal;
+}
+
 :host ::ng-deep .suggestion-table .p-datatable-table {
   width: 100%;
   min-width: 0;
@@ -661,6 +671,18 @@
   text-overflow: ellipsis;
 }
 
+.all-loras-table .name-cell {
+  white-space: normal;
+  align-items: flex-start;
+}
+
+.all-loras-table .name-cell .lora-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .edit-name-btn {
   opacity: 0.4;
   padding: 0.25rem !important;
@@ -720,6 +742,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.all-loras-table .trigger-inline {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  white-space: normal;
+}
+
+.all-loras-table .trigger-inline-value {
+  flex: 1 1 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .trigger-inline-form {
@@ -1071,7 +1107,7 @@
 
 .action-buttons {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
