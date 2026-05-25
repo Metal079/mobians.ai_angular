@@ -28,6 +28,20 @@
   --admin-expand-icon: var(--theme-primary, #3c78c9);
 }
 
+:host-context(body.theme-eggman) {
+  --admin-text: var(--theme-surface-text, #ffe1d5);
+  --admin-muted-text: rgba(255, 225, 213, 0.82);
+  --admin-subtle-text: rgba(255, 225, 213, 0.66);
+  --admin-input-bg: var(--theme-input-bg, #120606);
+  --admin-input-text: var(--theme-input-text, #ffd4c4);
+  --admin-input-muted: rgba(255, 225, 213, 0.6);
+  --admin-card-bg: var(--theme-surface-bg, #2d0a0a);
+  --admin-panel-bg: var(--theme-surface-alt-bg, #1f0808);
+  --admin-border: var(--theme-border, #8b0000);
+  --admin-expand-bg: rgba(38, 8, 8, 0.72);
+  --admin-expand-icon: var(--theme-primary, #cc0000);
+}
+
 .admin-wrapper {
   min-height: 100vh;
   background: var(--theme-page-bg, #0f1419);
@@ -242,6 +256,14 @@
   gap: 0.5rem;
   align-items: center;
   flex: 1;
+}
+
+.tab-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .search-input {
@@ -835,6 +857,189 @@
   font-size: 0.7rem;
 }
 
+:host ::ng-deep .manual-lora-dialog {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: 18px;
+  box-shadow: 0 28px 72px rgba(4, 17, 35, 0.38);
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-header {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--admin-panel-bg) 80%, #ffffff 20%),
+    var(--admin-panel-bg)
+  );
+  color: var(--admin-text);
+  border-bottom: 1px solid var(--admin-border);
+  padding: 1rem 1.25rem;
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-title {
+  color: var(--admin-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-header-actions,
+:host ::ng-deep .manual-lora-dialog .p-dialog-header-icon,
+:host ::ng-deep .manual-lora-dialog .p-dialog-close-button {
+  color: var(--admin-text);
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-close-button {
+  border-radius: 999px;
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-close-button:hover,
+:host ::ng-deep .manual-lora-dialog .p-dialog-close-button:focus-visible {
+  background: color-mix(in srgb, var(--admin-text) 12%, transparent);
+}
+
+:host ::ng-deep .manual-lora-dialog .p-dialog-content {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--admin-panel-bg) 92%, #0f172a 8%),
+    color-mix(in srgb, var(--admin-card-bg) 94%, #0f172a 6%)
+  );
+  color: var(--admin-text);
+  padding: 1.25rem;
+}
+
+.manual-lora-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  color: var(--admin-text);
+}
+
+.manual-lora-files,
+.manual-lora-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.manual-lora-file-field,
+.manual-lora-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.manual-lora-grid label {
+  padding: 0.8rem;
+  background: color-mix(in srgb, var(--admin-panel-bg) 86%, #ffffff 14%);
+  border: 1px solid color-mix(in srgb, var(--admin-border) 82%, transparent);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.manual-lora-file-field > span,
+.manual-lora-grid label > span {
+  color: var(--admin-muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.manual-lora-file-field {
+  min-height: 96px;
+  justify-content: center;
+  padding: 0.9rem;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--admin-card-bg) 88%, #ffffff 12%),
+    var(--admin-card-bg)
+  );
+  border: 1px dashed var(--admin-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--theme-page-bg, #0f1419) 18%, transparent);
+}
+
+.manual-lora-file-field input[type="file"] {
+  max-width: 100%;
+  color: var(--admin-text);
+  font-size: 0.82rem;
+}
+
+.manual-lora-file-field input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--admin-border) 85%, #ffffff 15%);
+  border-radius: 999px;
+  background: var(--admin-input-bg);
+  color: var(--admin-input-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.manual-lora-file-field input[type="file"]::file-selector-button:hover {
+  background: color-mix(in srgb, var(--admin-input-bg) 84%, var(--theme-primary, #6366f1) 16%);
+}
+
+.manual-lora-file-field small {
+  color: var(--admin-muted-text);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.manual-lora-grid input,
+.manual-lora-grid select,
+.manual-lora-grid textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--admin-input-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  color: var(--admin-input-text);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.manual-lora-grid input::placeholder,
+.manual-lora-grid textarea::placeholder {
+  color: var(--admin-input-muted);
+}
+
+.manual-lora-grid textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.manual-lora-grid input:focus,
+.manual-lora-grid select:focus,
+.manual-lora-grid textarea:focus {
+  outline: none;
+  border-color: var(--theme-primary, #6366f1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary, #6366f1) 22%, transparent);
+}
+
+.manual-lora-full {
+  grid-column: 1 / -1;
+}
+
+.manual-lora-options {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 0.9rem;
+  background: color-mix(in srgb, var(--admin-panel-bg) 86%, #ffffff 14%);
+  border: 1px solid color-mix(in srgb, var(--admin-border) 82%, transparent);
+  border-radius: 12px;
+}
+
+.manual-lora-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--admin-border);
+}
+
 .toggle-section {
   display: flex;
   gap: 1.5rem;
@@ -1293,6 +1498,24 @@
   }
   
   .search-input { max-width: 100%; }
+
+  .tab-action-buttons {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .tab-action-buttons p-button {
+    flex: 1 1 140px;
+  }
+
+  .manual-lora-files,
+  .manual-lora-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-lora-actions {
+    flex-direction: column-reverse;
+  }
 
   .trigger-inline {
     flex-wrap: wrap;

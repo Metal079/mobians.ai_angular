@@ -89,7 +89,10 @@
             <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
             <p-selectButton [options]="nsfwOptions" [(ngModel)]="nsfwFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
           </div>
-          <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" (onClick)="loadAllLoras()"></p-button>
+          <div class="tab-action-buttons">
+            <p-button label="Upload LoRA" icon="bi bi-upload" styleClass="p-button-success" (onClick)="openManualLoraDialog()"></p-button>
+            <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" (onClick)="loadAllLoras()"></p-button>
+          </div>
         </div>
         <p-table
           [value]="filteredAllLoras"
@@ -164,7 +167,7 @@
                         <span class="detail-label">Uses</span>
                         <span class="detail-value">{{ row.uses }}</span>
                       </div>
-                      @if (row.version_id) {
+                      @if (hasCivitAILink(row)) {
                         <div class="detail-item">
                           <span class="detail-label">CivitAI</span>
                           <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
@@ -270,12 +273,12 @@
                 <span class="uses-badge">{{ row.uses }}</span>
               </td>
               <td class="col-hide-sm">
-                @if (row.version_id) {
+                @if (hasCivitAILink(row)) {
                   <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
                     <i class="bi bi-box-arrow-up-right"></i>
                   </a>
                 }
-                @if (!row.version_id) {
+                @if (!hasCivitAILink(row)) {
                   <span class="no-link">-</span>
                 }
               </td>
@@ -371,7 +374,7 @@
                         <span class="detail-label">Submitted By</span>
                         <span class="detail-value">{{ row.submitted_by || row.username || '-' }}</span>
                       </div>
-                      @if (row.version_id) {
+                      @if (hasCivitAILink(row)) {
                         <div class="detail-item">
                           <span class="detail-label">CivitAI</span>
                           <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-link" (click)="onCivitAiClick($event, row)">
@@ -435,12 +438,12 @@
                 <span class="model-badge">{{ row.base_model || 'Unknown' }}</span>
               </td>
               <td class="col-hide-sm">
-                @if (row.version_id) {
+                @if (hasCivitAILink(row)) {
                   <a [href]="getCivitAILink(row)" target="_blank" rel="noopener noreferrer" class="civitai-btn" pTooltip="View on CivitAI" tooltipPosition="top" (click)="onCivitAiClick($event, row)">
                     <i class="bi bi-box-arrow-up-right"></i>
                   </a>
                 }
-                @if (!row.version_id) {
+                @if (!hasCivitAILink(row)) {
                   <span class="no-link">-</span>
                 }
               </td>
@@ -920,6 +923,72 @@
     </p-tabpanels>
   </p-tabs>
   </div>
+
+  <p-dialog [(visible)]="manualLoraDialogVisible" [modal]="true" [dismissableMask]="!uploadingManualLora" [closable]="!uploadingManualLora" [style]="{width: '92vw', maxWidth: '760px'}" header="Upload LoRA" styleClass="manual-lora-dialog" (onHide)="closeManualLoraDialog()">
+    @if (manualLoraDialogVisible) {
+      <div class="manual-lora-form">
+      <div class="manual-lora-files">
+        <label class="manual-lora-file-field">
+          <span>Safetensors</span>
+          <input type="file" accept=".safetensors" [disabled]="uploadingManualLora" (change)="onManualLoraFileSelected($event)" />
+          @if (manualLoraModelFile) {
+            <small>{{ manualLoraModelFile.name }}</small>
+          }
+        </label>
+        <label class="manual-lora-file-field">
+          <span>Preview Image</span>
+          <input type="file" accept="image/*" [disabled]="uploadingManualLora" (change)="onManualLoraPreviewSelected($event)" />
+          @if (manualLoraPreviewFile) {
+            <small>{{ manualLoraPreviewFile.name }}</small>
+          }
+        </label>
+      </div>
+
+      <div class="manual-lora-grid">
+        <label>
+          <span>Name</span>
+          <input type="text" pInputText [(ngModel)]="manualLoraForm.name" [disabled]="uploadingManualLora" />
+        </label>
+        <label>
+          <span>Version</span>
+          <input type="text" pInputText [(ngModel)]="manualLoraForm.version" [disabled]="uploadingManualLora" placeholder="v1.0" />
+        </label>
+        <label>
+          <span>Base Model</span>
+          <select [(ngModel)]="manualLoraForm.baseModel" [disabled]="uploadingManualLora">
+            @for (baseModel of manualLoraBaseModels; track baseModel) {
+              <option [value]="baseModel">{{ baseModel }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Creator</span>
+          <input type="text" pInputText [(ngModel)]="manualLoraForm.creator" [disabled]="uploadingManualLora" />
+        </label>
+        <label class="manual-lora-full">
+          <span>Trigger Words</span>
+          <input type="text" pInputText [(ngModel)]="manualLoraForm.triggerWords" [disabled]="uploadingManualLora" placeholder="comma separated" />
+        </label>
+        <label class="manual-lora-full">
+          <span>Description</span>
+          <textarea rows="4" [(ngModel)]="manualLoraForm.description" [disabled]="uploadingManualLora"></textarea>
+        </label>
+      </div>
+
+      <div class="manual-lora-options">
+        <div class="toggle-item">
+          <span class="toggle-label">NSFW</span>
+          <p-toggleswitch [(ngModel)]="manualLoraForm.isNsfw" [disabled]="uploadingManualLora"></p-toggleswitch>
+        </div>
+      </div>
+
+      <div class="manual-lora-actions">
+        <p-button label="Cancel" styleClass="p-button-text" [disabled]="uploadingManualLora" (onClick)="closeManualLoraDialog()"></p-button>
+        <p-button label="Upload" icon="bi bi-upload" styleClass="p-button-success" [disabled]="!canUploadManualLora()" [loading]="uploadingManualLora" (onClick)="submitManualLora()"></p-button>
+      </div>
+      </div>
+    }
+  </p-dialog>
 
   <!-- Details Dialog -->
   <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [style]="{width: '90vw', maxWidth: '700px'}" [header]="detailsDialogTitle" styleClass="details-dialog">

@@ -89,6 +89,18 @@ export interface LoraSuggestionStatuses {
   rejected_cooldowns?: Record<string, LoraSuggestionCooldown>;
 }
 
+export interface ManualLoraUploadRequest {
+  file: File;
+  previewImage: File;
+  name: string;
+  version: string;
+  baseModel: string;
+  triggerWords?: string;
+  creator?: string;
+  description?: string;
+  isNsfw?: boolean;
+}
+
 export interface SubmitJobResponse {
   job_id: string;
   prompt_template?: string;
@@ -613,6 +625,21 @@ export class StableDiffusionService {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}/image`;
     const formData = new FormData();
     formData.append('file', file, file.name);
+    return this.http.post(url, formData);
+  }
+
+  uploadManualLora(data: ManualLoraUploadRequest): Observable<any> {
+    const url = `${this.apiBaseUrl}/admin/lora/upload`;
+    const formData = new FormData();
+    formData.append('file', data.file, data.file.name);
+    formData.append('preview_image', data.previewImage, data.previewImage.name);
+    formData.append('name', data.name);
+    formData.append('version', data.version);
+    formData.append('base_model', data.baseModel);
+    formData.append('is_nsfw', String(!!data.isNsfw));
+    if (data.triggerWords?.trim()) formData.append('trigger_words', data.triggerWords.trim());
+    if (data.creator?.trim()) formData.append('creator', data.creator.trim());
+    if (data.description?.trim()) formData.append('description', data.description.trim());
     return this.http.post(url, formData);
   }
 

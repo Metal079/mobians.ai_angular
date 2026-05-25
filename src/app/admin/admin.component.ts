@@ -9,6 +9,7 @@ import {
   DynamicPromptCommunityTemplate,
   DynamicPromptCustomCategory,
   DynamicPromptTemplateStatus,
+  ManualLoraUploadRequest,
   StableDiffusionService,
 } from '../stable-diffusion.service';
 import { MessageService, ConfirmationService } from 'primeng/api';
@@ -103,6 +104,22 @@ export class AdminComponent implements OnInit, OnDestroy {
   imagePreviewUrl = '';
   imagePreviewTitle = '';
   imagePreviewLoading = false;
+
+  // Manual LoRA upload dialog
+  manualLoraDialogVisible = false;
+  uploadingManualLora = false;
+  manualLoraModelFile: File | null = null;
+  manualLoraPreviewFile: File | null = null;
+  readonly manualLoraBaseModels = ['Pony', 'SD 1.5', 'Illustrious', 'Anima'];
+  manualLoraForm = {
+    name: '',
+    version: '',
+    baseModel: 'Illustrious',
+    triggerWords: '',
+    creator: '',
+    description: '',
+    isNsfw: false,
+  };
 
   // Row expansion state (keys must match dataKey used in table)
   expandedRowKeysLoras: { [key: string]: boolean } = {};
@@ -635,6 +652,150 @@ export class AdminComponent implements OnInit, OnDestroy {
     if (filteredTarget) filteredTarget.image_url = imageUrl;
   }
 
+  openManualLoraDialog(): void {
+    this.resetManualLoraForm();
+    this.manualLoraDialogVisible = true;
+  }
+
+  closeManualLoraDialog(): void {
+    if (this.uploadingManualLora) return;
+    this.manualLoraDialogVisible = false;
+    this.resetManualLoraForm();
+  }
+
+  resetManualLoraForm(): void {
+    this.manualLoraModelFile = null;
+    this.manualLoraPreviewFile = null;
+    this.manualLoraForm = {
+      name: '',
+      version: '',
+      baseModel: 'Illustrious',
+      triggerWords: '',
+      creator: '',
+      description: '',
+      isNsfw: false,
+    };
+  }
+
+  onManualLoraFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input?.files?.[0] || null;
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.safetensors')) {
+      this.manualLoraModelFile = null;
+      input.value = '';
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Invalid File',
+        detail: 'Please select a .safetensors file.',
+        life: 4000
+      });
+      return;
+    }
+
+    this.manualLoraModelFile = file;
+    if (!this.manualLoraForm.name.trim()) {
+      this.manualLoraForm.name = file.name.replace(/\.safetensors$/i, '').trim();
+    }
+  }
+
+  onManualLoraPreviewSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input?.files?.[0] || null;
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.manualLoraPreviewFile = null;
+      input.value = '';
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Invalid Image',
+        detail: 'Please select an image file for the preview.',
+        life: 4000
+      });
+      return;
+    }
+
+    this.manualLoraPreviewFile = file;
+  }
+
+  canUploadManualLora(): boolean {
+    return !!(
+      this.manualLoraModelFile &&
+      this.manualLoraPreviewFile &&
+      this.manualLoraForm.name.trim() &&
+      this.manualLoraForm.version.trim() &&
+      this.manualLoraForm.baseModel &&
+      !this.uploadingManualLora
+    );
+  }
+
+  submitManualLora(): void {
+    if (!this.manualLoraModelFile || !this.manualLoraPreviewFile) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Missing Files',
+        detail: 'Select both a safetensors file and a preview image.',
+        life: 4000
+      });
+      return;
+    }
+
+    const name = this.manualLoraForm.name.trim();
+    const version = this.manualLoraForm.version.trim();
+    const baseModel = this.manualLoraForm.baseModel.trim();
+    if (!name || !version || !baseModel) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Missing Details',
+        detail: 'Name, version, and base model are required.',
+        life: 4000
+      });
+      return;
+    }
+
+    const payload: ManualLoraUploadRequest = {
+      file: this.manualLoraModelFile,
+      previewImage: this.manualLoraPreviewFile,
+      name,
+      version,
+      baseModel,
+      triggerWords: this.manualLoraForm.triggerWords,
+      creator: this.manualLoraForm.creator,
+      description: this.manualLoraForm.description,
+      isNsfw: this.manualLoraForm.isNsfw,
+    };
+
+    this.uploadingManualLora = true;
+    this.sdService.uploadManualLora(payload).pipe(
+      finalize(() => {
+        this.uploadingManualLora = false;
+      })
+    ).subscribe({
+      next: (response: any) => {
+        const createdName = response?.lora?.name || name;
+        this.manualLoraDialogVisible = false;
+        this.resetManualLoraForm();
+        this.messageService.add({
+          severity: 'success',
+          summary: 'LoRA Uploaded',
+          detail: `${createdName} is live and available.`,
+          life: 4000
+        });
+        this.loadAllLoras();
+      },
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Upload Failed',
+          detail: err?.error?.detail || 'Failed to upload LoRA.',
+          life: 6000
+        });
+      }
+    });
+  }
+
   // Name editing methods
   startEditName(row: any): void {
     const key = row?.id ?? row?.name;
@@ -841,7 +1002,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   getCivitAILink(row: any): string | null {
-    const versionId = row?.version_id ?? row?.model_version_id ?? row?.modelVersionId;
+    const versionId = this.getCivitAIVersionId(row);
     const modelId = row?.model_id ?? row?.model_page_id ?? row?.modelId ?? row?.modelPageId;
 
     if (modelId && versionId) return `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
@@ -850,11 +1011,21 @@ export class AdminComponent implements OnInit, OnDestroy {
     return null;
   }
 
+  hasCivitAILink(row: any): boolean {
+    return !!this.getCivitAILink(row);
+  }
+
+  private getCivitAIVersionId(row: any): number | null {
+    const rawVersionId = row?.version_id ?? row?.model_version_id ?? row?.modelVersionId;
+    const versionId = Number(rawVersionId);
+    return Number.isFinite(versionId) && versionId > 0 ? versionId : null;
+  }
+
   onCivitAiClick(event: Event, row: any): void {
     event.preventDefault();
     event.stopPropagation();
 
-    const versionId = row?.version_id ?? row?.model_version_id ?? row?.modelVersionId;
+    const versionId = this.getCivitAIVersionId(row);
     if (!versionId) return;
 
     this.sdService.resolveCivitAiLink(versionId).subscribe({
