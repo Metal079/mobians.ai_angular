@@ -299,14 +299,6 @@
 
         <!-- FastPass Code -->
         <div class="mb-3">
-          <label for="fastPassCode" class="form-label">
-            FastPass Code
-            <app-hint text="FastPass codes are given weekly to contest winners on the discord! They allow you skip the queue. If you have a code, enter it here! Join the discord to learn more."></app-hint>
-          </label>
-          <input type="password" class="form-control" id="fastPassCode" placeholder="Join the Discord to win!"
-            [(ngModel)]="generationRequest.fast_pass_code" (input)="fastPassCodeChange.emit($event)" />
-          </div>
-
           <!-- Hi-Res (Generate + Upscale) -->
           @if (generationRequest.job_type == 'txt2img' && !referenceImage) {
             <div
