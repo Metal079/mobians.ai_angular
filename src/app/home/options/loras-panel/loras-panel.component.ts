@@ -18,7 +18,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
 import { HintComponent } from 'src/app/hint/hint.component';
 
-type LoraSortOption = 'most-used' | 'last-used' | 'alphabetical';
+type LoraSortOption = 'most-used' | 'last-used' | 'recently-added' | 'alphabetical';
 
 @Component({
     selector: 'app-loras-panel',
@@ -61,6 +61,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   loraSortOptions: { label: string; value: LoraSortOption }[] = [
     { label: 'Most used', value: 'most-used' },
     { label: 'Last used', value: 'last-used' },
+    { label: 'Recently added', value: 'recently-added' },
     { label: 'Alphabetical', value: 'alphabetical' }
   ];
   showFavoriteLorasOnly = false;
@@ -291,6 +292,11 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
       filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     } else if (sortOption === 'last-used') {
       filtered = filtered.sort((a, b) => this.getLoraLastUsed(b) - this.getLoraLastUsed(a));
+    } else if (sortOption === 'recently-added') {
+      filtered = filtered.sort((a, b) =>
+        (this.getLoraDateAdded(b) - this.getLoraDateAdded(a))
+        || (a.name || '').localeCompare(b.name || '')
+      );
     } else {
       filtered = filtered.sort((a, b) => (b.uses || 0) - (a.uses || 0));
     }
@@ -789,6 +795,13 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     return this.loraLastUsed[key] || 0;
   }
 
+  private getLoraDateAdded(lora: any): number {
+    const rawDate = lora?.date_added;
+    if (!rawDate) return 0;
+    const parsed = Date.parse(String(rawDate));
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
   private markLoraUsed(lora: any) {
     const key = this.getLoraKey(lora);
     if (!key) return;
@@ -818,7 +831,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   private loadLoraUiState() {
     try {
       const sortRaw = localStorage.getItem(this.loraSortKey);
-      if (sortRaw === 'most-used' || sortRaw === 'last-used' || sortRaw === 'alphabetical') {
+      if (sortRaw === 'most-used' || sortRaw === 'last-used' || sortRaw === 'recently-added' || sortRaw === 'alphabetical') {
         this.loraSortOption = sortRaw;
       }
       const favoritesOnlyRaw = localStorage.getItem(this.loraFavoritesOnlyKey);

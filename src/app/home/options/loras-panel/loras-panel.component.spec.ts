@@ -95,4 +95,20 @@ describe('LorasPanelComponent', () => {
 
     expect(dialogService.open).toHaveBeenCalled();
   });
+
+  it('sorts LoRAs by most recently added', () => {
+    component.loras = [
+      { name: 'Older Lora', version: 'v1', base_model: 'Anima', is_nsfw: false, tags: [], uses: 30, date_added: '2025-01-01T00:00:00Z' },
+      { name: 'Newest Lora', version: 'v1', base_model: 'Anima', is_nsfw: false, tags: [], uses: 1, date_added: '2026-02-01T00:00:00Z' },
+      { name: 'Middle Lora', version: 'v1', base_model: 'Anima', is_nsfw: false, tags: [], uses: 20, date_added: '2025-08-01T00:00:00Z' },
+    ];
+
+    component.onLoraSortChange('recently-added');
+
+    expect(component.filteredLoras.map((lora) => lora.name)).toEqual([
+      'Newest Lora',
+      'Middle Lora',
+      'Older Lora',
+    ]);
+  });
 });
