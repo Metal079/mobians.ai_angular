@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, Subject, firstValueFrom } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SharedService } from '../shared.service';
 import {
+  CurrentUserResponse,
   DailyBonusResponse,
   StableDiffusionService,
   UserCreditsResponse
@@ -26,6 +27,7 @@ export interface UserCredits {
 export class AuthService {
   private _credits$ = new BehaviorSubject<UserCredits | null>(null);
   public credits$ = this._credits$.asObservable();
+  private readonly sessionValidationRetryDelaysMs = [500, 1500];
   
   // Subject to notify components that session is invalid and login is required
   private _sessionInvalid$ = new Subject<void>();
@@ -69,7 +71,7 @@ export class AuthService {
     }
     
     try {
-      const response = await firstValueFrom(this.api.getCurrentUser());
+      const response = await this.getCurrentUserWithRetry();
       if (response?.status === 'success' && response?.user) {
         // Token is valid - optionally update local user data with fresh info
         const userData = this.shared.getUserDataValue();
@@ -102,9 +104,42 @@ export class AuthService {
       // 401 will be handled by interceptor, but also handle here for completeness
       if (err?.status === 401) {
         this.clearAuthState();
+        return false;
+      }
+      if (this.isTransientSessionValidationError(err)) {
+        console.warn('Session validation could not reach the backend; keeping stored auth state.', err);
+        return true;
       }
       return false;
     }
+  }
+
+  private async getCurrentUserWithRetry(): Promise<CurrentUserResponse> {
+    let lastError: unknown;
+    const attempts = this.sessionValidationRetryDelaysMs.length + 1;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        return await firstValueFrom(this.api.getCurrentUser());
+      } catch (err) {
+        lastError = err;
+        if (!this.isTransientSessionValidationError(err) || attempt === attempts - 1) {
+          throw err;
+        }
+        await this.delay(this.sessionValidationRetryDelaysMs[attempt]);
+      }
+    }
+
+    throw lastError;
+  }
+
+  private isTransientSessionValidationError(err: unknown): boolean {
+    const status = (err as { status?: number } | null)?.status;
+    return status === 0 || status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
