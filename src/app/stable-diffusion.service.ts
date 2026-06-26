@@ -15,6 +15,27 @@ export interface CreditPackagesResponse {
   packages: CreditPackageResponseItem[];
 }
 
+export interface GenerationModelSettings {
+  model_id: string;
+  display_name: string;
+  base_model: string;
+  default_cfg: number;
+  credit_cost: number;
+  lora_credit_cost: number;
+  supports_sdxl_resolution: boolean;
+  supports_regional_prompting: boolean;
+  supports_upscale: boolean;
+  is_active: boolean;
+  is_default: boolean;
+  display_order: number;
+}
+
+export interface GenerationModelCatalogResponse {
+  default_model: string;
+  models: GenerationModelSettings[];
+  supported_lora_base_models?: string[];
+}
+
 export interface PayPalOrderResponse {
   order_id: string;
 }
@@ -418,6 +439,11 @@ export class StableDiffusionService {
   getModelCreditCost(model: string): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/cost/${encodeURIComponent(model)}`;
     return this.http.get(url);
+  }
+
+  getGenerationModels(): Observable<GenerationModelCatalogResponse> {
+    const url = `${this.apiBaseUrl}/models`;
+    return this.http.get<GenerationModelCatalogResponse>(url);
   }
 
   getCurrentUser(): Observable<CurrentUserResponse> {

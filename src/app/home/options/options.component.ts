@@ -3,7 +3,7 @@ import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
-import { StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { GenerationModelSettings, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { interval, of, firstValueFrom } from 'rxjs';
@@ -61,37 +61,63 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
-  private readonly sdxlResolutionModelIds = new Set<string>([
-    'autismMix',
-    'novaFurryXL_ilV140',
-    'novaMobianXL_v20',
-    'Anima-baseV1',
-  ]);
-  private readonly regionalPromptingModelIds = new Set<string>([
-    'autismMix',
-    'novaFurryXL_ilV140',
-    'novaMobianXL_v20',
-    'Anima-baseV1',
-  ]);
-
-  models_types: { [model: string]: string; } = {
-    "sonicDiffusionV4": "SD 1.5",
-    "autismMix": "Pony",
-    "novaMobianXL_v20": "Illustrious",
-    "novaFurryXL_ilV140": "Illustrious",
-    "Anima-baseV1": "Anima"
-  }
-
-  private readonly defaultModelId: string = "novaMobianXL_v20";
+  modelSettings: GenerationModelSettings[] = [];
+  models_types: { [model: string]: string; } = this.createModelTypeMap(this.modelSettings);
+  private defaultModelId: string = 'novaMobianXL_v20';
 
   private getAvailableModelIds(): string[] {
-    return Object.keys(this.models_types || {});
+    return this.modelSettings
+      .filter(model => model.is_active !== false)
+      .map(model => model.model_id);
   }
 
   private getDefaultModelId(): string {
     const available = this.getAvailableModelIds();
     if (available.includes(this.defaultModelId)) return this.defaultModelId;
     return available[0] || this.defaultModelId;
+  }
+
+  private resolveDefaultModelId(modelSettings: GenerationModelSettings[]): string {
+    const activeModels = modelSettings.filter(model => model.is_active !== false);
+    const defaultModel = activeModels.find(model => model.is_default);
+    if (defaultModel) return defaultModel.model_id;
+    if (activeModels.some(model => model.model_id === 'novaMobianXL_v20')) return 'novaMobianXL_v20';
+    return activeModels[0]?.model_id || 'novaMobianXL_v20';
+  }
+
+  private createModelTypeMap(modelSettings: GenerationModelSettings[]): { [model: string]: string } {
+    return modelSettings.reduce((acc, model) => {
+      if (model.model_id) acc[model.model_id] = model.base_model || 'SD 1.5';
+      return acc;
+    }, {} as { [model: string]: string });
+  }
+
+  private getModelSetting(modelId: unknown): GenerationModelSettings | undefined {
+    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
+    return this.modelSettings.find(model => model.model_id === normalized);
+  }
+
+  private setModelSettings(modelSettings: GenerationModelSettings[], defaultModelId?: string): void {
+    const activeModels = (modelSettings || [])
+      .filter(model => model?.model_id && model.is_active !== false)
+      .map(model => ({
+        ...model,
+        default_cfg: Number(model.default_cfg ?? 7),
+        credit_cost: Number(model.credit_cost ?? 0),
+        lora_credit_cost: Number(model.lora_credit_cost ?? 0),
+        display_order: Number(model.display_order ?? 0),
+      }))
+      .sort((left, right) => (left.display_order - right.display_order) || left.model_id.localeCompare(right.model_id));
+
+    if (!activeModels.length) {
+      throw new Error('No active generation models were returned by the backend.');
+    }
+
+    this.modelSettings = activeModels;
+    this.models_types = this.createModelTypeMap(activeModels);
+    this.defaultModelId = defaultModelId && activeModels.some(model => model.model_id === defaultModelId)
+      ? defaultModelId
+      : this.resolveDefaultModelId(activeModels);
   }
 
   private normalizeModelId(model: unknown): string {
@@ -114,24 +140,24 @@ export class OptionsComponent implements OnInit {
   }
 
   private getDefaultCfgForModel(modelId: string): number {
-    const normalized = modelId.trim();
-    if (normalized === 'Anima-baseV1') return 4;
-    return this.usesSdxlResolutionDefaults(normalized) ? 4 : 7;
+    const setting = this.getModelSetting(modelId);
+    return Number(setting?.default_cfg ?? (this.usesSdxlResolutionDefaults(modelId) ? 4 : 7));
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
-    return this.sdxlResolutionModelIds.has(normalized);
+    return this.getModelSetting(modelId)?.supports_sdxl_resolution === true;
   }
 
   private supportsRegionalPrompting(modelId: unknown): boolean {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
-    return this.regionalPromptingModelIds.has(normalized);
+    return this.getModelSetting(modelId)?.supports_regional_prompting === true;
+  }
+
+  supportsUpscale(modelId: unknown): boolean {
+    return this.getModelSetting(modelId)?.supports_upscale !== false;
   }
 
   private getModelType(modelId: unknown): string {
-    const normalized = typeof modelId === 'string' ? modelId.trim() : '';
-    return this.models_types[normalized] || 'SD 1.5';
+    return this.getModelSetting(modelId)?.base_model || 'SD 1.5';
   }
 
   private disableRegionalPromptingForUnsupportedModel(modelId: unknown): void {
@@ -254,22 +280,6 @@ export class OptionsComponent implements OnInit {
   private lastSubmittedCreditCost = 0;
   private lastSubmittedMode: 'generate' | 'upscale' | 'hires' | 'priority' = 'generate';
   
-  // Credit costs by model type
-  private readonly creditCosts: { [key: string]: number } = {
-    'SD 1.5': 10,
-    'Pony': 15,
-    'Illustrious': 15,
-    'Anima': 20,
-  };
-
-  // Additional cost per LoRA by model type
-  private readonly loraCreditCosts: { [key: string]: number } = {
-    'SD 1.5': 2,
-    'Pony': 5,
-    'Illustrious': 5,
-    'Anima': 5,
-  };
-
   @Input() inpaintMask?: string;
 
   @Output() imagesChange = new EventEmitter<any>();
@@ -327,6 +337,25 @@ export class OptionsComponent implements OnInit {
     });
   }
 
+  private async loadGenerationModels(): Promise<void> {
+    try {
+      const response = await firstValueFrom(
+        this.stableDiffusionService.getGenerationModels().pipe(timeout(5000))
+      );
+      this.setModelSettings(response.models, response.default_model);
+      this.ensureValidModelSelected(false);
+      this.updateCreditCost();
+    } catch (error) {
+      console.error('Failed to load generation models.', error);
+      this.enableGenerationButton = false;
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Model settings unavailable',
+        detail: 'Generation models could not be loaded from the server. Please try again later.',
+      });
+    }
+  }
+
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.generationRequest.prompt = value;
@@ -349,6 +378,7 @@ export class OptionsComponent implements OnInit {
       this.updateCreditCost();
     });
 
+    await this.loadGenerationModels();
     await this.loadSettings();
 
     this.dynamicPromptLibraryState.ensureLoaded().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -479,10 +509,10 @@ export class OptionsComponent implements OnInit {
 
   // Queue type and credit cost methods
   updateCreditCost() {
-    const modelType = this.getModelType(this.generationRequest.model);
-    const baseCost = this.creditCosts[modelType] ?? this.creditCosts['SD 1.5'] ?? 0;
+    const modelSetting = this.getModelSetting(this.generationRequest.model);
+    const baseCost = Number(modelSetting?.credit_cost ?? 0);
     const loraCount = Array.isArray(this.generationRequest?.loras) ? this.generationRequest.loras.length : 0;
-    const perLoraCost = this.loraCreditCosts[modelType] ?? 0;
+    const perLoraCost = Number(modelSetting?.lora_credit_cost ?? 0);
     const loraTotalCost = loraCount * perLoraCost;
     this.creditCost = baseCost + loraTotalCost;
     // LoRAs have 3x cost for upscale and 4x cost for enhanced generation
@@ -626,17 +656,17 @@ export class OptionsComponent implements OnInit {
 
   changeAspectRatio(aspectRatio: string) {
     if (aspectRatio == 'square') {
-      this.aspectRatio = { width: 512, height: 512, model: "novaFurryXL_ilV140", aspectRatio: "square" };
+      this.aspectRatio = { width: 512, height: 512, model: this.generationRequest.model, aspectRatio: "square" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 512;
     }
     else if (aspectRatio == 'portrait') {
-      this.aspectRatio = { width: 512, height: 768, model: "novaFurryXL_ilV140", aspectRatio: "portrait" };
+      this.aspectRatio = { width: 512, height: 768, model: this.generationRequest.model, aspectRatio: "portrait" };
       this.generationRequest.width = 512;
       this.generationRequest.height = 768;
     }
     else if (aspectRatio == 'landscape') {
-      this.aspectRatio = { width: 768, height: 512, model: "novaFurryXL_ilV140", aspectRatio: "landscape" };
+      this.aspectRatio = { width: 768, height: 512, model: this.generationRequest.model, aspectRatio: "landscape" };
       this.generationRequest.width = 768;
       this.generationRequest.height = 512;
     }
@@ -889,8 +919,8 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
-    this.generationRequest.guidance_scale = 4;
-    this.generationRequest.model = "novaMobianXL_v20";
+    this.generationRequest.model = this.getDefaultModelId();
+    this.generationRequest.guidance_scale = this.getDefaultCfgForModel(this.generationRequest.model);
     this.panelTheme = 'sonic';
     this.darkInputFields = false;
     this.applyThemeToBody(this.panelTheme);

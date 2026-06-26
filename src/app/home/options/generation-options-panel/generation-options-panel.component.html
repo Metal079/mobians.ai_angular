@@ -5,11 +5,9 @@
     <label for="floatingSelect">Model Select</label>
     <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
       [(ngModel)]="generationRequest.model" (change)="modelChange.emit($event)">
-      <option value="sonicDiffusionV4">SonicDiffusionV4</option>
-      <option value="autismMix">autismMix</option>
-      <option value="novaFurryXL_ilV140">novaFurryXL_ilV140</option>
-      <option value="novaMobianXL_v20">novaMobianXL_v20</option>
-      <option value="Anima-baseV1">Anima-baseV1</option>
+      @for (model of modelSettings; track model.model_id) {
+        <option [value]="model.model_id">{{ model.display_name || model.model_id }}</option>
+      }
     </select>
 
     <label for="floatingSelect">Image aspect-ratio</label>
@@ -296,7 +294,7 @@
         }}</span>
         <app-hint text="CFG refers to how closely an image tries to follow a prompt. Too high values may fry images, while too low values will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."></app-hint>
       </label>
-      <input type="range" class="form-range" min="2" max="15" value="7" id="customRange1"
+      <input type="range" class="form-range" min="1" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
 
         <!-- FastPass Code -->

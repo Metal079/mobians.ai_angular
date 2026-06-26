@@ -14,6 +14,65 @@ import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library
 
 import { OptionsComponent } from './options.component';
 
+const testModelSettings = [
+  {
+    model_id: 'sonicDiffusionV4',
+    display_name: 'SonicDiffusionV4',
+    base_model: 'SD 1.5',
+    default_cfg: 7,
+    credit_cost: 10,
+    lora_credit_cost: 2,
+    supports_sdxl_resolution: false,
+    supports_regional_prompting: false,
+    supports_upscale: true,
+    is_active: true,
+    is_default: false,
+    display_order: 10,
+  },
+  {
+    model_id: 'autismMix',
+    display_name: 'autismMix',
+    base_model: 'Pony',
+    default_cfg: 4,
+    credit_cost: 15,
+    lora_credit_cost: 5,
+    supports_sdxl_resolution: true,
+    supports_regional_prompting: true,
+    supports_upscale: false,
+    is_active: true,
+    is_default: false,
+    display_order: 20,
+  },
+  {
+    model_id: 'novaMobianXL_v20',
+    display_name: 'novaMobianXL_v20',
+    base_model: 'Illustrious',
+    default_cfg: 4,
+    credit_cost: 15,
+    lora_credit_cost: 5,
+    supports_sdxl_resolution: true,
+    supports_regional_prompting: true,
+    supports_upscale: true,
+    is_active: true,
+    is_default: true,
+    display_order: 40,
+  },
+  {
+    model_id: 'Anima-baseV1',
+    display_name: 'Anima-baseV1',
+    base_model: 'Anima',
+    default_cfg: 4,
+    credit_cost: 20,
+    lora_credit_cost: 5,
+    supports_sdxl_resolution: true,
+    supports_regional_prompting: true,
+    supports_upscale: true,
+    is_active: true,
+    is_default: false,
+    display_order: 50,
+  },
+];
+
 const dynamicPromptLibraryResponse: DynamicPromptLibraryResponse = {
   wildcard_set: 'mobians-v1',
   categories: [
@@ -112,6 +171,7 @@ describe('OptionsComponent', () => {
 
     fixture = TestBed.createComponent(OptionsComponent);
     component = fixture.componentInstance;
+    (component as any).setModelSettings(testModelSettings, 'novaMobianXL_v20');
     TestBed.inject(DynamicPromptLibraryStateService).library.set(dynamicPromptLibraryResponse);
   });
 
@@ -137,6 +197,38 @@ describe('OptionsComponent', () => {
     expect(component.creditCost).toBe(30);
     expect(component.upscaleCreditCost).toBe(90);
     expect(component.hiresCreditCost).toBe(120);
+  });
+
+  it('uses backend model catalog settings for defaults and credit costs', () => {
+    (component as any).setModelSettings([
+      {
+        model_id: 'customModel',
+        display_name: 'Custom Model',
+        base_model: 'CustomBase',
+        default_cfg: 6.5,
+        credit_cost: 18,
+        lora_credit_cost: 4,
+        supports_sdxl_resolution: false,
+        supports_regional_prompting: true,
+        supports_upscale: false,
+        is_active: true,
+        is_default: true,
+        display_order: 1,
+      },
+    ], 'customModel');
+
+    component.generationRequest.model = 'customModel';
+    component.generationRequest.loras = [{}, {}];
+
+    component.changeModel({ target: { value: 'customModel' } } as any);
+
+    expect(component.generationRequest.guidance_scale).toBe(6.5);
+    expect(component.creditCost).toBe(26);
+    expect(component.upscaleCreditCost).toBe(78);
+    expect(component.hiresCreditCost).toBe(104);
+    expect((component as any).supportsRegionalPrompting('customModel')).toBeTrue();
+    expect(component.supportsUpscale('customModel')).toBeFalse();
+    expect(component.models_types['customModel']).toBe('CustomBase');
   });
 
   it('keeps regional prompting enabled for Anima-baseV1 while keeping its default CFG', () => {

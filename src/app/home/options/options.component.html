@@ -90,7 +90,7 @@
       <p-button label="Inpainting" (click)="openImageModal()"></p-button>
       <app-hint text="Allows you to draw on the image you uploaded using your mouse to specify what should be changed. The inpainted areas will be the only ones changed while the rest of the image is unaffected"></app-hint>
       <!-- Upscale button -->
-      @if (this.generationRequest.model != 'sonicDiffusionXL' && this.generationRequest.model != 'autismMix') {
+      @if (supportsUpscale(this.generationRequest.model)) {
         <span class="d-inline-flex align-items-center"
           >
           <p-button label="Upscale" [disabled]="!enableGenerationButton" (click)="this.submitJob('upscale')"></p-button>
@@ -151,6 +151,7 @@
 <app-generation-options-panel
   [generationRequest]="generationRequest"
   [aspectRatio]="aspectRatio"
+  [modelSettings]="modelSettings"
   [panelTheme]="panelTheme"
   [darkInputFields]="darkInputFields"
   [currentSeed]="currentSeed"

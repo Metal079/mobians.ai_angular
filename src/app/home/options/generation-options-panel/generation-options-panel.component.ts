@@ -6,7 +6,7 @@ import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { RegionalPromptRegion } from 'src/_shared/regional-prompting.interface';
 import { TooltipModule } from 'primeng/tooltip';
 import { HintComponent } from 'src/app/hint/hint.component';
-import { RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { GenerationModelSettings, RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 
 type PanelTheme = 'sonic' | 'navy' | 'eggman';
@@ -19,14 +19,9 @@ type PanelTheme = 'sonic' | 'navy' | 'eggman';
     imports: [CommonModule, FormsModule, TooltipModule, HintComponent]
 })
 export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
-  private readonly regionalPromptingModelIds = new Set<string>([
-    'autismMix',
-    'novaFurryXL_ilV140',
-    'novaMobianXL_v20',
-    'Anima-baseV1',
-  ]);
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) aspectRatio!: AspectRatio;
+  @Input() modelSettings: GenerationModelSettings[] = [];
 
   @Input() panelTheme: PanelTheme = 'sonic';
   @Output() panelThemeChange = new EventEmitter<PanelTheme>();
@@ -342,7 +337,9 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
 
   private isRegionalPromptingSupported(): boolean {
     const currentModel = String(this.generationRequest?.model ?? '').trim();
-    return this.regionalPromptingModelIds.has(currentModel);
+    return this.modelSettings.some(
+      model => model.model_id === currentModel && model.supports_regional_prompting === true
+    );
   }
 
   private enforceRegionalPromptingSupport() {
