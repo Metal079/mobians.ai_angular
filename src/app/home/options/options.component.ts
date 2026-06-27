@@ -61,6 +61,7 @@ export class OptionsComponent implements OnInit {
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
+  private settingsHydrated = false;
   modelSettings: GenerationModelSettings[] = [];
   models_types: { [model: string]: string; } = this.createModelTypeMap(this.modelSettings);
   private defaultModelId: string = 'novaMobianXL_v20';
@@ -102,7 +103,7 @@ export class OptionsComponent implements OnInit {
       .filter(model => model?.model_id && model.is_active !== false)
       .map(model => ({
         ...model,
-        default_cfg: Number(model.default_cfg ?? 7),
+        default_cfg: this.validateModelDefaultCfg(model.default_cfg, model.model_id),
         credit_cost: Number(model.credit_cost ?? 0),
         lora_credit_cost: Number(model.lora_credit_cost ?? 0),
         display_order: Number(model.display_order ?? 0),
@@ -141,7 +142,23 @@ export class OptionsComponent implements OnInit {
 
   private getDefaultCfgForModel(modelId: string): number {
     const setting = this.getModelSetting(modelId);
-    return Number(setting?.default_cfg ?? (this.usesSdxlResolutionDefaults(modelId) ? 4 : 7));
+    if (setting) return setting.default_cfg;
+
+    return this.normalizeCfgValue(undefined, this.usesSdxlResolutionDefaults(modelId) ? 4 : 7);
+  }
+
+  private validateModelDefaultCfg(value: unknown, modelId: string): number {
+    const numeric = Number(value);
+    if (!Number.isInteger(numeric) || numeric < 1 || numeric > 15) {
+      throw new Error(`Invalid default CFG for generation model ${modelId}: ${value}`);
+    }
+    return numeric;
+  }
+
+  private normalizeCfgValue(value: unknown, fallback: number): number {
+    const numeric = Number(value);
+    const resolved = Number.isFinite(numeric) ? numeric : fallback;
+    return Math.min(15, Math.max(1, Math.round(resolved)));
   }
 
   private usesSdxlResolutionDefaults(modelId: unknown): boolean {
@@ -170,6 +187,11 @@ export class OptionsComponent implements OnInit {
   }
 
   private ensureValidModelSelected(persist: boolean = true): void {
+    if (!this.modelSettings.length) {
+      if (this.aspectRatio) this.aspectRatio.model = this.generationRequest?.model || this.defaultModelId;
+      return;
+    }
+
     const previous = this.generationRequest?.model;
     const normalized = this.normalizeModelId(previous);
     this.generationRequest.model = normalized;
@@ -378,8 +400,8 @@ export class OptionsComponent implements OnInit {
       this.updateCreditCost();
     });
 
-    await this.loadGenerationModels();
     await this.loadSettings();
+    await this.loadGenerationModels();
 
     this.dynamicPromptLibraryState.ensureLoaded().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => this.applyDynamicPromptState(this.generationRequest.prompt),
@@ -747,6 +769,8 @@ export class OptionsComponent implements OnInit {
 
   // Save session storage info of changed settings
   saveSettings() {
+    if (!this.settingsHydrated) return;
+
     // Save prompt
     localStorage.setItem("prompt-input", this.generationRequest.prompt);
 
@@ -833,7 +857,7 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.seed = parseInt(localStorage.getItem("seed-input")!);
     }
     if (localStorage.getItem("cfg") != null) {
-      this.generationRequest.guidance_scale = parseInt(localStorage.getItem("cfg")!);
+      this.generationRequest.guidance_scale = this.normalizeCfgValue(localStorage.getItem("cfg"), this.getDefaultCfgForModel(this.generationRequest.model));
     }
     if (localStorage.getItem("aspect-ratio") != null) {
       this.changeAspectRatio(localStorage.getItem("aspect-ratio")!);
@@ -890,6 +914,7 @@ export class OptionsComponent implements OnInit {
     }
 
     this.updateCreditCost();
+    this.settingsHydrated = true;
   }
 
   // Reset session storage info of changed settings and reset view

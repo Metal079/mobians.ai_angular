@@ -32,6 +32,7 @@ interface SyncedImageInfo {
 })
 export class ImageSyncService {
   private readonly SYNC_LIMIT = 1000;
+  private readonly CLOUD_BLOB_BATCH_SIZE = 50;
   private readonly API_URL = environment.apiBaseUrl;
   
   // Track sync status
@@ -331,6 +332,57 @@ export class ImageSyncService {
       console.error('Failed to download from cloud:', error);
       return { images, blobs };
     }
+  }
+
+  /**
+   * Download image blobs for a known set of cloud image UUIDs.
+   */
+  async downloadImageBlobs(imageUUIDs: string[]): Promise<Map<string, Blob>> {
+    const blobs = new Map<string, Blob>();
+
+    if (!this.authService.isLoggedIn()) {
+      return blobs;
+    }
+
+    const uniqueUUIDs = Array.from(
+      new Set(
+        (imageUUIDs || [])
+          .map(uuid => String(uuid || '').trim())
+          .filter(uuid => uuid.length > 0)
+      )
+    );
+
+    if (uniqueUUIDs.length === 0) {
+      return blobs;
+    }
+
+    for (let i = 0; i < uniqueUUIDs.length; i += this.CLOUD_BLOB_BATCH_SIZE) {
+      const chunk = uniqueUUIDs.slice(i, i + this.CLOUD_BLOB_BATCH_SIZE);
+
+      try {
+        const response = await firstValueFrom(
+          this.http.post<any[]>(`${this.API_URL}/history/sync/images/blobs`, {
+            image_uuids: chunk
+          }, {
+            headers: this.getAuthHeaders()
+          })
+        );
+
+        for (const item of response || []) {
+          if (!item?.image_uuid || !item.image_blob) {
+            continue;
+          }
+
+          blobs.set(item.image_uuid, this.base64ToBlob(item.image_blob, 'image/webp'));
+          this.syncedImageUUIDs.add(item.image_uuid);
+        }
+      } catch (error) {
+        console.error('Failed to download cloud image blobs:', error);
+      }
+    }
+
+    this.saveSyncedUUIDsToStorage();
+    return blobs;
   }
 
   /**

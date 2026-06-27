@@ -23,6 +23,10 @@ class BlobMigrationServiceStub {
   convertWebPToPNG(blob: Blob) {
     return Promise.resolve(blob);
   }
+
+  embedPngTextMetadata(blob: Blob) {
+    return Promise.resolve(blob);
+  }
 }
 
 class SharedServiceStub {
@@ -44,6 +48,7 @@ class ImageSyncServiceStub {
     isSyncing: false
   });
   downloadFromCloud = jasmine.createSpy('downloadFromCloud').and.resolveTo({ images: [], blobs: new Map() });
+  downloadImageBlobs = jasmine.createSpy('downloadImageBlobs').and.resolveTo(new Map());
   isImageSynced = jasmine.createSpy('isImageSynced').and.returnValue(false);
   updateImageMetadata = jasmine.createSpy('updateImageMetadata').and.resolveTo(true);
   syncImage = jasmine.createSpy('syncImage').and.resolveTo(true);
@@ -180,6 +185,51 @@ describe('ImageHistoryPanelComponent', () => {
 
     expect(images).toEqual([cloudImage]);
     expect(imageSyncService.downloadFromCloud).toHaveBeenCalledWith(false);
+  });
+
+  it('mergeCloudImages should fetch metadata first and blobs only for missing local images', async () => {
+    const localImage = createImage({ UUID: 'local-1', favorite: false, tags: [] });
+    const cloudLocalImage = createImage({ UUID: 'local-1', favorite: true, tags: ['tag-1'] });
+    const cloudMissingImage = createImage({ UUID: 'missing-1', favorite: true, tags: [] });
+    const missingBlob = new Blob(['missing'], { type: 'image/webp' });
+    const fakeDb = {} as IDBDatabase;
+
+    imageSyncService.downloadFromCloud.and.resolveTo({
+      images: [cloudLocalImage, cloudMissingImage],
+      blobs: new Map()
+    });
+    imageSyncService.downloadImageBlobs.and.resolveTo(new Map([
+      ['missing-1', missingBlob]
+    ]));
+
+    spyOn(component as any, 'getDatabase').and.resolveTo(fakeDb);
+    spyOn(component as any, 'getLocalImage').and.callFake((_db: IDBDatabase, uuid: string) => {
+      return Promise.resolve(uuid === 'local-1' ? localImage : null);
+    });
+    spyOn(component as any, 'hasStoredImageBlob').and.resolveTo(true);
+    spyOn(component as any, 'updateLocalCloudMetadata').and.callFake(async (
+      _db: IDBDatabase,
+      local: MobiansImage,
+      cloud: MobiansImage
+    ) => {
+      local.favorite = cloud.favorite;
+      local.tags = cloud.tags;
+      return true;
+    });
+    spyOn(component as any, 'storeCloudImage').and.resolveTo(true);
+    spyOn(component, 'searchImages').and.resolveTo();
+    spyOn(component, 'paginateImages').and.resolveTo([]);
+    spyOn(component, 'updateFavoriteImages').and.resolveTo();
+    spyOn(component, 'updateTagCounts').and.resolveTo();
+
+    const mergedCount = await component.mergeCloudImages();
+
+    expect(imageSyncService.downloadFromCloud).toHaveBeenCalledWith(false);
+    expect(imageSyncService.downloadImageBlobs).toHaveBeenCalledOnceWith(['missing-1']);
+    expect((component as any).storeCloudImage).toHaveBeenCalledWith(fakeDb, cloudMissingImage, missingBlob);
+    expect(localImage.favorite).toBeTrue();
+    expect(localImage.tags).toEqual(['tag-1']);
+    expect(mergedCount).toBe(2);
   });
 
   it('updateFavoriteImages should apply tag/search filters and reset page when preservePage is false', async () => {

@@ -183,6 +183,31 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('does not overwrite persisted settings before hydration is complete', () => {
+    localStorage.setItem('prompt-input', 'saved prompt');
+    component.generationRequest.prompt = '';
+
+    component.saveSettings();
+
+    expect(localStorage.getItem('prompt-input')).toBe('saved prompt');
+  });
+
+  it('restores saved settings without model catalog availability', async () => {
+    (component as any).modelSettings = [];
+    component.models_types = {};
+    localStorage.setItem('prompt-input', 'remembered prompt');
+    localStorage.setItem('panel-theme', 'navy');
+    localStorage.setItem('model', 'Anima-baseV1');
+    localStorage.setItem('cfg', '6');
+
+    await component.loadSettings();
+
+    expect(component.generationRequest.prompt).toBe('remembered prompt');
+    expect(component.panelTheme).toBe('navy');
+    expect(component.generationRequest.model).toBe('Anima-baseV1');
+    expect(component.generationRequest.guidance_scale).toBe(6);
+  });
+
   it('uses the SDXL-sized defaults for Anima-baseV1', () => {
     expect((component as any).usesSdxlResolutionDefaults('Anima-baseV1')).toBeTrue();
     expect((component as any).supportsRegionalPrompting('Anima-baseV1')).toBeTrue();
@@ -205,7 +230,7 @@ describe('OptionsComponent', () => {
         model_id: 'customModel',
         display_name: 'Custom Model',
         base_model: 'CustomBase',
-        default_cfg: 6.5,
+        default_cfg: 6,
         credit_cost: 18,
         lora_credit_cost: 4,
         supports_sdxl_resolution: false,
@@ -222,13 +247,31 @@ describe('OptionsComponent', () => {
 
     component.changeModel({ target: { value: 'customModel' } } as any);
 
-    expect(component.generationRequest.guidance_scale).toBe(6.5);
+    expect(component.generationRequest.guidance_scale).toBe(6);
     expect(component.creditCost).toBe(26);
     expect(component.upscaleCreditCost).toBe(78);
     expect(component.hiresCreditCost).toBe(104);
     expect((component as any).supportsRegionalPrompting('customModel')).toBeTrue();
     expect(component.supportsUpscale('customModel')).toBeFalse();
     expect(component.models_types['customModel']).toBe('CustomBase');
+  });
+
+  it('rejects backend model catalog defaults outside the CFG slider range', () => {
+    expect(() => (component as any).setModelSettings([
+      {
+        ...testModelSettings[0],
+        default_cfg: 0,
+      },
+    ], 'sonicDiffusionV4')).toThrowError(/Invalid default CFG/);
+  });
+
+  it('rejects decimal backend model catalog CFG defaults', () => {
+    expect(() => (component as any).setModelSettings([
+      {
+        ...testModelSettings[0],
+        default_cfg: 6.5,
+      },
+    ], 'sonicDiffusionV4')).toThrowError(/Invalid default CFG/);
   });
 
   it('keeps regional prompting enabled for Anima-baseV1 while keeping its default CFG', () => {

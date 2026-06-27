@@ -2643,6 +2643,105 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }, this.cloudSyncIntervalMs);
   }
 
+  private async getLocalImage(db: IDBDatabase, uuid: string): Promise<MobiansImage | null> {
+    return new Promise<MobiansImage | null>((resolve) => {
+      const transaction = db.transaction(this.storeName, 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.get(uuid);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => resolve(null);
+    });
+  }
+
+  private async hasStoredImageBlob(db: IDBDatabase, uuid: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const transaction = db.transaction(this.blobStoreName, 'readonly');
+      const store = transaction.objectStore(this.blobStoreName);
+      const request = store.get(uuid);
+      request.onsuccess = () => resolve(!!request.result?.blob);
+      request.onerror = () => resolve(false);
+    });
+  }
+
+  private async storeCloudImage(db: IDBDatabase, cloudImage: MobiansImage, blob: Blob): Promise<boolean> {
+    try {
+      return await new Promise<boolean>((resolve) => {
+        const transaction = db.transaction([this.storeName, this.blobStoreName], 'readwrite');
+        const imageStore = transaction.objectStore(this.storeName);
+        const blobStore = transaction.objectStore(this.blobStoreName);
+        let failed = false;
+
+        transaction.oncomplete = () => resolve(!failed);
+        transaction.onerror = () => resolve(false);
+        transaction.onabort = () => resolve(false);
+
+        const imageMetadata: any = { ...cloudImage };
+        delete imageMetadata.blob;
+        delete imageMetadata.url;
+
+        const imageRequest = imageStore.put(imageMetadata);
+        imageRequest.onerror = () => { failed = true; };
+
+        const blobRequest = blobStore.put({ UUID: cloudImage.UUID, blob });
+        blobRequest.onerror = () => { failed = true; };
+      });
+    } catch (error) {
+      console.error('Failed to store cloud image:', error);
+      return false;
+    }
+  }
+
+  private async storeCloudImageBlob(db: IDBDatabase, uuid: string, blob: Blob): Promise<boolean> {
+    try {
+      return await new Promise<boolean>((resolve) => {
+        const transaction = db.transaction(this.blobStoreName, 'readwrite');
+        const blobStore = transaction.objectStore(this.blobStoreName);
+
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = () => resolve(false);
+        transaction.onabort = () => resolve(false);
+
+        blobStore.put({ UUID: uuid, blob });
+      });
+    } catch (error) {
+      console.error('Failed to store cloud image blob:', error);
+      return false;
+    }
+  }
+
+  private async updateLocalCloudMetadata(
+    db: IDBDatabase,
+    localImage: MobiansImage,
+    cloudImage: MobiansImage
+  ): Promise<boolean> {
+    const tagsChanged = JSON.stringify(localImage.tags || []) !== JSON.stringify(cloudImage.tags || []);
+    const favoriteChanged = localImage.favorite !== cloudImage.favorite;
+
+    if (!tagsChanged && !favoriteChanged) {
+      return false;
+    }
+
+    localImage.tags = cloudImage.tags || [];
+    localImage.favorite = cloudImage.favorite;
+
+    await new Promise<void>((resolve) => {
+      const transaction = db.transaction(this.storeName, 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      store.put(localImage);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => resolve();
+      transaction.onabort = () => resolve();
+    });
+
+    const cachedImg = this.imageHistoryMetadata.find(i => i.UUID === cloudImage.UUID);
+    if (cachedImg) {
+      cachedImg.tags = cloudImage.tags || [];
+      cachedImg.favorite = cloudImage.favorite;
+    }
+
+    return true;
+  }
+
   private async syncFromCloud() {
     try {
       await this.imageSyncService.fetchSyncStatus();
@@ -2662,59 +2761,68 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   async mergeCloudImages(): Promise<number> {
     try {
-      const { images, blobs } = await this.imageSyncService.downloadFromCloud();
+      const { images } = await this.imageSyncService.downloadFromCloud(false);
       if (images.length === 0) return 0;
 
       const db = await this.getDatabase();
       let imagesAdded = 0;
       let imagesUpdated = 0;
+      let blobsRestored = 0;
+      const imagesToAdd: MobiansImage[] = [];
+      const blobOnlyUUIDs: string[] = [];
 
       for (const cloudImage of images) {
-        const localImage = await new Promise<MobiansImage | null>((resolve) => {
-          const transaction = db.transaction(this.storeName, 'readonly');
-          const store = transaction.objectStore(this.storeName);
-          const request = store.get(cloudImage.UUID);
-          request.onsuccess = () => resolve(request.result || null);
-          request.onerror = () => resolve(null);
-        });
+        const localImage = await this.getLocalImage(db, cloudImage.UUID);
 
         if (!localImage) {
-          const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
-          const imageStore = transaction.objectStore(this.storeName);
-          const blobStore = transaction.objectStore('blobStore');
+          imagesToAdd.push(cloudImage);
+          continue;
+        }
 
-          imageStore.put(cloudImage);
+        if (await this.updateLocalCloudMetadata(db, localImage, cloudImage)) {
+          imagesUpdated++;
+        }
 
-          const blob = blobs.get(cloudImage.UUID);
-          if (blob) {
-            blobStore.put({ UUID: cloudImage.UUID, blob });
-          }
-
-          imagesAdded++;
-        } else {
-          const tagsChanged = JSON.stringify(localImage.tags || []) !== JSON.stringify(cloudImage.tags || []);
-          const favoriteChanged = localImage.favorite !== cloudImage.favorite;
-
-          if (tagsChanged || favoriteChanged) {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-
-            localImage.tags = cloudImage.tags || [];
-            localImage.favorite = cloudImage.favorite;
-            store.put(localImage);
-
-            const cachedImg = this.imageHistoryMetadata.find(i => i.UUID === cloudImage.UUID);
-            if (cachedImg) {
-              cachedImg.tags = cloudImage.tags || [];
-              cachedImg.favorite = cloudImage.favorite;
-            }
-
-            imagesUpdated++;
-          }
+        if (!(await this.hasStoredImageBlob(db, cloudImage.UUID))) {
+          blobOnlyUUIDs.push(cloudImage.UUID);
         }
       }
 
-      if (imagesAdded > 0 || imagesUpdated > 0) {
+      const blobUUIDsToDownload = [
+        ...imagesToAdd.map(image => image.UUID),
+        ...blobOnlyUUIDs
+      ];
+      const cloudBlobs = await this.imageSyncService.downloadImageBlobs(blobUUIDsToDownload);
+
+      for (const cloudImage of imagesToAdd) {
+        const blob = cloudBlobs.get(cloudImage.UUID);
+        if (!blob) {
+          continue;
+        }
+
+        if (await this.storeCloudImage(db, cloudImage, blob)) {
+          imagesAdded++;
+        }
+      }
+
+      for (const uuid of blobOnlyUUIDs) {
+        const blob = cloudBlobs.get(uuid);
+        if (!blob) {
+          continue;
+        }
+
+        if (await this.storeCloudImageBlob(db, uuid, blob)) {
+          this.imageUrlCache.delete(uuid);
+          const visibleImage = this.currentPageImages.find(image => image.UUID === uuid)
+            || this.favoritePageImages.find(image => image.UUID === uuid);
+          if (visibleImage) {
+            await this.loadImageData(visibleImage);
+          }
+          blobsRestored++;
+        }
+      }
+
+      if (imagesAdded > 0 || imagesUpdated > 0 || blobsRestored > 0) {
         await this.searchImages();
         const nextImages = await this.paginateImages(this.currentPageNumber);
         this.runInAngularZone(() => {
@@ -2725,7 +2833,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         await this.updateTagCounts();
       }
 
-      return imagesAdded + imagesUpdated;
+      return imagesAdded + imagesUpdated + blobsRestored;
     } catch (error) {
       console.error('Failed to merge cloud images:', error);
       return 0;
