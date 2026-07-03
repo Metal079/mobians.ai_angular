@@ -362,7 +362,16 @@ export class OptionsComponent implements OnInit {
   private async loadGenerationModels(): Promise<void> {
     try {
       const response = await firstValueFrom(
-        this.stableDiffusionService.getGenerationModels().pipe(timeout(5000))
+        this.stableDiffusionService.getGenerationModels().pipe(
+          timeout(8000),
+          retryWhen(errors => errors.pipe(
+            scan((attempt, error) => {
+              if (attempt >= 2) throw error;
+              return attempt + 1;
+            }, 0),
+            delayWhen(attempt => timer(attempt * 1500))
+          ))
+        )
       );
       this.setModelSettings(response.models, response.default_model);
       this.ensureValidModelSelected(false);
