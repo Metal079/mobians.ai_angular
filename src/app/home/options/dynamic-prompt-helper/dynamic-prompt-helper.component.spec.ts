@@ -559,7 +559,7 @@ describe('DynamicPromptHelperComponent', () => {
     spyOn(stableDiffusionService, 'upvoteDynamicPromptTemplate').and.returnValue(of({
       template: { ...template, upvote_count: 1, has_upvoted: true },
       vote_reward: {
-        creator_credits_awarded: 50,
+        creator_credits_awarded: 100,
         voter_credits_awarded: 15,
         voter_balance_after: 315,
       },
@@ -595,7 +595,7 @@ describe('DynamicPromptHelperComponent', () => {
     spyOn(stableDiffusionService, 'upvoteDynamicPromptCategory').and.returnValue(of({
       category: { ...category, upvote_count: 1, has_upvoted: true },
       vote_reward: {
-        creator_credits_awarded: 50,
+        creator_credits_awarded: 100,
         voter_credits_awarded: 0,
         voter_balance_after: null,
         voter_reward_skipped_reason: 'daily_cap_reached',
