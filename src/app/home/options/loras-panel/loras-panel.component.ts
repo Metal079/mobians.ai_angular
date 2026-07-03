@@ -135,6 +135,10 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
         this.resetLoraUiState();
       }
     }
+
+    if (changes['modelsTypes'] && !changes['modelsTypes'].firstChange) {
+      this.handleModelChange();
+    }
   }
 
   ngDoCheck() {

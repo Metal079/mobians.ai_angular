@@ -1,4 +1,4 @@
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA, SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -110,5 +110,23 @@ describe('LorasPanelComponent', () => {
       'Middle Lora',
       'Older Lora',
     ]);
+  });
+
+  it('refilters LoRAs when model type mapping arrives after LoRAs load', () => {
+    component.modelsTypes = {};
+    component.loras = [
+      { name: 'Anima Lora', version: 'v1', base_model: 'Anima', is_nsfw: false, tags: [], uses: 1 },
+    ];
+
+    component.filterLoras();
+
+    expect(component.displayedLoras).toEqual([]);
+
+    component.modelsTypes = { 'anima-model': 'Anima' };
+    component.ngOnChanges({
+      modelsTypes: new SimpleChange({}, component.modelsTypes, false),
+    });
+
+    expect(component.displayedLoras.map((lora) => lora.name)).toEqual(['Anima Lora']);
   });
 });
