@@ -469,7 +469,10 @@ export class StableDiffusionService {
 
   //#region Lora API calls
   getLoras(status: string = 'active', fields: 'summary' | 'full' = 'summary'): Observable<any> {
-    const url = `${this.apiBaseUrl}/get_loras/?status=${encodeURIComponent(status)}&fields=${encodeURIComponent(fields)}`;
+    let url = `${this.apiBaseUrl}/get_loras/?status=${encodeURIComponent(status)}&fields=${encodeURIComponent(fields)}`;
+    if (fields === 'full') {
+      url += `&_=${Date.now()}`;
+    }
     return this.http.get(url);
   }
 
