@@ -229,7 +229,7 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   loadAllLoras(): void {
     this.loadingLoras = true;
-    this.sdService.getLoras('all').subscribe({
+    this.sdService.getLoras('all', 'full').subscribe({
       next: (rows: any[]) => {
         this.runInView(() => {
           this.allLoras = Array.isArray(rows) ? rows : [];
