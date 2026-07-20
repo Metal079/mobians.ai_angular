@@ -292,7 +292,7 @@
         <!-- CFG -->
         <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
         }}</span>
-        <app-hint text="CFG refers to how closely an image tries to follow a prompt. Too high values may fry images, while too low values will result in an unrelated photo being generated but generally more creative/pretty. By default 7 is used but this can be experimented with."></app-hint>
+        <app-hint text="CFG refers to how closely an image tries to follow a prompt. Too high values may fry images, while too low values will result in an unrelated photo being generated but generally more creative/pretty. This can be experimented with, but its recommended to stick to around the default value for the model."></app-hint>
       </label>
       <input type="range" class="form-range" min="1" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
