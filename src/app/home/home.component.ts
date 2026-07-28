@@ -42,7 +42,7 @@ export class HomeComponent {
   headerMessage: HeaderMessage[] = [{
     severity: 'info',
     summary: 'Welcome to Mobians!',
-    detail: 'Join the community on Discord and gain fastpasses by participating in our weekly events! <a href="https://discord.gg/mobians" target="_blank">Click here to join.</a>',
+    detail: 'Join the community on Discord and gain credits by participating in our weekly events! <a href="https://discord.gg/mobians" target="_blank">Click here to join.</a>',
   }];
   loginInfo: any = null;
 
