@@ -25,6 +25,10 @@ class StableDiffusionServiceStub {
     return of([] as any[]);
   }
 
+  searchByID() {
+    return of([] as any[]);
+  }
+
   addLoraSuggestion() {
     return of({ status: 'success' });
   }
@@ -85,6 +89,7 @@ describe('AddLorasComponent', () => {
             data: {
               showNSFWLoras: false,
               targetBaseModel: 'Anima',
+              supportedBaseModels: ['Anima', 'Illustrious'],
             },
           },
         },
@@ -120,6 +125,38 @@ describe('AddLorasComponent', () => {
     expect(component.searchResults.length).toBe(1);
     expect(component.searchResults[0].base_model).toBe('Anima');
     expect(component.searchResults[0].name).toContain('Anima LoRA');
+  });
+
+  it('allows model ID searches across all supported site model types', () => {
+    const searchResults$ = of([
+      { name: 'Illustrious LoRA', model_name: 'v1', base_model: 'Illustrious' },
+      { name: 'Unsupported LoRA', model_name: 'v1', base_model: 'Flux.1 D' },
+    ]) as any;
+    spyOn(stableDiffusionService as any, 'searchByID').and.returnValue(searchResults$);
+    component.ngOnInit();
+
+    component.searchByModelId('123');
+
+    expect(component.searchResults.length).toBe(1);
+    expect(component.searchResults[0].base_model).toBe('Illustrious');
+    expect(component.searchResults[0].name).toContain('Illustrious LoRA');
+  });
+
+  it('blocks submitting a result whose model type is unavailable on the site', () => {
+    const addSpy = spyOn(stableDiffusionService as any, 'addLoraSuggestion').and.callThrough();
+    const messageSpy = spyOn(TestBed.inject(MessageService) as any, 'add');
+    component.ngOnInit();
+    component.selectedLoRA = {
+      ...buildSelectedLora(321),
+      base_model: 'Flux.1 D'
+    };
+
+    component.requestSelectedLoRA();
+
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(messageSpy).toHaveBeenCalledWith(jasmine.objectContaining({
+      summary: 'Unsupported model type'
+    }));
   });
 
   it('submits LoRA requests for Google-authenticated users without a Discord id', () => {

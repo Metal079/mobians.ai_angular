@@ -521,9 +521,11 @@ export class OptionsComponent implements OnInit {
     }
   }
 
-  changeModel(event: any) {
-    let selectElement = event.target as HTMLSelectElement;
-    const selectedModelId = this.normalizeModelId(selectElement.value);
+  changeModel(modelSelection: string | Event) {
+    const rawModelId = typeof modelSelection === 'string'
+      ? modelSelection
+      : (modelSelection.target as HTMLSelectElement | null)?.value;
+    const selectedModelId = this.normalizeModelId(rawModelId);
     this.generationRequest.model = selectedModelId;
     this.disableRegionalPromptingForUnsupportedModel(selectedModelId);
 

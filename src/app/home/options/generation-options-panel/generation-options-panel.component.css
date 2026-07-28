@@ -18,6 +18,87 @@
   margin-left: 0;
 }
 
+.model-select {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.model-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.model-select-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-type-tag {
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, #2f6fd6) 75%, #ffffff);
+  border-radius: 999px;
+  background: var(--theme-primary, #2f6fd6);
+  color: var(--theme-primary-text, #ffffff);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .model-select.p-select {
+  min-height: 38px;
+  border-color: var(--theme-input-border);
+  background: var(--theme-input-bg);
+  color: var(--theme-input-text);
+}
+
+:host ::ng-deep .model-select.p-select:not(.p-disabled):hover {
+  border-color: var(--theme-primary);
+}
+
+:host ::ng-deep .model-select.p-select.p-focus {
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 0.2rem var(--theme-input-focus-ring);
+}
+
+:host ::ng-deep .model-select .p-select-label {
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  color: var(--theme-input-text);
+}
+
+:host ::ng-deep .model-select .p-select-dropdown {
+  color: var(--theme-input-text);
+}
+
+:host ::ng-deep .model-select-panel.p-select-overlay {
+  border-color: var(--theme-input-border);
+  background: var(--theme-input-bg);
+  color: var(--theme-input-text);
+}
+
+:host ::ng-deep .model-select-panel .p-select-option {
+  color: var(--theme-input-text);
+}
+
+:host ::ng-deep .model-select-panel .p-select-option.p-select-option-selected,
+:host ::ng-deep .model-select-panel .p-select-option.p-focus {
+  background: color-mix(in srgb, var(--theme-primary, #2f6fd6) 18%, var(--theme-input-bg));
+  color: var(--theme-input-text);
+}
+
 .history-maintenance-actions {
   margin-top: 0.5rem;
   display: flex;

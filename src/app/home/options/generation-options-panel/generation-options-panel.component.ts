@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { RegionalPromptRegion } from 'src/_shared/regional-prompting.interface';
+import { SelectModule } from 'primeng/select';
 import { TooltipModule } from 'primeng/tooltip';
 import { HintComponent } from 'src/app/hint/hint.component';
 import { GenerationModelSettings, RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
@@ -16,7 +17,7 @@ type PanelTheme = 'sonic' | 'navy' | 'eggman';
     templateUrl: './generation-options-panel.component.html',
     styleUrls: ['./generation-options-panel.component.css'],
     standalone: true,
-    imports: [CommonModule, FormsModule, TooltipModule, HintComponent]
+    imports: [CommonModule, FormsModule, SelectModule, TooltipModule, HintComponent]
 })
 export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) generationRequest!: any;
@@ -43,7 +44,7 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
 
   @Input() downloadAllInProgress = false;
 
-  @Output() modelChange = new EventEmitter<Event>();
+  @Output() modelChange = new EventEmitter<string>();
   @Output() aspectRatioChange = new EventEmitter<Event>();
   @Output() saveSettings = new EventEmitter<void>();
   @Output() fastPassCodeChange = new EventEmitter<Event>();
@@ -94,6 +95,10 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   onDarkInputFieldsChange(enabled: boolean) {
     this.darkInputFieldsChange.emit(enabled);
     this.saveSettings.emit();
+  }
+
+  onModelSelectionChange(modelId: string) {
+    this.modelChange.emit(modelId);
   }
 
   onHiresEnabledChange(enabled: boolean) {

@@ -39,6 +39,7 @@ export class AddLorasComponent {
   private readonly rerequestCooldownMs = 7 * 24 * 60 * 60 * 1000;
   private isComponentDestroyed = false;
   targetBaseModel: string | null = null;
+  supportedBaseModels = new Set<string>();
 
   searchOptions: { value: SearchOption; label: string; icon: string }[] = [
     { value: 'lora_name', label: 'Search by Name', icon: 'pi pi-search' },
@@ -109,6 +110,13 @@ export class AddLorasComponent {
       ? targetBaseModel.trim()
       : null;
 
+    const supportedBaseModels = this.config?.data?.supportedBaseModels;
+    this.supportedBaseModels = new Set(
+      (Array.isArray(supportedBaseModels) ? supportedBaseModels : [])
+        .map((baseModel: unknown) => typeof baseModel === 'string' ? baseModel.trim() : '')
+        .filter(Boolean)
+    );
+
     this.loadApprovedLoras();
     this.loadSuggestionStatuses();
   }
@@ -170,11 +178,25 @@ export class AddLorasComponent {
   }
 
   searchByModelId(query: string) {
-    this.executeSearch(this.stableDiffusionService.searchByID(query, true), 'civitAi model ID search done');
+    this.executeSearch(
+      this.stableDiffusionService.searchByID(query, true),
+      'civitAi model ID search done',
+      false
+    );
   }
 
   requestSelectedLoRA() {
     if (this.selectedLoRA) {
+      if (!this.isSupportedBaseModel(this.selectedLoRA?.base_model)) {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Unsupported model type',
+          detail: `LoRAs for ${this.selectedLoRA?.base_model || 'this model type'} are not available on this site.`,
+          life: 5000
+        });
+        return;
+      }
+
       const userData = this.sharedService.getUserDataValue();
       if (!this.hasAuthenticatedUser(userData)) {
         this.messageService.add({
@@ -542,7 +564,11 @@ export class AddLorasComponent {
     });
   }
 
-  private executeSearch(request$: Observable<any>, successLog: string): void {
+  private executeSearch(
+    request$: Observable<any>,
+    successLog: string,
+    restrictToTargetBaseModel: boolean = true
+  ): void {
     this.applyAsyncState(() => {
       this.isLoading = true;
     });
@@ -552,7 +578,10 @@ export class AddLorasComponent {
       .subscribe({
         next: (response: any) => {
           console.log(successLog);
-          const mappedResults = this.filterResultsToTargetBaseModel(this.mapSearchResults(response));
+          const mappedResults = this.filterSearchResults(
+            this.mapSearchResults(response),
+            restrictToTargetBaseModel
+          );
 
           this.applyAsyncState(() => {
             this.searchResults = mappedResults;
@@ -589,6 +618,25 @@ export class AddLorasComponent {
     }
 
     return results.filter((result) => (result?.base_model ?? '').trim() === this.targetBaseModel);
+  }
+
+  private filterSearchResults(results: any[], restrictToTargetBaseModel: boolean): any[] {
+    if (restrictToTargetBaseModel) {
+      return this.filterResultsToTargetBaseModel(results);
+    }
+
+    // ID searches can cross model families, but only within the active site
+    // catalog passed by the generation options panel. The backend enforces the
+    // same allowlist authoritatively when searching and submitting.
+    if (this.supportedBaseModels.size === 0) {
+      return results;
+    }
+    return results.filter((result) => this.isSupportedBaseModel(result?.base_model));
+  }
+
+  private isSupportedBaseModel(baseModel: unknown): boolean {
+    const normalizedBaseModel = typeof baseModel === 'string' ? baseModel.trim() : '';
+    return this.supportedBaseModels.size === 0 || this.supportedBaseModels.has(normalizedBaseModel);
   }
 
   private applyAsyncState(update: () => void): void {

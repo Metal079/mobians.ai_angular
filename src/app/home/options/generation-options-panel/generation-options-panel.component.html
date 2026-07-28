@@ -2,16 +2,32 @@
 <div class="collapse w-100" id="collapseExample">
   <div class="card card-body">
     <!-- Existing options content -->
-    <label for="floatingSelect">Model Select</label>
-    <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
-      [(ngModel)]="generationRequest.model" (change)="modelChange.emit($event)">
-      @for (model of modelSettings; track model.model_id) {
-        <option [value]="model.model_id">{{ model.display_name || model.model_id }}</option>
-      }
-    </select>
+    <label for="modelSelect">Model Select</label>
+    <p-select
+      inputId="modelSelect"
+      styleClass="model-select"
+      panelStyleClass="model-select-panel"
+      ariaLabel="Model Select"
+      [options]="modelSettings"
+      optionValue="model_id"
+      [(ngModel)]="generationRequest.model"
+      (onChange)="onModelSelectionChange($event.value)">
+      <ng-template #selectedItem let-model>
+        <div class="model-select-option">
+          <span class="model-select-name">{{ model.display_name || model.model_id }}</span>
+          <span class="model-type-tag">{{ model.base_model }}</span>
+        </div>
+      </ng-template>
+      <ng-template #item let-model>
+        <div class="model-select-option">
+          <span class="model-select-name">{{ model.display_name || model.model_id }}</span>
+          <span class="model-type-tag">{{ model.base_model }}</span>
+        </div>
+      </ng-template>
+    </p-select>
 
-    <label for="floatingSelect">Image aspect-ratio</label>
-    <select class="form-select" id="floatingSelect" aria-label="Floating label select example"
+    <label for="aspectRatioSelect">Image aspect-ratio</label>
+    <select class="form-select" id="aspectRatioSelect" aria-label="Image aspect-ratio"
       [(ngModel)]="aspectRatio['aspectRatio']" (change)="aspectRatioChange.emit($event)">
       <option value="square">Square</option>
       <option value="landscape">Landscape</option>

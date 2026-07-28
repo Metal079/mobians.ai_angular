@@ -294,7 +294,7 @@ describe('OptionsComponent', () => {
       ],
     };
 
-    component.changeModel({ target: { value: 'Anima-baseV1' } } as any);
+    component.changeModel('Anima-baseV1');
 
     expect(component.generationRequest.guidance_scale).toBe(4);
     expect(component.generationRequest.regional_prompting.enabled).toBeTrue();

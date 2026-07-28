@@ -233,6 +233,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
       data: {
         showNSFWLoras: this.showNSFWLoras,
         targetBaseModel: this.modelsTypes?.[this.generationRequest?.model] ?? null,
+        supportedBaseModels: Array.from(new Set(Object.values(this.modelsTypes ?? {}))),
       },
     });
     if (!dialogRef) return;
