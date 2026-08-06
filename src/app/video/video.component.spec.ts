@@ -5,16 +5,18 @@ import { AccountCtaService } from '../auth/account-cta.service';
 import { AuthService } from '../auth/auth.service';
 import { VideoGenerationService } from '../video-generation.service';
 import { VideoComponent } from './video.component';
+import { VideoJob } from 'src/_shared/video-generation.interface';
 
 describe('VideoComponent', () => {
   let component: VideoComponent;
   let videoService: jasmine.SpyObj<VideoGenerationService>;
+  let authService: jasmine.SpyObj<AuthService>;
   let changeDetector: jasmine.SpyObj<ChangeDetectorRef>;
 
   beforeEach(() => {
-    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs']);
+    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob']);
     changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges']);
-    const authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn']);
+    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
     const accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
     const zone = { run: (update: () => void) => update() } as NgZone;
 
@@ -86,5 +88,58 @@ describe('VideoComponent', () => {
     };
 
     expect(component.promptPlaceholder).toContain('settles into the ending pose');
+  });
+
+  it('keeps the visual and audio prompts after a video is queued', () => {
+    const job = {
+      id: 'job-1', status: 'pending', created_at: '', updated_at: '', prompt: 'A gentle wave',
+      duration_seconds: 5, aspect_ratio: 'square', width: 640, height: 640, seed: 1,
+      progress: 0, credit_cost: 100, refunded: false, has_last_frame: false, media_ready: false,
+    } as const;
+    authService.isLoggedIn.and.returnValue(true);
+    videoService.submitJob.and.returnValue(of({ job, credits_used: 100, credits_remaining: 400 }));
+    spyOn<any>(component, 'hydrateJobAssets');
+    component.config = {
+      service: { feature_enabled: true, desired_state: 'available', effective_state: 'available', accepting_jobs: true, message: '', worker_status: 'online' },
+      prices: { '5': 100 }, aspects: { square: { width: 640, height: 640, comfy_value: 'square' }, landscape: { width: 768, height: 512, comfy_value: 'landscape' }, portrait: { width: 512, height: 768, comfy_value: 'portrait' } },
+      durations: [5], active_job_limit: 3, retention_hours: 24, max_frame_bytes: 1024, accepted_frame_types: ['image/png'],
+    };
+    component.currentCredits = 500;
+    component.firstFrame = { file: new File(['frame'], 'frame.png', { type: 'image/png' }), previewUrl: 'blob:first', width: 640, height: 640, source: 'upload' };
+    component.prompt = 'A gentle wave';
+    component.audioPrompt = 'Soft wind';
+
+    component.submit();
+
+    expect(component.prompt).toBe('A gentle wave');
+    expect(component.audioPrompt).toBe('Soft wind');
+  });
+
+  it('toggles a saved prompt between collapsed and expanded', () => {
+    const job = { id: 'job-1' } as VideoJob;
+
+    component.togglePrompt(job);
+    expect(component.isPromptExpanded(job)).toBeTrue();
+
+    component.togglePrompt(job);
+    expect(component.isPromptExpanded(job)).toBeFalse();
+  });
+
+  it('updates a cancelled job immediately when polling is already in flight', () => {
+    const job = {
+      id: 'job-1', status: 'pending', created_at: '', updated_at: '', prompt: 'A gentle wave',
+      duration_seconds: 5, aspect_ratio: 'square', width: 640, height: 640, seed: 1,
+      progress: 0, credit_cost: 100, refunded: false, has_last_frame: false, media_ready: false,
+    } as VideoJob;
+    component.jobs = [job];
+    component.loadingJobs = true;
+    videoService.cancelJob.and.returnValue(of({ status: 'cancelled', credits_refunded: 100, credits_remaining: 500 }));
+
+    component.cancel(job);
+
+    expect(component.jobs[0].status).toBe('cancelled');
+    expect(component.jobs[0].refunded).toBeTrue();
+    expect(component.jobs[0].error_message).toBe('Cancelled by user');
+    expect(authService.updateCredits).toHaveBeenCalledWith(500);
   });
 });

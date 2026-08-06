@@ -209,11 +209,8 @@
             <span class="step-label">Account queue</span>
             <h2 id="my-videos-title">My videos</h2>
           </div>
-          <button type="button" class="refresh-button" [disabled]="loadingJobs" (click)="loadJobs()" aria-label="Refresh video jobs">
-            <i class="bi bi-arrow-clockwise" [class.spinning]="loadingJobs"></i>
-          </button>
         </div>
-        <p class="sync-note"><i class="bi bi-phone"></i> Progress syncs across signed-in devices.</p>
+        <p class="sync-note"><i class="bi bi-arrow-repeat"></i> Updates automatically and syncs across signed-in devices.</p>
 
         @if (jobs.length === 0 && !loadingJobs) {
           <div class="empty-gallery">
@@ -242,7 +239,22 @@
                   </div>
                 }
                 <div class="job-body">
-                  <p>{{ job.prompt }}</p>
+                  <p class="job-prompt" [class.expanded]="isPromptExpanded(job)" [id]="'video-prompt-' + job.id">{{ job.prompt }}</p>
+                  <div class="prompt-actions">
+                    <button
+                      type="button"
+                      class="prompt-action"
+                      [attr.aria-expanded]="isPromptExpanded(job)"
+                      [attr.aria-controls]="'video-prompt-' + job.id"
+                      (click)="togglePrompt(job)">
+                      <i class="bi" [ngClass]="isPromptExpanded(job) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                      {{ isPromptExpanded(job) ? 'Show less' : 'Show full prompt' }}
+                    </button>
+                    <button type="button" class="prompt-action" (click)="copyPrompt(job)" [attr.aria-label]="'Copy prompt for video ' + job.id">
+                      <i class="bi" [ngClass]="copiedPromptJobId === job.id ? 'bi-check-lg' : 'bi-copy'"></i>
+                      {{ copiedPromptJobId === job.id ? 'Copied' : 'Copy prompt' }}
+                    </button>
+                  </div>
                   <div class="job-meta">
                     <span>{{ aspectLabel(job.aspect_ratio) }}</span>
                     <span>{{ job.credit_cost }} credits</span>

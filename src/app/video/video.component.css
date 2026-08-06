@@ -281,7 +281,6 @@
 }
 
 .frame-actions button,
-.refresh-button,
 .job-actions button,
 .duration-options button,
 .aspect-options button {
@@ -635,14 +634,6 @@
   margin-bottom: 0.2rem;
 }
 
-.refresh-button {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-}
-
 .sync-note {
   display: flex;
   gap: 0.4rem;
@@ -721,7 +712,7 @@
   padding: 0.75rem;
 }
 
-.job-body > p {
+.job-prompt {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
@@ -729,6 +720,37 @@
   -webkit-line-clamp: 2;
   font-size: 0.82rem;
   line-height: 1.35;
+}
+
+.job-prompt.expanded {
+  display: block;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.prompt-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--theme-link-color, var(--theme-primary-outline));
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.prompt-action:hover,
+.prompt-action:focus-visible {
+  text-decoration: underline;
 }
 
 .job-meta {

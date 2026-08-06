@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { asyncScheduler, observeOn, Subscription } from 'rxjs';
@@ -54,7 +54,8 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     private shared: SharedService, 
     private auth: AuthService,
     private messageService: MessageService,
-    private accountCtaService: AccountCtaService
+    private accountCtaService: AccountCtaService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -65,6 +66,7 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
       this.hasGoogle = !!user?.google_user_id;
       this.isAdmin = !!user?.has_required_role;
       this.userName = user?.display_name || user?.username || null;
+      this.cdr.markForCheck();
     });
     this.subscriptions.push(userSub);
 
@@ -81,6 +83,7 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
         this.dailyStreak = 0;
         this.nextDailyBonusFromServer = null;
       }
+      this.cdr.markForCheck();
     });
     this.subscriptions.push(creditsSub);
 

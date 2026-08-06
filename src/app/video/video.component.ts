@@ -95,8 +95,11 @@ export class VideoComponent implements OnInit, OnDestroy {
   ];
   readonly thumbnailUrls = new Map<string, string>();
   readonly videoUrls = new Map<string, string>();
+  readonly expandedPromptIds = new Set<string>();
+  copiedPromptJobId: string | null = null;
   private readonly videoUrlExpiry = new Map<string, number>();
   private readonly knownRefunds = new Set<string>();
+  private copiedPromptResetTimer: ReturnType<typeof setTimeout> | null = null;
   private pollSubscription: Subscription | null = null;
   private foregroundSubscription: Subscription | null = null;
   private creditsSubscription: Subscription | null = null;
@@ -136,6 +139,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.pollSubscription?.unsubscribe();
     this.foregroundSubscription?.unsubscribe();
     this.creditsSubscription?.unsubscribe();
+    if (this.copiedPromptResetTimer) clearTimeout(this.copiedPromptResetTimer);
     this.revokeFrame(this.firstFrame);
     this.revokeFrame(this.lastFrame);
     document.body.classList.remove('video-picker-open');
@@ -369,8 +373,6 @@ export class VideoComponent implements OnInit, OnDestroy {
           this.authService.updateCredits(response.credits_remaining);
           this.jobs = [response.job, ...this.jobs.filter((job) => job.id !== response.job.id)];
           this.hydrateJobAssets();
-          this.prompt = '';
-          this.audioPrompt = '';
           this.cameraMotion = 'auto';
           this.showAdvancedCameraOptions = false;
           this.seed = null;
@@ -389,14 +391,53 @@ export class VideoComponent implements OnInit, OnDestroy {
     });
   }
 
+  isPromptExpanded(job: VideoJob): boolean {
+    return this.expandedPromptIds.has(job.id);
+  }
+
+  togglePrompt(job: VideoJob): void {
+    if (this.expandedPromptIds.has(job.id)) {
+      this.expandedPromptIds.delete(job.id);
+    } else {
+      this.expandedPromptIds.add(job.id);
+    }
+  }
+
+  async copyPrompt(job: VideoJob): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(job.prompt);
+      this.runInView(() => this.copiedPromptJobId = job.id);
+      if (this.copiedPromptResetTimer) clearTimeout(this.copiedPromptResetTimer);
+      this.copiedPromptResetTimer = setTimeout(() => {
+        this.runInView(() => this.copiedPromptJobId = null);
+        this.copiedPromptResetTimer = null;
+      }, 2000);
+    } catch {
+      this.runInView(() => {
+        this.errorMessage = 'The prompt could not be copied. Select the expanded prompt and copy it manually.';
+      });
+    }
+  }
+
   cancel(job: VideoJob): void {
     if (job.status !== 'pending') return;
     this.videoService.cancelJob(job.id).subscribe({
       next: (response) => {
         this.runInView(() => {
           this.authService.updateCredits(response.credits_remaining);
-          this.loadJobs(true);
+          if (response.credits_refunded > 0) this.knownRefunds.add(job.id);
+          this.jobs = this.jobs.map((existingJob) => existingJob.id === job.id
+            ? {
+                ...existingJob,
+                status: 'cancelled',
+                refunded: response.credits_refunded > 0 || existingJob.refunded,
+                error_message: 'Cancelled by user',
+                updated_at: new Date().toISOString(),
+              }
+            : existingJob
+          );
         });
+        this.loadJobs(true);
       },
       error: (error) => this.runInView(() => this.errorMessage = this.apiError(error, 'The pending job could not be cancelled.')),
     });
