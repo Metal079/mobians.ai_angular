@@ -1,6 +1,6 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { NEVER, of } from 'rxjs';
 import { SwPush } from '@angular/service-worker';
 import { MessageService } from 'primeng/api';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -119,6 +119,10 @@ class StableDiffusionServiceStub {
   getLoraPreferences() {
     return of([]);
   }
+
+  getJobStatus() {
+    return NEVER;
+  }
 }
 
 class SharedServiceStub {
@@ -182,6 +186,28 @@ describe('OptionsComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('keeps a pending image job when the route is destroyed and resumes polling immediately', fakeAsync(() => {
+    const jobId = 'image-job-123';
+    localStorage.setItem('mobians:pending-job', JSON.stringify({
+      job_id: jobId,
+      createdAt: Date.now(),
+    }));
+    const stableDiffusionService = TestBed.inject(StableDiffusionService) as any;
+    const generationLock = TestBed.inject(GenerationLockService) as any;
+    const statusSpy = spyOn(stableDiffusionService, 'getJobStatus').and.returnValue(NEVER);
+    const releaseSpy = spyOn(generationLock, 'release');
+
+    component.getJob(jobId);
+    tick(0);
+
+    expect(statusSpy).toHaveBeenCalledOnceWith(jobId);
+
+    fixture.destroy();
+
+    expect(JSON.parse(localStorage.getItem('mobians:pending-job') || '{}').job_id).toBe(jobId);
+    expect(releaseSpy).not.toHaveBeenCalled();
+  }));
 
   it('does not overwrite persisted settings before hydration is complete', () => {
     localStorage.setItem('prompt-input', 'saved prompt');

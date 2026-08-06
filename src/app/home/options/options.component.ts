@@ -6,12 +6,10 @@ import { RouterOutlet } from '@angular/router';
 import { GenerationModelSettings, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { interval, of, firstValueFrom } from 'rxjs';
+import { firstValueFrom, of, Subscription, timer } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
-import { Subscription } from 'rxjs';
-import { timer } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationService } from 'src/app/notification.service';
@@ -263,6 +261,7 @@ export class OptionsComponent implements OnInit {
   hasPendingJob: boolean = false;
   // Track active polling subscription and cancel state
   private jobPollSub?: Subscription;
+  private componentDestroyed = false;
   // Make cancelInProgress public so it can be referenced in the template
   cancelInProgress: boolean = false;
   API_URL: string = "";
@@ -492,6 +491,13 @@ export class OptionsComponent implements OnInit {
   }
 
   ngOnDestroy() {
+    // Route changes should stop this view's polling without treating the
+    // still-running backend job as failed. A new image view resumes it from
+    // the persisted pending-job record.
+    this.componentDestroyed = true;
+    this.jobPollSub?.unsubscribe();
+    this.jobPollSub = undefined;
+
     if (this.subscription) {
       this.subscription.unsubscribe();
     }
@@ -1468,6 +1474,10 @@ export class OptionsComponent implements OnInit {
 
   // check for status of job
   getJob(job_id: string) {
+    // The submit request can finish after the user has navigated away. The
+    // pending job is already persisted, so the next image view will resume it.
+    if (this.componentDestroyed) return;
+
     // Set current job id for cancel button
     this.jobID = job_id;
 
@@ -1486,9 +1496,9 @@ export class OptionsComponent implements OnInit {
     // Adaptive polling: slower interval on poor connections
     const pollingIntervalMs = this.getAdaptivePollingInterval();
 
-    // Create an interval which fires at the adaptive rate
+    // Poll immediately on entry/resume, then continue at the adaptive rate.
     let subscription: Subscription; // Declare a variable to hold the subscription
-    subscription = interval(pollingIntervalMs)
+    subscription = timer(0, pollingIntervalMs)
       .pipe(
         // For each tick of the interval, call the lightweight status endpoint
         concatMap((): any => {
@@ -1543,9 +1553,14 @@ export class OptionsComponent implements OnInit {
         tap((response: any) => lastResponse = response),
         // Only continue the stream while the job is incomplete
         takeWhile((response: any) => !(jobComplete = (response && response.status === 'completed')), true),
-        takeUntilDestroyed(this.destroyRef),
         // Once the stream completes, do any cleanup if necessary
         finalize(async () => {
+          // Navigating to another section only tears down this view. Keep the
+          // pending record and lock so returning to Images can resume polling.
+          if (this.componentDestroyed) {
+            return;
+          }
+
           // If this finalize was triggered by a cancel, skip notifications and any error popups
           if (this.cancelInProgress) {
             return;
@@ -1632,6 +1647,8 @@ export class OptionsComponent implements OnInit {
    * Falls back to the full /get_job/ endpoint if individual downloads fail.
    */
   private async downloadJobImages(job_id: string) {
+    if (this.componentDestroyed) return;
+
     const imageCount = 4;
     const maxRetries = 10;
     const blobs: (Blob | null)[] = new Array(imageCount).fill(null);
@@ -1643,15 +1660,17 @@ export class OptionsComponent implements OnInit {
       this.queueStatusMessageChange.emit(`Downloading image ${i + 1} of ${imageCount}...`);
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
-        if (this.cancelInProgress) return;
+        if (this.cancelInProgress || this.componentDestroyed) return;
         try {
           blobs[i] = await firstValueFrom(
             this.stableDiffusionService.getJobImage(job_id, i).pipe(
               timeout(120000) // 2 minute timeout per image
             )
           );
+          if (this.componentDestroyed) return;
           break; // success — move to next image
         } catch (err: any) {
+          if (this.componentDestroyed) return;
           const status = err?.status;
           const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
           if (!retryable || attempt >= maxRetries - 1) {
@@ -1668,6 +1687,7 @@ export class OptionsComponent implements OnInit {
       }
     }
 
+    if (this.componentDestroyed) return;
     this.queueStatusMessageChange.emit(undefined);
 
     const successfulBlobs = blobs.filter((b): b is Blob => b !== null);
@@ -1747,19 +1767,22 @@ export class OptionsComponent implements OnInit {
    * Fallback: download all images via the original /get_job/ endpoint (single large response).
    */
   private async downloadJobImagesFallback(job_id: string) {
+    if (this.componentDestroyed) return;
+
     const maxRetries = 5;
     const getJobInfo = { job_id };
 
     this.queueStatusMessageChange.emit('Downloading images (fallback)...');
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      if (this.cancelInProgress) return;
+      if (this.cancelInProgress || this.componentDestroyed) return;
       try {
         const response = await firstValueFrom(
           this.stableDiffusionService.getJob(getJobInfo).pipe(
             timeout(180000) // 3 minute timeout for full payload
           )
         );
+        if (this.componentDestroyed) return;
 
         this.queueStatusMessageChange.emit(undefined);
 
@@ -1816,6 +1839,7 @@ export class OptionsComponent implements OnInit {
         await this.historyPanel?.ingestGeneratedImages(generatedImages);
         return; // success
       } catch (err: any) {
+        if (this.componentDestroyed) return;
         const status = err?.status;
         const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
         if (!retryable || attempt >= maxRetries - 1) {
