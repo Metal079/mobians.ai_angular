@@ -10,6 +10,7 @@ export class SharedService {
   private _generationRequest: BehaviorSubject<GenerationRequest | null> = new BehaviorSubject<GenerationRequest | null>(null);
   private _images: BehaviorSubject<MobiansImage[]> = new BehaviorSubject<MobiansImage[]>([]);
   private _referenceImage: BehaviorSubject<MobiansImage | null> = new BehaviorSubject<MobiansImage | null>(null);
+  private referenceImageObjectUrl: string | null = null;
   private _userData: BehaviorSubject<any> = new BehaviorSubject<any>(null);
   private _instructions: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(true);
 
@@ -97,6 +98,19 @@ export class SharedService {
 
   // Reference Image
   setReferenceImage(value: MobiansImage | null) {
+    this.revokeReferenceImageObjectUrl();
+
+    if (value?.blob) {
+      try {
+        const url = URL.createObjectURL(value.blob);
+        this.referenceImageObjectUrl = url;
+        this._referenceImage.next({ ...value, url });
+        return;
+      } catch {
+        // Fall back to the existing URL if object URLs are unavailable.
+      }
+    }
+
     this._referenceImage.next(value);
   }
 
@@ -106,6 +120,12 @@ export class SharedService {
 
   getReferenceImageValue(): MobiansImage | null {
     return this._referenceImage.getValue();
+  }
+
+  private revokeReferenceImageObjectUrl(): void {
+    if (!this.referenceImageObjectUrl) return;
+    URL.revokeObjectURL(this.referenceImageObjectUrl);
+    this.referenceImageObjectUrl = null;
   }
 
   setUserData(value: any) {

@@ -359,6 +359,7 @@ export class ImageGridComponent implements OnDestroy {
       // Set the reference image
       const referenceImage = {
         url: url,
+        blob: file,
         width: img.naturalWidth,
         height: img.naturalHeight,
         aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
