@@ -12,26 +12,42 @@ describe('VideoComponent', () => {
   let videoService: jasmine.SpyObj<VideoGenerationService>;
   let authService: jasmine.SpyObj<AuthService>;
   let changeDetector: jasmine.SpyObj<ChangeDetectorRef>;
+  let accountCta: jasmine.SpyObj<AccountCtaService>;
+  let zone: NgZone;
+
+  function createPngFile(name = 'frame.png'): File {
+    const base64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new File([bytes], name, { type: 'image/png', lastModified: 1234 });
+  }
+
+  function createComponent(): VideoComponent {
+    return new VideoComponent(videoService, authService, accountCta, zone, changeDetector);
+  }
 
   beforeEach(() => {
     videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob']);
     changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges']);
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
-    const accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
-    const zone = { run: (update: () => void) => update() } as NgZone;
+    accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
+    zone = { run: (update: () => void) => update() } as NgZone;
 
-    component = new VideoComponent(videoService, authService, accountCta, zone, changeDetector);
+    component = createComponent();
   });
 
   it('updates the view after an uploaded frame finishes loading asynchronously', async () => {
     spyOn<any>(component, 'readImageDimensions').and.resolveTo({ width: 1200, height: 800 });
     spyOn(URL, 'createObjectURL').and.returnValue('blob:preview');
-    const file = new File(['frame'], 'frame.png', { type: 'image/png' });
+    const file = createPngFile();
     const event = { target: { files: [file] } } as unknown as Event;
 
     await component.onFileSelected(event, 'first');
 
-    expect(component.firstFrame?.file).toBe(file);
+    expect(component.firstFrame?.file).not.toBe(file);
+    expect(component.firstFrame?.file.name).toBe(file.name);
+    expect(component.firstFrame?.file.size).toBe(file.size);
+    expect(component.firstFrame?.file.lastModified).toBe(file.lastModified);
     expect(component.aspectRatio).toBe('landscape');
     expect(changeDetector.detectChanges).toHaveBeenCalled();
   });
@@ -41,18 +57,108 @@ describe('VideoComponent', () => {
     spyOn(URL, 'createObjectURL').and.returnValue('blob:history-preview');
     component.pickerOpen = true;
     component.pickerTarget = 'last';
+    const png = createPngFile('history.png');
 
     await component.onHistoryImageSelected({
       UUID: 'history-frame',
       width: 800,
       height: 1200,
       aspectRatio: 'portrait',
-      blob: new Blob(['frame'], { type: 'image/webp' }),
+      blob: new Blob([await png.arrayBuffer()], { type: 'image/png' }),
     });
 
     expect(component.lastFrame?.source).toBe('history');
     expect(component.pickerOpen).toBeFalse();
     expect(changeDetector.detectChanges).toHaveBeenCalled();
+  });
+
+  it('rejects empty or mislabeled image files before decoding them', async () => {
+    const dimensionSpy = spyOn<any>(component, 'readImageDimensions').and.resolveTo({ width: 1, height: 1 });
+
+    await component.onFileSelected({
+      target: { files: [new File([], 'empty.png', { type: 'image/png' })] },
+    } as unknown as Event, 'first');
+
+    expect(component.errorMessage).toContain('empty');
+    expect(dimensionSpy).not.toHaveBeenCalled();
+
+    await component.onFileSelected({
+      target: { files: [new File(['not a PNG'], 'mislabeled.png', { type: 'image/png' })] },
+    } as unknown as Event, 'first');
+
+    expect(component.errorMessage).toContain('does not contain a readable');
+    expect(dimensionSpy).not.toHaveBeenCalled();
+  });
+
+  it('detects the image type when a mobile picker omits the MIME type', async () => {
+    const png = createPngFile();
+    const file = new File([await png.arrayBuffer()], 'picker-frame', { type: '' });
+    spyOn<any>(component, 'readImageDimensions').and.resolveTo({ width: 1, height: 1 });
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:generic-picker-preview');
+
+    await component.onFileSelected({ target: { files: [file] } } as unknown as Event, 'first');
+
+    expect(component.errorMessage).toBe('');
+    expect(component.firstFrame?.file.type).toBe('image/png');
+  });
+
+  it('shows an access-specific error when a picker-backed file cannot be copied', async () => {
+    const file = createPngFile();
+    const warningSpy = spyOn(console, 'warn');
+    spyOn(file, 'arrayBuffer').and.rejectWith(new Error('Provider grant expired'));
+
+    await component.onFileSelected({ target: { files: [file] } } as unknown as Event, 'first');
+
+    expect(component.firstFrame).toBeNull();
+    expect(component.errorMessage).toContain('could not be accessed');
+    expect(warningSpy).toHaveBeenCalled();
+  });
+
+  it('falls back to an HTML image decode when createImageBitmap rejects the file', async () => {
+    const file = createPngFile();
+    spyOn(window, 'createImageBitmap').and.rejectWith(new Error('Bitmap decoder unavailable'));
+
+    const dimensions = await (component as any).readImageDimensions(file);
+
+    expect(dimensions).toEqual({ width: 1, height: 1 });
+  });
+
+  it('ignores an image decode that finishes after the video route is destroyed', async () => {
+    const file = createPngFile();
+    const fileBytes = await file.arrayBuffer();
+    spyOn(file, 'arrayBuffer').and.returnValue(Promise.resolve(fileBytes));
+    let resolveDimensions!: (dimensions: { width: number; height: number }) => void;
+    const dimensions = new Promise<{ width: number; height: number }>((resolve) => resolveDimensions = resolve);
+    const dimensionSpy = spyOn<any>(component, 'readImageDimensions').and.returnValue(dimensions);
+
+    const selection = component.onFileSelected({ target: { files: [file] } } as unknown as Event, 'first');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(dimensionSpy).toHaveBeenCalled();
+
+    component.ngOnDestroy();
+    resolveDimensions({ width: 1, height: 1 });
+    await selection;
+
+    expect(component.firstFrame).toBeNull();
+    expect(component.errorMessage).toBe('');
+  });
+
+  it('can decode the same real PNG after leaving and re-entering the video route', async () => {
+    const file = createPngFile();
+
+    await component.onFileSelected({ target: { files: [file] } } as unknown as Event, 'first');
+    expect(component.firstFrame?.width).toBe(1);
+    expect(component.firstFrame?.height).toBe(1);
+    component.ngOnDestroy();
+
+    const reenteredComponent = createComponent();
+    await reenteredComponent.onFileSelected({ target: { files: [file] } } as unknown as Event, 'first');
+
+    expect(reenteredComponent.errorMessage).toBe('');
+    expect(reenteredComponent.firstFrame?.width).toBe(1);
+    expect(reenteredComponent.firstFrame?.height).toBe(1);
+    reenteredComponent.ngOnDestroy();
   });
 
   it('releases the polling guard after a stalled jobs request times out', fakeAsync(() => {

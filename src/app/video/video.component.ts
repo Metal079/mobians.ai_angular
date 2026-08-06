@@ -18,6 +18,8 @@ interface SelectedFrame {
   source: 'upload' | 'history';
 }
 
+type FrameTarget = 'first' | 'last';
+
 type VideoCameraMotion =
   | 'auto'
   | 'static'
@@ -104,6 +106,9 @@ export class VideoComponent implements OnInit, OnDestroy {
   private foregroundSubscription: Subscription | null = null;
   private creditsSubscription: Subscription | null = null;
   private readonly jobsRequestTimeoutMs = 15_000;
+  private readonly frameSelectionVersion: Record<FrameTarget, number> = { first: 0, last: 0 };
+  private readonly pendingImageDecodes = new Map<string, () => void>();
+  private componentDestroyed = false;
 
   constructor(
     private readonly videoService: VideoGenerationService,
@@ -136,6 +141,11 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.componentDestroyed = true;
+    this.frameSelectionVersion.first++;
+    this.frameSelectionVersion.last++;
+    for (const cancelDecode of [...this.pendingImageDecodes.values()]) cancelDecode();
+    this.pendingImageDecodes.clear();
     this.pollSubscription?.unsubscribe();
     this.foregroundSubscription?.unsubscribe();
     this.creditsSubscription?.unsubscribe();
@@ -277,26 +287,26 @@ export class VideoComponent implements OnInit, OnDestroy {
     });
   }
 
-  triggerUpload(input: HTMLInputElement, target: 'first' | 'last'): void {
+  triggerUpload(input: HTMLInputElement, target: FrameTarget): void {
     this.pickerTarget = target;
     input.value = '';
     input.click();
   }
 
-  async onFileSelected(event: Event, target: 'first' | 'last'): Promise<void> {
+  async onFileSelected(event: Event, target: FrameTarget): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     await this.setFrame(file, target, 'upload');
   }
 
-  async onFrameDrop(event: DragEvent, target: 'first' | 'last'): Promise<void> {
+  async onFrameDrop(event: DragEvent, target: FrameTarget): Promise<void> {
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
     if (file) await this.setFrame(file, target, 'upload');
   }
 
-  openHistory(target: 'first' | 'last'): void {
+  openHistory(target: FrameTarget): void {
     this.pickerTarget = target;
     this.pickerOpen = true;
     document.body.classList.add('video-picker-open');
@@ -317,7 +327,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.runInView(() => this.closeHistory());
   }
 
-  removeFrame(target: 'first' | 'last'): void {
+  removeFrame(target: FrameTarget): void {
     if (target === 'first') {
       this.revokeFrame(this.firstFrame);
       this.firstFrame = null;
@@ -481,23 +491,62 @@ export class VideoComponent implements OnInit, OnDestroy {
 
   private async setFrame(
     file: File,
-    target: 'first' | 'last',
+    target: FrameTarget,
     source: 'upload' | 'history',
   ): Promise<void> {
-    const allowed = this.config?.accepted_frame_types ?? ['image/jpeg', 'image/png', 'image/webp'];
+    const selectionVersion = ++this.frameSelectionVersion[target];
+    const declaredMimeType = file.type.toLowerCase();
+    const allowed = (this.config?.accepted_frame_types ?? ['image/jpeg', 'image/png', 'image/webp'])
+      .map((type) => type.toLowerCase());
     const maxBytes = this.config?.max_frame_bytes ?? 15 * 1024 * 1024;
-    if (!allowed.includes(file.type)) {
+    const genericMimeTypes = ['', 'application/octet-stream'];
+    if (!genericMimeTypes.includes(declaredMimeType) && !allowed.includes(declaredMimeType)) {
       this.errorMessage = 'Frames must be JPEG, PNG, or WebP images.';
+      return;
+    }
+    if (file.size === 0) {
+      this.errorMessage = 'That image is empty or could not be accessed. Try choosing it again or save it to your device first.';
       return;
     }
     if (file.size > maxBytes) {
       this.errorMessage = 'Each frame must be 15 MB or smaller.';
       return;
     }
+
+    let ownedFile: File;
     try {
-      const dimensions = await this.readImageDimensions(file);
-      const previewUrl = URL.createObjectURL(file);
-      const selected: SelectedFrame = { file, previewUrl, ...dimensions, source };
+      // Android photo pickers and custom tabs can expose a temporary provider-backed
+      // File. Copy its bytes while the picker grant is fresh so route changes cannot
+      // leave the decoder with a stale handle.
+      const bytes = await file.arrayBuffer();
+      if (!this.isFrameSelectionCurrent(target, selectionVersion)) return;
+      if (bytes.byteLength === 0) {
+        this.errorMessage = 'That image is empty or could not be accessed. Try choosing it again or save it to your device first.';
+        return;
+      }
+      const detectedMimeType = this.detectImageMimeType(bytes);
+      if (!detectedMimeType || !allowed.includes(detectedMimeType)) {
+        this.errorMessage = 'That file does not contain a readable JPEG, PNG, or WebP image.';
+        return;
+      }
+      ownedFile = new File([bytes], file.name || `video-${target}-frame`, {
+        type: detectedMimeType,
+        lastModified: file.lastModified,
+      });
+    } catch (error) {
+      if (!this.isFrameSelectionCurrent(target, selectionVersion)) return;
+      this.logFrameReadFailure(file, target, 'copy', error);
+      this.runInView(() => {
+        this.errorMessage = 'That image could not be accessed. Try choosing it again or save it to your device first.';
+      });
+      return;
+    }
+
+    try {
+      const dimensions = await this.readImageDimensions(ownedFile);
+      if (!this.isFrameSelectionCurrent(target, selectionVersion)) return;
+      const previewUrl = URL.createObjectURL(ownedFile);
+      const selected: SelectedFrame = { file: ownedFile, previewUrl, ...dimensions, source };
       this.runInView(() => {
         if (target === 'first') {
           this.revokeFrame(this.firstFrame);
@@ -509,7 +558,9 @@ export class VideoComponent implements OnInit, OnDestroy {
         }
         this.errorMessage = '';
       });
-    } catch {
+    } catch (error) {
+      if (!this.isFrameSelectionCurrent(target, selectionVersion)) return;
+      this.logFrameReadFailure(ownedFile, target, 'decode', error);
       this.runInView(() => {
         this.errorMessage = 'That image could not be read. Try a different JPEG, PNG, or WebP file.';
       });
@@ -524,18 +575,95 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   private readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+    return this.readImageDimensionsWithFallback(file);
+  }
+
+  private async readImageDimensionsWithFallback(file: File): Promise<{ width: number; height: number }> {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const dimensions = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        if (dimensions.width > 0 && dimensions.height > 0) return dimensions;
+      } catch {
+        if (this.componentDestroyed) throw new Error('Image decode cancelled');
+        // Some mobile Chromium builds reject createImageBitmap for images that
+        // an HTMLImageElement can still decode, so continue to the fallback.
+      }
+    }
+
+    if (this.componentDestroyed) throw new Error('Image decode cancelled');
+    return this.readImageElementDimensions(file);
+  }
+
+  private readImageElementDimensions(file: File): Promise<{ width: number; height: number }> {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const image = new Image();
-      image.onload = () => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        image.onload = null;
+        image.onerror = null;
+        this.pendingImageDecodes.delete(url);
         URL.revokeObjectURL(url);
-        resolve({ width: image.naturalWidth, height: image.naturalHeight });
       };
-      image.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Invalid image'));
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        const dimensions = { width: image.naturalWidth, height: image.naturalHeight };
+        cleanup();
+        if (dimensions.width > 0 && dimensions.height > 0) {
+          resolve(dimensions);
+        } else {
+          reject(new Error('Image has invalid dimensions'));
+        }
       };
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+      timeoutId = setTimeout(() => fail(new Error('Image decode timed out')), 30_000);
+      this.pendingImageDecodes.set(url, () => fail(new Error('Image decode cancelled')));
+      image.onload = succeed;
+      image.onerror = () => fail(new Error('Invalid image'));
       image.src = url;
+    });
+  }
+
+  private isFrameSelectionCurrent(target: FrameTarget, version: number): boolean {
+    return !this.componentDestroyed && this.frameSelectionVersion[target] === version;
+  }
+
+  private detectImageMimeType(buffer: ArrayBuffer): 'image/jpeg' | 'image/png' | 'image/webp' | null {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return 'image/jpeg';
+    }
+    const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    if (bytes.length >= pngSignature.length && pngSignature.every((value, index) => bytes[index] === value)) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12
+      && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
+      && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') {
+      return 'image/webp';
+    }
+    return null;
+  }
+
+  private logFrameReadFailure(file: File, target: FrameTarget, stage: 'copy' | 'decode', error: unknown): void {
+    const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : undefined;
+    console.warn('Video frame could not be read.', {
+      target,
+      stage,
+      type: file.type,
+      size: file.size,
+      extension,
+      error: error instanceof Error ? error.name : typeof error,
     });
   }
 
