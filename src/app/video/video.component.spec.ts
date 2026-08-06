@@ -142,4 +142,33 @@ describe('VideoComponent', () => {
     expect(component.jobs[0].error_message).toBe('Cancelled by user');
     expect(authService.updateCredits).toHaveBeenCalledWith(500);
   });
+
+  it('formats FastAPI validation arrays as readable field errors', () => {
+    const message = (component as any).apiError({
+      error: {
+        detail: [
+          { type: 'missing', loc: ['body', 'first_frame'], msg: 'Field required' },
+          { type: 'missing', loc: ['body', 'prompt'], msg: 'Field required' },
+          { type: 'missing', loc: ['body', 'duration_seconds'], msg: 'Field required' },
+          { type: 'missing', loc: ['body', 'aspect_ratio'], msg: 'Field required' },
+        ],
+      },
+    }, 'The video job could not be queued.');
+
+    expect(message).toBe(
+      'First frame: Field required. Video description: Field required. Video length: Field required. 1 more input error.'
+    );
+    expect(message).not.toContain('[object Object]');
+  });
+
+  it('preserves normal API error strings and falls back for unknown objects', () => {
+    expect((component as any).apiError(
+      { error: { detail: 'Video generation is unavailable.' } },
+      'Fallback'
+    )).toBe('Video generation is unavailable.');
+    expect((component as any).apiError(
+      { error: { detail: [{ unexpected: true }] } },
+      'Fallback'
+    )).toBe('Fallback');
+  });
 });

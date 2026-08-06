@@ -564,7 +564,76 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   private apiError(error: any, fallback: string): string {
-    return error?.error?.detail || error?.error?.message || fallback;
+    const detailMessage = this.formatApiErrorDetail(error?.error?.detail);
+    if (detailMessage) return detailMessage;
+
+    const responseMessage = this.formatApiErrorDetail(error?.error?.message);
+    return responseMessage || fallback;
+  }
+
+  private formatApiErrorDetail(detail: unknown): string | null {
+    if (typeof detail === 'string') return detail.trim() || null;
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((entry) => this.formatValidationEntry(entry))
+        .filter((message): message is string => !!message);
+      const uniqueMessages = [...new Set(messages)];
+      if (!uniqueMessages.length) return null;
+
+      const visibleMessages = uniqueMessages.slice(0, 3);
+      const hiddenCount = uniqueMessages.length - visibleMessages.length;
+      const suffix = hiddenCount > 0
+        ? ` ${hiddenCount} more input ${hiddenCount === 1 ? 'error' : 'errors'}.`
+        : '';
+      return `${visibleMessages.join(' ')}${suffix}`;
+    }
+
+    if (detail && typeof detail === 'object') {
+      const record = detail as Record<string, unknown>;
+      return this.formatApiErrorDetail(record['message'])
+        ?? this.formatApiErrorDetail(record['msg'])
+        ?? this.formatApiErrorDetail(record['detail']);
+    }
+
+    return null;
+  }
+
+  private formatValidationEntry(entry: unknown): string | null {
+    if (typeof entry === 'string') return this.withTerminalPunctuation(entry);
+    if (!entry || typeof entry !== 'object') return null;
+
+    const validation = entry as Record<string, unknown>;
+    const message = this.formatApiErrorDetail(validation['msg'])
+      ?? this.formatApiErrorDetail(validation['message'])
+      ?? this.formatApiErrorDetail(validation['detail']);
+    if (!message) return null;
+
+    const location = Array.isArray(validation['loc'])
+      ? validation['loc'].filter((part) => part !== 'body').at(-1)
+      : null;
+    const field = typeof location === 'string' ? this.validationFieldLabel(location) : null;
+    return this.withTerminalPunctuation(field ? `${field}: ${message}` : message);
+  }
+
+  private validationFieldLabel(field: string): string {
+    const labels: Record<string, string> = {
+      first_frame: 'First frame',
+      last_frame: 'Last frame',
+      first_frame_source: 'First frame source',
+      last_frame_source: 'Last frame source',
+      prompt: 'Video description',
+      audio_prompt: 'Audio direction',
+      duration_seconds: 'Video length',
+      aspect_ratio: 'Aspect ratio',
+      seed: 'Seed',
+    };
+    return labels[field] ?? field.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+  }
+
+  private withTerminalPunctuation(message: string): string {
+    const normalized = message.trim();
+    return /[.!?]$/.test(normalized) ? normalized : `${normalized}.`;
   }
 
   private runInView(update: () => void): void {
