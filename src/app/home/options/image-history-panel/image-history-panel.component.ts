@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, DestroyRef, Input, NgZone, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, EventEmitter, Input, NgZone, OnDestroy, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -34,6 +34,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private readonly maxImagesPerZipMobile = 150;
 
   @Input() lossyImages = true;
+  @Input() pickerMode = false;
+  @Output() imageSelected = new EventEmitter<MobiansImage>();
 
   private dbName = 'ImageDatabase';
   private storeName = 'ImageStore';
@@ -651,6 +653,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   onFavoriteImageClick(image: MobiansImage, event: Event) {
+    if (this.pickerMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.handleImageClick(image);
+      return;
+    }
     if (this.bulkSelectMode) {
       this.toggleImageSelection(image, event);
       return;
@@ -2641,6 +2649,25 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.cloudSyncInterval = window.setInterval(() => {
       void this.syncTagsFromCloud();
     }, this.cloudSyncIntervalMs);
+  }
+
+  async handleImageClick(image: MobiansImage): Promise<void> {
+    if (!this.pickerMode) {
+      await this.openImageDetails(image);
+      return;
+    }
+
+    const blob = await this.getDownloadBlob(image);
+    if (!blob) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Image unavailable',
+        detail: 'This image could not be loaded. Try another image.',
+        life: 4000
+      });
+      return;
+    }
+    this.imageSelected.emit({ ...image, blob });
   }
 
   private async getLocalImage(db: IDBDatabase, uuid: string): Promise<MobiansImage | null> {

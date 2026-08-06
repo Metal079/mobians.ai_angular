@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { asyncScheduler, observeOn, Subscription } from 'rxjs';
@@ -17,6 +17,13 @@ import { AccountCtaService } from './account-cta.service';
 })
 export class ProfileMenuComponent implements OnInit, OnDestroy {
   @Output() loginRequest = new EventEmitter<void>();
+  private startMinimizedApplied = false;
+  @Input() set startMinimized(value: boolean) {
+    if (value && !this.startMinimizedApplied) {
+      this.isMinimized = true;
+      this.startMinimizedApplied = true;
+    }
+  }
   
   isLoggedIn = false;
   hasDiscord = false;

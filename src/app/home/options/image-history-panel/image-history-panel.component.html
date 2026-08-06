@@ -1,5 +1,5 @@
 <!-- Image History Content Panel -->
-<div class="collapse w-100" id="historyCollapse">
+<div class="w-100" id="historyCollapse" [class.collapse]="!pickerMode" [class.show]="pickerMode" [class.picker-mode]="pickerMode">
   <div class="card card-body">
     <p-tabs [value]="historyTab" (valueChange)="historyTab = +($event ?? 0)">
       <p-tablist>
@@ -43,7 +43,7 @@
                   <div class="image-container">
                     <img [attr.src]="image.url || null" alt="Generated Image" loading="eager" decoding="sync"
                       (load)="onImageElementLoad(image, $event)" (error)="onImageElementError(image, $event)"
-                      (click)="openImageDetails(image)">
+                      (click)="handleImageClick(image)">
                     <div class="top-left-icon">
                       <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                       (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>

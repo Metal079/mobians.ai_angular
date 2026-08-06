@@ -10,6 +10,7 @@ import { FaqComponent } from './faq/faq.component';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AuthService } from 'src/app/auth/auth.service';
+import { GenerationModeSwitchComponent } from '../generation-mode-switch/generation-mode-switch.component';
 
 interface HeaderMessage {
   severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
@@ -22,7 +23,7 @@ interface HeaderMessage {
     templateUrl: './home.component.html',
     styleUrls: ['./home.component.css'],
     standalone: true,
-    imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent]
+    imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent, GenerationModeSwitchComponent]
 })
 export class HomeComponent {
   @ViewChild(ImageModalComponent) imageModal!: ImageModalComponent;

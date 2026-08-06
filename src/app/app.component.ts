@@ -24,6 +24,7 @@ export class AppComponent implements OnInit, OnDestroy {
   creditPurchaseCtaContext: CreditPurchaseCtaContext | null = null;
   isLoggedIn = false;
   hideFloatingMenu = true;
+  minimizeFloatingMenu = false;
   private sessionInvalidSub: Subscription | null = null;
   private loginCtaSub: Subscription | null = null;
   private creditPurchaseCtaSub: Subscription | null = null;
@@ -304,5 +305,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private updateRouteFlags(url: string): void {
     this.hideFloatingMenu = /^\/admin(?:\/|$)/.test(url || '');
+    this.minimizeFloatingMenu = /^\/video(?:\/|$)/.test(url || '');
   }
 }

@@ -18,6 +18,31 @@
   margin-left: 20px;
 }
 
+#historyCollapse.picker-mode {
+  margin-left: 0;
+}
+
+.picker-mode .top-left-icon,
+.picker-mode .top-right-icon,
+.picker-mode .bottom-left-icon,
+.picker-mode .bottom-right-icon,
+.picker-mode .bulk-controls,
+.picker-mode .tag-manager {
+  display: none !important;
+}
+
+.picker-mode .image-container {
+  border: 2px solid transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.picker-mode .image-container:hover {
+  border-color: var(--theme-primary-outline);
+  transform: translateY(-2px);
+}
+
 .sorting-options {
   display: flex;
   flex-wrap: wrap;

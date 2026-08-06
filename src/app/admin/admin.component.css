@@ -14,6 +14,128 @@
   --admin-expand-icon: #f3f9ff;
 }
 
+.video-admin-panel h2,
+.video-admin-panel p {
+  margin: 0;
+}
+
+.video-admin-panel .tab-actions > div > p {
+  margin-top: 0.25rem;
+  opacity: 0.72;
+}
+
+.video-admin-alert,
+.video-current-job,
+.video-service-help {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #c58b1a;
+  border-radius: 10px;
+  background: color-mix(in srgb, #f59e0b 14%, var(--admin-panel-bg));
+}
+
+.video-admin-alert code,
+.video-current-job code {
+  word-break: break-all;
+}
+
+.video-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.video-status-grid article {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 112px;
+  padding: 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-panel-bg);
+}
+
+.video-status-grid article > span,
+.video-current-job > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+.video-status-grid article strong {
+  font-size: 1.05rem;
+}
+
+.video-status-grid article small {
+  align-self: end;
+  opacity: 0.72;
+}
+
+.video-current-job {
+  border-color: var(--admin-border);
+  background: var(--admin-panel-bg);
+}
+
+.video-service-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 760px;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-panel-bg);
+}
+
+.video-service-form label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.video-service-form label > span {
+  font-weight: 700;
+}
+
+.video-service-form select,
+.video-service-form textarea {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid var(--theme-input-border);
+  border-radius: 8px;
+  background: var(--theme-input-bg);
+  color: var(--theme-input-text);
+}
+
+.video-service-form label > small {
+  justify-self: end;
+}
+
+.video-service-help {
+  align-items: flex-start;
+  margin: 0;
+  border-color: var(--admin-border);
+  background: var(--admin-page-bg);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .video-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .video-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 :host-context(body.theme-navy) {
   --admin-text: var(--theme-surface-text, #e6eef8);
   --admin-muted-text: rgba(230, 238, 248, 0.72);

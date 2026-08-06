@@ -32,6 +32,8 @@ import { ToastModule } from 'primeng/toast';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { VideoGenerationService } from '../video-generation.service';
+import { VideoAdminState, VideoDesiredState } from 'src/_shared/video-generation.interface';
 
 interface DownloaderStatus {
   status: string;
@@ -143,6 +145,11 @@ export class AdminComponent implements OnInit, OnDestroy {
   downloaderStatus: DownloaderStatus | null = null;
   downloadHistory: DownloadHistoryItem[] = [];
   loadingDownloaderStatus = false;
+  videoAdminState: VideoAdminState | null = null;
+  loadingVideoService = false;
+  savingVideoService = false;
+  videoDesiredState: VideoDesiredState = 'maintenance';
+  videoMaintenanceMessage = 'Video generation is temporarily under maintenance.';
   dynamicPromptLibrary: DynamicPromptAdminLibraryResponse | null = null;
   selectedDynamicCategoryId = '';
   dynamicCategoryEntriesText: Record<string, string> = {};
@@ -186,7 +193,8 @@ export class AdminComponent implements OnInit, OnDestroy {
     private router: Router,
     private authService: AuthService,
     private zone: NgZone,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private videoService: VideoGenerationService,
   ) {}
 
   ngOnInit(): void {
@@ -205,10 +213,12 @@ export class AdminComponent implements OnInit, OnDestroy {
     this.loadDownloaderStatus();
     this.loadDownloadHistory();
     this.loadDynamicPromptLibrary();
+    this.loadVideoService();
     this.scheduleInitialLoadRecovery();
     // Poll downloader status every 10 seconds
     this.statusPollingSubscription = interval(10000).subscribe(() => {
       this.loadDownloaderStatus(true);
+      this.loadVideoService(true);
     });
   }
 
@@ -225,6 +235,55 @@ export class AdminComponent implements OnInit, OnDestroy {
   reloadAll(): void {
     this.loadAllLoras();
     this.loadSuggestions();
+  }
+
+  loadVideoService(silent = false): void {
+    if (this.loadingVideoService) return;
+    if (!silent) this.loadingVideoService = true;
+    this.videoService.getAdminState().subscribe({
+      next: (state) => {
+        this.runInView(() => {
+          this.videoAdminState = state;
+          this.videoDesiredState = state.service.desired_state;
+          this.videoMaintenanceMessage = state.service.maintenance_message || this.videoMaintenanceMessage;
+          this.loadingVideoService = false;
+        });
+      },
+      error: () => this.runInView(() => this.loadingVideoService = false),
+    });
+  }
+
+  saveVideoService(): void {
+    if (this.savingVideoService) return;
+    this.savingVideoService = true;
+    this.videoService.updateAdminState(this.videoDesiredState, this.videoMaintenanceMessage).subscribe({
+      next: ({ service }) => {
+        this.runInView(() => {
+          if (this.videoAdminState) this.videoAdminState = { ...this.videoAdminState, service };
+          this.videoDesiredState = service.desired_state;
+          this.savingVideoService = false;
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Video service updated',
+            detail: service.desired_state === 'draining' ? 'New jobs are blocked while the queue finishes.' : `Desired state is ${service.desired_state}.`,
+          });
+        });
+        this.loadVideoService(true);
+      },
+      error: (error) => this.runInView(() => {
+        this.savingVideoService = false;
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Update failed',
+          detail: error?.error?.detail || 'The video service state could not be updated.',
+        });
+      }),
+    });
+  }
+
+  formatVideoBytes(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'Unknown';
+    return `${(value / 1024 ** 3).toFixed(1)} GB`;
   }
 
   loadAllLoras(): void {
@@ -1756,6 +1815,10 @@ export class AdminComponent implements OnInit, OnDestroy {
       if (shouldLoadTemplates || shouldLoadCategories) {
         this.loadActiveCommunityModerationContent();
       }
+    }
+
+    if (nextTab === 5 && !this.loadingVideoService) {
+      this.loadVideoService();
     }
   }
 

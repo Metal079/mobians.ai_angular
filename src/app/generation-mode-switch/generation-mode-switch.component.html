@@ -1,0 +1,10 @@
+<nav class="mode-switch" aria-label="Generation type">
+  <a routerLink="/" [class.active]="active === 'image'" [attr.aria-current]="active === 'image' ? 'page' : null">
+    <i class="bi bi-image" aria-hidden="true"></i>
+    Image
+  </a>
+  <a routerLink="/video" [class.active]="active === 'video'" [attr.aria-current]="active === 'video' ? 'page' : null">
+    <i class="bi bi-camera-reels" aria-hidden="true"></i>
+    Video
+  </a>
+</nav>

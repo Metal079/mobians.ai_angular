@@ -1,0 +1,287 @@
+<main class="video-page">
+  <app-generation-mode-switch active="video"></app-generation-mode-switch>
+
+  <header class="video-header">
+    <div>
+      <h1>Bring an image to life</h1>
+      <p>Create a short video from a first frame, or guide a transition with an optional last frame.</p>
+    </div>
+    @if (config) {
+      <div class="service-pill" [class.available]="config.service.accepting_jobs">
+        <span class="status-dot" aria-hidden="true"></span>
+        {{ config.service.accepting_jobs ? 'Ready' : (config.service.effective_state | titlecase) }}
+      </div>
+    }
+  </header>
+
+  @if (configLoading) {
+    <div class="service-banner neutral"><span class="spinner"></span> Checking video service…</div>
+  } @else if (config && !config.service.accepting_jobs) {
+    <div class="service-banner warning">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <div><strong>New video jobs are paused.</strong><span>{{ config.service.message }}</span></div>
+    </div>
+  }
+
+  @if (errorMessage) {
+    <div class="service-banner error" role="alert">
+      <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+      <span>{{ errorMessage }}</span>
+      <button type="button" aria-label="Dismiss error" (click)="errorMessage = ''"><i class="bi bi-x-lg"></i></button>
+    </div>
+  }
+
+  @if (!isLoggedIn) {
+    <section class="login-wall">
+      <div class="login-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+      <h2>Your video queue follows you</h2>
+      <p>Sign in to queue up to three videos and see their progress from your desktop or phone.</p>
+      <button type="button" class="primary-action" (click)="openLogin()">Sign in to continue</button>
+    </section>
+  } @else {
+    <div class="workspace-grid">
+      <section class="composer-card" aria-labelledby="video-composer-title">
+        <div class="section-heading">
+          <div>
+            <span class="step-label">Create</span>
+            <h2 id="video-composer-title">New video</h2>
+          </div>
+          <div class="slot-count" [class.full]="activeJobs >= activeLimit">
+            {{ activeJobs }} / {{ activeLimit }} active
+          </div>
+        </div>
+
+        <div class="frames-row">
+          <article class="frame-card required" (dragover)="$event.preventDefault()" (drop)="onFrameDrop($event, 'first')">
+            <div class="frame-title"><span>First frame</span><small>Required</small></div>
+            @if (firstFrame) {
+              <div class="frame-preview">
+                <img [src]="firstFrame.previewUrl" alt="Selected first frame">
+                <button type="button" class="remove-frame" aria-label="Remove first frame" (click)="removeFrame('first')"><i class="bi bi-x-lg"></i></button>
+                <span class="frame-dimensions">{{ firstFrame.width }}×{{ firstFrame.height }}</span>
+              </div>
+            } @else {
+              <div class="frame-empty">
+                <i class="bi bi-image"></i>
+                <span>Drop an image here</span>
+                <small>JPEG, PNG, or WebP · up to 15 MB</small>
+              </div>
+            }
+            <div class="frame-actions">
+              <button type="button" (click)="triggerUpload(firstInput, 'first')"><i class="bi bi-upload"></i> Upload</button>
+              <button type="button" (click)="openHistory('first')"><i class="bi bi-clock-history"></i> History</button>
+            </div>
+            <input #firstInput type="file" hidden accept="image/jpeg,image/png,image/webp" (change)="onFileSelected($event, 'first')">
+          </article>
+
+          <div class="transition-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+
+          <article class="frame-card" (dragover)="$event.preventDefault()" (drop)="onFrameDrop($event, 'last')">
+            <div class="frame-title"><span>Last frame</span><small>Optional</small></div>
+            @if (lastFrame) {
+              <div class="frame-preview">
+                <img [src]="lastFrame.previewUrl" alt="Selected last frame">
+                <button type="button" class="remove-frame" aria-label="Remove last frame" (click)="removeFrame('last')"><i class="bi bi-x-lg"></i></button>
+                <span class="frame-dimensions">{{ lastFrame.width }}×{{ lastFrame.height }}</span>
+              </div>
+            } @else {
+              <div class="frame-empty secondary">
+                <i class="bi bi-image-alt"></i>
+                <span>Add an ending pose</span>
+                <small>Leave empty to just use initial image</small>
+              </div>
+            }
+            <div class="frame-actions">
+              <button type="button" (click)="triggerUpload(lastInput, 'last')"><i class="bi bi-upload"></i> Upload</button>
+              <button type="button" (click)="openHistory('last')"><i class="bi bi-clock-history"></i> History</button>
+            </div>
+            <input #lastInput type="file" hidden accept="image/jpeg,image/png,image/webp" (change)="onFileSelected($event, 'last')">
+          </article>
+        </div>
+
+        <label class="field-block" for="videoPrompt">
+          <span>What happens in the video? <small>Required</small></span>
+          <p class="field-help">Describe the subject's movement, expression, and the action around them. You don't need to repeat what is already visible.</p>
+          <textarea id="videoPrompt" [(ngModel)]="prompt" rows="4" [attr.maxlength]="maxUserPromptLength" [placeholder]="promptPlaceholder"></textarea>
+          <em>{{ prompt.length }} / {{ maxUserPromptLength }}</em>
+        </label>
+
+        <fieldset class="control-group camera-group">
+          <legend>Camera movement <small>Optional</small></legend>
+          <p class="control-help">Choose one, or leave it on Auto and let the video decide.</p>
+          <div class="camera-options">
+            @for (option of primaryCameraOptions; track option.id) {
+              <button type="button" [class.selected]="cameraMotion === option.id" [attr.aria-pressed]="cameraMotion === option.id" (click)="cameraMotion = option.id">
+                <i class="bi" [ngClass]="option.icon"></i>
+                <span>{{ option.label }}</span>
+              </button>
+            }
+          </div>
+          <button type="button" class="advanced-camera-toggle" [attr.aria-expanded]="showAdvancedCameraOptions" (click)="showAdvancedCameraOptions = !showAdvancedCameraOptions">
+            <span>{{ showAdvancedCameraOptions ? 'Fewer camera options' : 'More camera options' }}</span>
+            <i class="bi" [class.bi-chevron-up]="showAdvancedCameraOptions" [class.bi-chevron-down]="!showAdvancedCameraOptions"></i>
+          </button>
+          @if (showAdvancedCameraOptions) {
+            <div class="camera-options advanced-camera-options">
+              @for (option of advancedCameraOptions; track option.id) {
+                <button type="button" [class.selected]="cameraMotion === option.id" [attr.aria-pressed]="cameraMotion === option.id" (click)="cameraMotion = option.id">
+                  <i class="bi" [ngClass]="option.icon"></i>
+                  <span>{{ option.label }}</span>
+                </button>
+              }
+            </div>
+          }
+        </fieldset>
+
+        <details class="prompt-tips">
+          <summary><i class="bi bi-lightbulb"></i> Prompt tips</summary>
+          <ul>
+            <li>Focus on one clear main action.</li>
+            <li>Add expressions or movement in the environment.</li>
+            <li>Use one camera movement for a more predictable result.</li>
+            <li>If you added a last frame, describe how the scene transitions into it.</li>
+          </ul>
+          <a class="prompt-guide-link" href="https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md" target="_blank" rel="noopener noreferrer">
+            Read MiniMax's official prompting guide <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+        </details>
+
+        <label class="field-block" for="audioPrompt">
+          <span>Audio direction <small>Optional</small></span>
+          <p class="field-help">Describe sounds, ambience, music, or dialogue, not visual movement.</p>
+          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" maxlength="1000" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
+          <em>{{ audioPrompt.length }} / 1000</em>
+        </label>
+
+        <fieldset class="control-group">
+          <legend>Aspect ratio</legend>
+          <div class="aspect-options">
+            @for (aspect of aspectOrder; track aspect) {
+              <button type="button" [class.selected]="aspectRatio === aspect" (click)="selectAspect(aspect)">
+                <span class="aspect-shape" [ngClass]="aspect"></span>
+                <strong>{{ aspectLabel(aspect) }}</strong>
+                <small>{{ aspectDimensions(aspect).width }}×{{ aspectDimensions(aspect).height }}</small>
+              </button>
+            }
+          </div>
+          @if (adaptationWarning) {
+            <p class="adaptation-warning"><i class="bi bi-crop"></i>{{ adaptationWarning }}</p>
+          }
+        </fieldset>
+
+        <div class="settings-row">
+          <fieldset class="control-group duration-group">
+            <legend>Length</legend>
+            <div class="duration-options">
+              @for (duration of durations; track duration) {
+                <button type="button" [class.selected]="durationSeconds === duration" (click)="durationSeconds = duration">
+                  {{ duration }}s
+                </button>
+              }
+            </div>
+          </fieldset>
+          <label class="seed-field" for="videoSeed">
+            <span>Seed <small>Optional</small></span>
+            <input id="videoSeed" type="number" min="0" max="9223372036854775807" [(ngModel)]="seed" placeholder="Random">
+          </label>
+        </div>
+
+        <div class="submit-panel">
+          <div class="price-summary">
+            <strong>{{ selectedCost }} credits</strong>
+            <span>{{ durationSeconds }} seconds · 24 fps · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
+          </div>
+          <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" (click)="submit()">
+            @if (submitting) { <span class="spinner"></span> Queuing… }
+            @else if (activeJobs >= activeLimit) { Queue is full }
+            @else if (currentCredits < selectedCost) { Get credits to create }
+            @else { <i class="bi bi-stars"></i> Generate video }
+          </button>
+        </div>
+        @if (currentCredits < selectedCost) {
+          <button type="button" class="credit-link" (click)="openCreditPurchase()">You have {{ currentCredits }} credits. Add credits to generate.</button>
+        }
+      </section>
+
+      <section class="gallery-card" aria-labelledby="my-videos-title">
+        <div class="section-heading gallery-heading">
+          <div>
+            <span class="step-label">Account queue</span>
+            <h2 id="my-videos-title">My videos</h2>
+          </div>
+          <button type="button" class="refresh-button" [disabled]="loadingJobs" (click)="loadJobs()" aria-label="Refresh video jobs">
+            <i class="bi bi-arrow-clockwise" [class.spinning]="loadingJobs"></i>
+          </button>
+        </div>
+        <p class="sync-note"><i class="bi bi-phone"></i> Progress syncs across signed-in devices.</p>
+
+        @if (jobs.length === 0 && !loadingJobs) {
+          <div class="empty-gallery">
+            <i class="bi bi-film"></i>
+            <h3>Your videos will appear here</h3>
+            <p>Completed videos remain available for 24 hours.</p>
+          </div>
+        } @else {
+          <div class="video-list">
+            @for (job of jobs; track trackJob($index, job)) {
+              <article class="video-job" [class]="'status-' + job.status">
+                <div class="job-media">
+                  @if (job.status === 'completed' && videoUrls.get(job.id)) {
+                    <video [src]="videoUrls.get(job.id)" controls playsinline preload="metadata" [poster]="thumbnailUrls.get(job.id) || ''"></video>
+                  } @else if (thumbnailUrls.get(job.id)) {
+                    <img [src]="thumbnailUrls.get(job.id)" alt="Video first frame">
+                  } @else {
+                    <div class="media-placeholder"><span class="spinner"></span></div>
+                  }
+                  <span class="job-status">{{ statusLabel(job) }}</span>
+                  <span class="duration-badge">{{ job.duration_seconds }}s</span>
+                </div>
+                @if (job.status === 'pending' || job.status === 'processing') {
+                  <div class="progress-track" [attr.aria-label]="statusLabel(job)">
+                    <span [style.width.%]="job.status === 'pending' ? 4 : job.progress"></span>
+                  </div>
+                }
+                <div class="job-body">
+                  <p>{{ job.prompt }}</p>
+                  <div class="job-meta">
+                    <span>{{ aspectLabel(job.aspect_ratio) }}</span>
+                    <span>{{ job.credit_cost }} credits</span>
+                    @if (job.expires_at && job.status === 'completed') { <span>{{ expiresLabel(job) }}</span> }
+                  </div>
+                  @if (job.error_message && (job.status === 'failed' || job.status === 'cancelled')) {
+                    <p class="job-error">{{ job.error_message }}</p>
+                  }
+                  @if (job.status === 'completed' && config?.service?.effective_state === 'offline') {
+                    <p class="job-offline"><i class="bi bi-wifi-off"></i> Playback returns when the video server is online. Expiry continues.</p>
+                  }
+                  <div class="job-actions">
+                    @if (job.status === 'pending') {
+                      <button type="button" class="cancel-button" (click)="cancel(job)"><i class="bi bi-x-circle"></i> Cancel & refund</button>
+                    }
+                    @if (job.status === 'completed') {
+                      <button type="button" class="download-button" (click)="download(job)"><i class="bi bi-download"></i> Download</button>
+                    }
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+    </div>
+  }
+</main>
+
+@if (pickerOpen) {
+  <div class="history-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="history-picker-title" (click)="closeHistory()">
+    <section class="history-picker" (click)="$event.stopPropagation()">
+      <header>
+        <div><span class="step-label">{{ pickerTarget === 'first' ? 'First frame' : 'Last frame' }}</span><h2 id="history-picker-title">Choose from image history</h2></div>
+        <button type="button" aria-label="Close image history" (click)="closeHistory()"><i class="bi bi-x-lg"></i></button>
+      </header>
+      <div class="history-picker-content">
+        <app-image-history-panel [pickerMode]="true" (imageSelected)="onHistoryImageSelected($event)"></app-image-history-panel>
+      </div>
+    </section>
+  </div>
+}

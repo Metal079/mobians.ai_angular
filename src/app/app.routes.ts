@@ -11,6 +11,10 @@ export const routes: Routes = [
     loadComponent: () => import('./home/faq/faq.component').then((m) => m.FaqComponent)
   },
   {
+    path: 'video',
+    loadComponent: () => import('./video/video.component').then((m) => m.VideoComponent)
+  },
+  {
     path: 'train',
     children: [
       {

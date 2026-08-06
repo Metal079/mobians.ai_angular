@@ -73,6 +73,15 @@
             <span class="tab-badge">{{ communityModerationCount }}</span>
           </div>
         </p-tab>
+        <p-tab [value]="5">
+          <div class="tab-header">
+            <i class="bi bi-camera-reels"></i>
+            <span>Video Service</span>
+            <span class="tab-badge" [ngClass]="{'success': videoAdminState?.service?.effective_state === 'available', 'danger': videoAdminState?.service?.effective_state === 'offline', 'warning': videoAdminState?.service?.effective_state === 'draining' || videoAdminState?.service?.effective_state === 'maintenance'}">
+              {{ videoAdminState?.service?.effective_state || 'unknown' }}
+            </span>
+          </div>
+        </p-tab>
       </p-tablist>
       <p-tabpanels>
         <p-tabpanel [value]="0">
@@ -919,6 +928,79 @@
             </p-table>
           }
         </div>
+      </p-tabpanel>
+
+      <p-tabpanel [value]="5">
+        <section class="video-admin-panel">
+          <div class="tab-actions">
+            <div>
+              <h2>Video generation service</h2>
+              <p>Control submissions and monitor the dedicated ComfyUI worker.</p>
+            </div>
+            <p-button label="Refresh" icon="bi bi-arrow-repeat" styleClass="p-button-outlined" [loading]="loadingVideoService" (onClick)="loadVideoService()"></p-button>
+          </div>
+
+          @if (videoAdminState) {
+            @if (!videoAdminState.service.feature_enabled) {
+              <div class="video-admin-alert">
+                <i class="bi bi-toggle-off"></i>
+                <span>The public feature flag is off. Set <code>VIDEO_GENERATION_ENABLED=1</code> only after migration and live ComfyUI checks pass.</span>
+              </div>
+            }
+
+            <div class="video-status-grid">
+              <article>
+                <span>Effective state</span>
+                <strong>{{ videoAdminState.service.effective_state | titlecase }}</strong>
+                <small>{{ videoAdminState.service.worker_message || videoAdminState.service.message }}</small>
+              </article>
+              <article>
+                <span>Worker</span>
+                <strong>{{ videoAdminState.service.worker_status | titlecase }}</strong>
+                <small>{{ videoAdminState.service.worker_heartbeat_at ? (videoAdminState.service.worker_heartbeat_at | date:'medium') : 'No heartbeat received' }}</small>
+              </article>
+              <article>
+                <span>Queue</span>
+                <strong>{{ videoAdminState.counts.pending_count }} pending · {{ videoAdminState.counts.processing_count }} active</strong>
+                <small>{{ videoAdminState.counts.retained_count }} completed files retained</small>
+              </article>
+              <article>
+                <span>Output disk</span>
+                <strong>{{ formatVideoBytes(videoAdminState.service.disk_free_bytes) }} free</strong>
+                <small>{{ formatVideoBytes(videoAdminState.service.disk_total_bytes) }} total</small>
+              </article>
+            </div>
+
+            @if (videoAdminState.service.current_job_id) {
+              <div class="video-current-job"><span>Current job</span><code>{{ videoAdminState.service.current_job_id }}</code></div>
+            }
+
+            <div class="video-service-form">
+              <label>
+                <span>Desired service state</span>
+                <select [(ngModel)]="videoDesiredState" [disabled]="savingVideoService">
+                  <option value="available">Available — accept and process jobs</option>
+                  <option value="draining">Draining — block new jobs, finish queue</option>
+                  <option value="maintenance">Maintenance — remain stopped</option>
+                </select>
+              </label>
+              <label>
+                <span>Public maintenance message</span>
+                <textarea rows="3" maxlength="500" [(ngModel)]="videoMaintenanceMessage" [disabled]="savingVideoService"></textarea>
+                <small>{{ videoMaintenanceMessage.length }} / 500</small>
+              </label>
+              <div class="video-service-help">
+                <i class="bi bi-info-circle"></i>
+                <span>Draining finishes both queued and active jobs, then automatically switches to maintenance. Processing jobs cannot be cancelled.</span>
+              </div>
+              <p-button label="Save service state" icon="bi bi-check2-circle" [loading]="savingVideoService" [disabled]="!videoMaintenanceMessage.trim()" (onClick)="saveVideoService()"></p-button>
+            </div>
+          } @else if (loadingVideoService) {
+            <div class="empty-state"><p-progressSpinner strokeWidth="4"></p-progressSpinner><p>Loading video service…</p></div>
+          } @else {
+            <div class="empty-state"><i class="bi bi-exclamation-triangle"></i><p>Video service tables are unavailable. Apply migration 033, then refresh.</p></div>
+          }
+        </section>
       </p-tabpanel>
     </p-tabpanels>
   </p-tabs>

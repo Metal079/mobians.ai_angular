@@ -14,6 +14,6 @@
 <!-- Floating user menu (always available) -->
 @if (!hideFloatingMenu) {
   <div class="floating-menu" style="position: fixed; right: .5rem; bottom: .5rem; z-index: 1000;">
-    <app-profile-menu (loginRequest)="openLoginPrompt()"></app-profile-menu>
+    <app-profile-menu [startMinimized]="minimizeFloatingMenu" (loginRequest)="openLoginPrompt()"></app-profile-menu>
   </div>
 }

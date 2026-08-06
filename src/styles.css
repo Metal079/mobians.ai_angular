@@ -168,6 +168,10 @@ body {
   color: var(--theme-surface-text);
 }
 
+body.video-picker-open {
+  overflow: hidden;
+}
+
 textarea.form-control,
 input.form-control,
 select.form-select,

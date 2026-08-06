@@ -16,7 +16,7 @@ export interface CreditPurchaseCtaContext {
   reason?: CreditPurchaseCtaReason;
   requiredCredits?: number;
   currentCredits?: number;
-  requestedMode?: 'priority' | 'upscale' | 'hires' | 'generate';
+  requestedMode?: 'priority' | 'upscale' | 'hires' | 'generate' | 'video';
   message?: string;
 }
 
