@@ -59,6 +59,8 @@ export class VideoComponent implements OnInit, OnDestroy {
   lastFrame: SelectedFrame | null = null;
   prompt = '';
   audioPrompt = '';
+  disableSound = false;
+  outputAsGif = false;
   cameraMotion: VideoCameraMotion = 'auto';
   showAdvancedCameraOptions = false;
   durationSeconds = 5;
@@ -343,6 +345,10 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.aspectWasManuallyChanged = true;
   }
 
+  onGifOptionChanged(): void {
+    if (this.outputAsGif) this.disableSound = true;
+  }
+
   aspectDimensions(aspect: VideoAspect): { width: number; height: number } {
     return this.config?.aspects?.[aspect] ?? {
       width: aspect === 'landscape' ? 768 : aspect === 'portrait' ? 512 : 640,
@@ -373,6 +379,8 @@ export class VideoComponent implements OnInit, OnDestroy {
       lastFrameSource: this.lastFrame?.source,
       prompt: this.composedPrompt,
       audioPrompt: this.audioPrompt.trim() || null,
+      disableSound: this.disableSound,
+      outputFormat: this.outputAsGif ? 'gif' : 'video',
       durationSeconds: this.durationSeconds,
       aspectRatio: this.aspectRatio,
       seed: this.seed,
@@ -458,7 +466,7 @@ export class VideoComponent implements OnInit, OnDestroy {
       next: ({ access_token }) => {
         const link = document.createElement('a');
         link.href = this.videoService.mediaUrl(job.id, access_token, true);
-        link.download = `mobians-video-${job.id}.mp4`;
+        link.download = `mobians-${job.output_format === 'gif' ? 'gif' : 'video'}-${job.id}.${job.output_format === 'gif' ? 'gif' : 'mp4'}`;
         document.body.appendChild(link);
         link.click();
         link.remove();

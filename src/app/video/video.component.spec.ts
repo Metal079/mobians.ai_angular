@@ -221,6 +221,46 @@ describe('VideoComponent', () => {
     expect(component.audioPrompt).toBe('Soft wind');
   });
 
+  it('automatically disables sound when GIF output is selected', () => {
+    component.disableSound = false;
+    component.outputAsGif = true;
+
+    component.onGifOptionChanged();
+
+    expect(component.disableSound).toBeTrue();
+  });
+
+  it('submits GIF output as silent even when an audio direction is retained', () => {
+    const job = {
+      id: 'job-gif', status: 'pending', created_at: '', updated_at: '', prompt: 'A gentle wave',
+      duration_seconds: 5, aspect_ratio: 'square', width: 640, height: 640, seed: 1,
+      progress: 0, credit_cost: 100, refunded: false, has_last_frame: false, media_ready: false,
+      disable_sound: true, output_format: 'gif',
+    } as const;
+    authService.isLoggedIn.and.returnValue(true);
+    videoService.submitJob.and.returnValue(of({ job, credits_used: 100, credits_remaining: 400 }));
+    spyOn<any>(component, 'hydrateJobAssets');
+    component.config = {
+      service: { feature_enabled: true, desired_state: 'available', effective_state: 'available', accepting_jobs: true, message: '', worker_status: 'online' },
+      prices: { '5': 100 }, aspects: { square: { width: 640, height: 640, comfy_value: 'square' }, landscape: { width: 768, height: 512, comfy_value: 'landscape' }, portrait: { width: 512, height: 768, comfy_value: 'portrait' } },
+      durations: [5], active_job_limit: 3, retention_hours: 24, max_frame_bytes: 1024, accepted_frame_types: ['image/png'],
+    };
+    component.currentCredits = 500;
+    component.firstFrame = { file: new File(['frame'], 'frame.png', { type: 'image/png' }), previewUrl: 'blob:first', width: 640, height: 640, source: 'upload' };
+    component.prompt = 'A gentle wave';
+    component.audioPrompt = 'Soft wind';
+    component.outputAsGif = true;
+    component.onGifOptionChanged();
+
+    component.submit();
+
+    expect(videoService.submitJob).toHaveBeenCalledWith(jasmine.objectContaining({
+      audioPrompt: 'Soft wind',
+      disableSound: true,
+      outputFormat: 'gif',
+    }));
+  });
+
   it('toggles a saved prompt between collapsed and expanded', () => {
     const job = { id: 'job-1' } as VideoJob;
 

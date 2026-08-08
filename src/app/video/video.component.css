@@ -200,6 +200,19 @@
   opacity: 0.67;
 }
 
+.frame-title .optional-badge {
+  padding: 0.18rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--theme-border-strong) 75%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-surface-text) 10%, transparent);
+  color: var(--theme-surface-text);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  opacity: 1;
+}
+
 .frame-preview,
 .frame-empty {
   position: relative;
@@ -270,7 +283,12 @@
 }
 
 .frame-empty.secondary {
-  opacity: 0.82;
+  border: 1px dashed color-mix(in srgb, var(--theme-border-strong) 55%, transparent);
+}
+
+.frame-empty.secondary i,
+.frame-empty.secondary small {
+  color: var(--theme-surface-text);
 }
 
 .frame-actions {
@@ -567,6 +585,80 @@
 .seed-field input {
   min-height: 42px;
   padding: 0 0.65rem;
+}
+
+.delivery-group {
+  margin-top: 1rem;
+}
+
+.delivery-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.delivery-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 72px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 12px;
+  background: var(--theme-surface-alt-bg);
+  cursor: pointer;
+}
+
+.delivery-option:hover,
+.delivery-option:focus-within {
+  border-color: var(--theme-primary-outline);
+}
+
+.delivery-option.selected {
+  border-color: var(--theme-primary-outline);
+  background: color-mix(in srgb, var(--theme-primary) 14%, var(--theme-surface-alt-bg));
+  box-shadow: inset 0 0 0 1px var(--theme-primary-outline);
+}
+
+.delivery-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.delivery-option > span:last-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.delivery-option strong {
+  font-size: 0.82rem;
+}
+
+.delivery-option small {
+  font-size: 0.7rem;
+  line-height: 1.3;
+  opacity: 0.72;
+}
+
+.delivery-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-primary) 18%, transparent);
+  color: var(--theme-primary-outline);
+  font-size: 1.1rem;
+}
+
+.gif-note {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
 }
 
 .submit-panel {
@@ -983,6 +1075,10 @@
   }
 
   .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .delivery-options {
     grid-template-columns: minmax(0, 1fr);
   }
 

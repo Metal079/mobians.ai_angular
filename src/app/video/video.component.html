@@ -4,7 +4,7 @@
   <header class="video-header">
     <div>
       <h1>Bring an image to life</h1>
-      <p>Create a short video from a first frame, or guide a transition with an optional last frame.</p>
+      <p>Create a short video from one image, or add an optional ending image to guide how it finishes.</p>
     </div>
     @if (config) {
       <div class="service-pill" [class.available]="config.service.accepting_jobs">
@@ -77,7 +77,7 @@
           <div class="transition-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
 
           <article class="frame-card" (dragover)="$event.preventDefault()" (drop)="onFrameDrop($event, 'last')">
-            <div class="frame-title"><span>Last frame</span><small>Optional</small></div>
+            <div class="frame-title"><span>Ending image</span><small class="optional-badge">Optional</small></div>
             @if (lastFrame) {
               <div class="frame-preview">
                 <img [src]="lastFrame.previewUrl" alt="Selected last frame">
@@ -87,8 +87,8 @@
             } @else {
               <div class="frame-empty secondary">
                 <i class="bi bi-image-alt"></i>
-                <span>Add an ending pose</span>
-                <small>Leave empty to just use initial image</small>
+                <span>Add an image for the ending</span>
+                <small>Not required — leave empty to let the video choose the ending</small>
               </div>
             }
             <div class="frame-actions">
@@ -148,10 +148,29 @@
 
         <label class="field-block" for="audioPrompt">
           <span>Audio direction <small>Optional</small></span>
-          <p class="field-help">Describe sounds, ambience, music, or dialogue, not visual movement.</p>
-          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" maxlength="1000" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
+          <p class="field-help">{{ disableSound ? 'Audio will not be included in this generation.' : 'Describe sounds, ambience, music, or dialogue, not visual movement.' }}</p>
+          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" maxlength="1000" [disabled]="disableSound" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
           <em>{{ audioPrompt.length }} / 1000</em>
         </label>
+
+        <fieldset class="control-group delivery-group">
+          <legend>Output options</legend>
+          <div class="delivery-options">
+            <label class="delivery-option" [class.selected]="disableSound">
+              <input type="checkbox" [(ngModel)]="disableSound" [disabled]="outputAsGif">
+              <span class="delivery-icon"><i class="bi" [ngClass]="disableSound ? 'bi-volume-mute-fill' : 'bi-volume-up-fill'"></i></span>
+              <span><strong>Disable sound</strong><small>Create the result without an audio track.</small></span>
+            </label>
+            <label class="delivery-option" [class.selected]="outputAsGif">
+              <input type="checkbox" [(ngModel)]="outputAsGif" (ngModelChange)="onGifOptionChanged()">
+              <span class="delivery-icon"><i class="bi bi-filetype-gif"></i></span>
+              <span><strong>Send as GIF</strong><small>Deliver a looping GIF instead of an MP4 video.</small></span>
+            </label>
+          </div>
+          @if (outputAsGif) {
+            <p class="control-help gif-note"><i class="bi bi-info-circle"></i> GIFs cannot contain audio, so sound is disabled automatically.</p>
+          }
+        </fieldset>
 
         <fieldset class="control-group">
           <legend>Aspect ratio</legend>
@@ -189,13 +208,13 @@
         <div class="submit-panel">
           <div class="price-summary">
             <strong>{{ selectedCost }} credits</strong>
-            <span>{{ durationSeconds }} seconds · 24 fps · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
+            <span>{{ durationSeconds }} seconds · {{ outputAsGif ? 'GIF' : 'MP4' }} · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
           </div>
           <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" (click)="submit()">
             @if (submitting) { <span class="spinner"></span> Queuing… }
             @else if (activeJobs >= activeLimit) { Queue is full }
             @else if (currentCredits < selectedCost) { Get credits to create }
-            @else { <i class="bi bi-stars"></i> Generate video }
+            @else { <i class="bi bi-stars"></i> Generate {{ outputAsGif ? 'GIF' : 'video' }} }
           </button>
         </div>
         @if (currentCredits < selectedCost) {
@@ -224,7 +243,11 @@
               <article class="video-job" [class]="'status-' + job.status">
                 <div class="job-media">
                   @if (job.status === 'completed' && videoUrls.get(job.id)) {
-                    <video [src]="videoUrls.get(job.id)" controls playsinline preload="metadata" [poster]="thumbnailUrls.get(job.id) || ''"></video>
+                    @if (job.output_format === 'gif') {
+                      <img [src]="videoUrls.get(job.id)" alt="Generated GIF">
+                    } @else {
+                      <video [src]="videoUrls.get(job.id)" controls playsinline preload="metadata" [poster]="thumbnailUrls.get(job.id) || ''"></video>
+                    }
                   } @else if (thumbnailUrls.get(job.id)) {
                     <img [src]="thumbnailUrls.get(job.id)" alt="Video first frame">
                   } @else {
@@ -257,6 +280,7 @@
                   </div>
                   <div class="job-meta">
                     <span>{{ aspectLabel(job.aspect_ratio) }}</span>
+                    <span>{{ job.output_format === 'gif' ? 'GIF' : (job.disable_sound ? 'Silent video' : 'Video with sound') }}</span>
                     <span>{{ job.credit_cost }} credits</span>
                     @if (job.expires_at && job.status === 'completed') { <span>{{ expiresLabel(job) }}</span> }
                   </div>

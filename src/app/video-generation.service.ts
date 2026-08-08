@@ -18,6 +18,8 @@ export interface VideoSubmission {
   lastFrameSource?: 'upload' | 'history' | null;
   prompt: string;
   audioPrompt?: string | null;
+  disableSound: boolean;
+  outputFormat: 'video' | 'gif';
   durationSeconds: number;
   aspectRatio: string;
   seed?: number | null;
@@ -48,7 +50,9 @@ export class VideoGenerationService {
     if (submission.lastFrame) form.append('last_frame', submission.lastFrame);
     if (submission.lastFrame && submission.lastFrameSource) form.append('last_frame_source', submission.lastFrameSource);
     form.append('prompt', submission.prompt);
-    if (submission.audioPrompt?.trim()) form.append('audio_prompt', submission.audioPrompt.trim());
+    if (!submission.disableSound && submission.audioPrompt?.trim()) form.append('audio_prompt', submission.audioPrompt.trim());
+    form.append('disable_sound', String(submission.disableSound));
+    form.append('output_format', submission.outputFormat);
     form.append('duration_seconds', String(submission.durationSeconds));
     form.append('aspect_ratio', submission.aspectRatio);
     if (submission.seed !== null && submission.seed !== undefined) form.append('seed', String(submission.seed));

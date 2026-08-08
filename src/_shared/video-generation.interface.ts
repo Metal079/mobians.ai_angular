@@ -1,4 +1,5 @@
 export type VideoAspect = 'square' | 'landscape' | 'portrait';
+export type VideoOutputFormat = 'video' | 'gif';
 export type VideoJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired';
 export type VideoDesiredState = 'available' | 'draining' | 'maintenance';
 
@@ -45,6 +46,8 @@ export interface VideoJob {
   expires_at?: string | null;
   prompt: string;
   audio_prompt?: string | null;
+  disable_sound?: boolean;
+  output_format?: VideoOutputFormat;
   duration_seconds: number;
   aspect_ratio: VideoAspect;
   width: number;

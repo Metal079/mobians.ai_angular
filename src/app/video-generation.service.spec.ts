@@ -29,6 +29,8 @@ describe('VideoGenerationService', () => {
       lastFrameSource: 'history',
       prompt: 'A smooth turn',
       audioPrompt: 'quiet wind',
+      disableSound: false,
+      outputFormat: 'video',
       durationSeconds: 8,
       aspectRatio: 'portrait',
       seed: 42,
@@ -43,9 +45,31 @@ describe('VideoGenerationService', () => {
     expect(body.get('last_frame_source')).toBe('history');
     expect(body.get('prompt')).toBe('A smooth turn');
     expect(body.get('audio_prompt')).toBe('quiet wind');
+    expect(body.get('disable_sound')).toBe('false');
+    expect(body.get('output_format')).toBe('video');
     expect(body.get('duration_seconds')).toBe('8');
     expect(body.get('aspect_ratio')).toBe('portrait');
     expect(body.get('seed')).toBe('42');
+    request.flush({});
+  });
+
+  it('does not send a retained audio direction for silent GIF output', () => {
+    service.submitJob({
+      firstFrame: new File(['first'], 'first.png', { type: 'image/png' }),
+      firstFrameSource: 'upload',
+      prompt: 'A smooth turn',
+      audioPrompt: 'quiet wind',
+      disableSound: true,
+      outputFormat: 'gif',
+      durationSeconds: 5,
+      aspectRatio: 'square',
+    }).subscribe();
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/video/jobs`);
+    const body = request.request.body as FormData;
+    expect(body.get('audio_prompt')).toBeNull();
+    expect(body.get('disable_sound')).toBe('true');
+    expect(body.get('output_format')).toBe('gif');
     request.flush({});
   });
 
