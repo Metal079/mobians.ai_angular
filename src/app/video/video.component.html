@@ -149,8 +149,8 @@
         <label class="field-block" for="audioPrompt">
           <span>Audio direction <small>Optional</small></span>
           <p class="field-help">{{ disableSound ? 'Audio will not be included in this generation.' : 'Describe sounds, ambience, music, or dialogue, not visual movement.' }}</p>
-          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" maxlength="1000" [disabled]="disableSound" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
-          <em>{{ audioPrompt.length }} / 1000</em>
+          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" [attr.maxlength]="audioPromptMaxLength" [disabled]="disableSound" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
+          <em>{{ audioPrompt.length }} / {{ audioPromptMaxLength }}</em>
         </label>
 
         <fieldset class="control-group delivery-group">
@@ -207,17 +207,18 @@
 
         <div class="submit-panel">
           <div class="price-summary">
-            <strong>{{ selectedCost }} credits</strong>
+            <strong>{{ selectedPriceAvailable ? (selectedCost + ' credits') : 'Price unavailable' }}</strong>
             <span>{{ durationSeconds }} seconds · {{ outputAsGif ? 'GIF' : 'MP4' }} · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
           </div>
           <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" (click)="submit()">
             @if (submitting) { <span class="spinner"></span> Queuing… }
             @else if (activeJobs >= activeLimit) { Queue is full }
+            @else if (!selectedPriceAvailable) { Price unavailable }
             @else if (currentCredits < selectedCost) { Get credits to create }
             @else { <i class="bi bi-stars"></i> Generate {{ outputAsGif ? 'GIF' : 'video' }} }
           </button>
         </div>
-        @if (currentCredits < selectedCost) {
+        @if (selectedPriceAvailable && currentCredits < selectedCost) {
           <button type="button" class="credit-link" (click)="openCreditPurchase()">You have {{ currentCredits }} credits. Add credits to generate.</button>
         }
       </section>

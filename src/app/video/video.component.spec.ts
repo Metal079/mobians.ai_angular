@@ -182,6 +182,37 @@ describe('VideoComponent', () => {
     expect(component.prompt).toBe('Her expression softens as the lights glow behind her.');
   });
 
+  it('keeps the full 8000-character user allowance when a camera command is selected', () => {
+    component.cameraMotion = 'auto';
+    expect(component.maxUserPromptLength).toBe(8000);
+
+    component.prompt = 'a'.repeat(8000);
+    component.cameraMotion = 'pedestal-down';
+
+    expect(component.maxUserPromptLength).toBe(8000);
+    expect(component.composedPrompt.length).toBeLessThanOrEqual(component.composedPromptMaxLength);
+  });
+
+  it('allows 4000 characters for audio direction', () => {
+    expect(component.audioPromptMaxLength).toBe(4000);
+  });
+
+  it('uses only backend configuration for durations and prices', () => {
+    expect(component.durations).toEqual([]);
+    expect(component.selectedCost).toBe(0);
+
+    component.config = {
+      service: { feature_enabled: true, desired_state: 'available', effective_state: 'available', accepting_jobs: true, message: '', worker_status: 'online' },
+      prices: { '5': 80, '15': 400 },
+      aspects: { square: { width: 640, height: 640, comfy_value: 'square' }, landscape: { width: 768, height: 512, comfy_value: 'landscape' }, portrait: { width: 512, height: 768, comfy_value: 'portrait' } },
+      durations: [5, 15], active_job_limit: 3, retention_hours: 24, max_frame_bytes: 1024, accepted_frame_types: ['image/png'],
+    };
+    component.durationSeconds = 15;
+
+    expect(component.durations).toEqual([5, 15]);
+    expect(component.selectedCost).toBe(400);
+  });
+
   it('uses a transition-focused example when a last frame is selected', () => {
     expect(component.promptPlaceholder).toContain('looks toward the camera');
 

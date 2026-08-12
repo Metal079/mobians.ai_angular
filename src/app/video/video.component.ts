@@ -74,9 +74,10 @@ export class VideoComponent implements OnInit, OnDestroy {
   configLoading = true;
   errorMessage = '';
   currentCredits = 0;
-  readonly durationFallback = [5, 6, 7, 8, 9, 10];
   readonly aspectOrder: VideoAspect[] = ['square', 'landscape', 'portrait'];
-  readonly promptMaxLength = 4000;
+  readonly promptMaxLength = 8000;
+  readonly composedPromptMaxLength = 8020;
+  readonly audioPromptMaxLength = 4000;
   readonly primaryCameraOptions: CameraMotionOption[] = [
     { id: 'auto', label: 'Auto', command: null, icon: 'bi-stars' },
     { id: 'static', label: 'Keep still', command: '[Static shot]', icon: 'bi-pause-circle' },
@@ -164,7 +165,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get durations(): number[] {
-    return this.config?.durations ?? this.durationFallback;
+    return this.config?.durations ?? [];
   }
 
   get activeJobs(): number {
@@ -176,7 +177,11 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get selectedCost(): number {
-    return this.config?.prices?.[String(this.durationSeconds)] ?? (100 + (this.durationSeconds - 5) * 40);
+    return this.config?.prices?.[String(this.durationSeconds)] ?? 0;
+  }
+
+  get selectedPriceAvailable(): boolean {
+    return this.selectedCost > 0;
   }
 
   get serviceAcceptingJobs(): boolean {
@@ -205,8 +210,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get maxUserPromptLength(): number {
-    const commandLength = this.selectedCameraOption.command?.length ?? 0;
-    return this.promptMaxLength - (commandLength ? commandLength + 1 : 0);
+    return this.promptMaxLength;
   }
 
   get composedPrompt(): string {
@@ -218,7 +222,9 @@ export class VideoComponent implements OnInit, OnDestroy {
   get canSubmit(): boolean {
     return !!this.firstFrame
       && !!this.composedPrompt
-      && this.composedPrompt.length <= this.promptMaxLength
+      && this.composedPrompt.length <= this.composedPromptMaxLength
+      && this.audioPrompt.length <= this.audioPromptMaxLength
+      && this.selectedPriceAvailable
       && this.activeJobs < this.activeLimit
       && this.serviceAcceptingJobs
       && !this.submitting;
@@ -230,6 +236,9 @@ export class VideoComponent implements OnInit, OnDestroy {
       next: (config) => {
         this.runInView(() => {
           this.config = config;
+          if (!config.durations.includes(this.durationSeconds) && config.durations.length > 0) {
+            this.durationSeconds = config.durations[0];
+          }
           this.configLoading = false;
         });
       },
