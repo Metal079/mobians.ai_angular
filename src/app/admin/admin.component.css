@@ -1466,6 +1466,14 @@
   gap: 0.5rem;
 }
 
+.history-header small,
+.history-version-id {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--admin-subtle-text);
+  font-size: 0.7rem;
+}
+
 .status-header h3 i,
 .history-header h3 i {
   color: var(--theme-primary, #6366f1) !important;
@@ -1558,14 +1566,29 @@
 .text-danger { color: #f87171 !important; }
 .text-warning { color: #fbbf24 !important; }
 
-.error-cell {
-  max-width: 200px;
+.history-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: capitalize;
 }
 
-.error-snippet {
+.history-lora-name,
+.history-result-detail {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.history-result-detail {
+  color: var(--admin-muted-text);
+}
+
+.history-result-detail.error-snippet {
   color: #f87171;
-  font-size: 0.75rem;
-  cursor: help;
+}
+
+:host ::ng-deep .history-table .p-datatable-table {
+  table-layout: fixed;
 }
 
 /* Ensure admin fully follows navy palette when theme is navy */
@@ -1702,6 +1725,14 @@
   :host ::ng-deep .admin-table .p-datatable-tbody > tr > td {
     border: none !important;
     padding: 0.25rem 0;
+  }
+
+  :host ::ng-deep .history-table .p-datatable-table {
+    min-width: 0;
+  }
+
+  :host ::ng-deep .history-table .p-datatable-tbody > tr > td {
+    width: 100%;
   }
 
   .community-content-counts {

@@ -554,40 +554,58 @@
           <!-- Download History -->
           <div class="download-history-card">
             <div class="history-header">
-              <h3><i class="bi bi-clock-history"></i> Download History</h3>
+              <div>
+                <h3><i class="bi bi-clock-history"></i> Download History</h3>
+                <small>Up to {{ downloadHistoryLimit }} most recent requests</small>
+              </div>
             </div>
 
             <p-table
               [value]="downloadHistory"
               [paginator]="true"
               [rows]="10"
+              [rowsPerPageOptions]="[10,25,50]"
+              [showCurrentPageReport]="true"
+              currentPageReportTemplate="Showing {first} to {last} of {totalRecords}"
               styleClass="admin-table history-table">
               <ng-template pTemplate="header">
                 <tr>
-                  <th style="width: 50px">Status</th>
+                  <th style="width: 110px">Status</th>
                   <th>LoRA Name</th>
-                  <th>Version</th>
-                  <th>Downloaded At</th>
-                  <th>Error</th>
+                  <th style="width: 145px">Version</th>
+                  <th style="width: 180px">Processed At</th>
+                  <th style="width: 34%">Failure Details</th>
                 </tr>
               </ng-template>
               <ng-template pTemplate="body" let-item>
                 <tr>
                   <td>
-                    <i [ngClass]="getHistoryStatusIcon(item.status)" [pTooltip]="item.status" tooltipPosition="right"></i>
+                    <span class="p-column-title">Status</span>
+                    <span class="history-status">
+                      <i [ngClass]="getHistoryStatusIcon(item.status)"></i>
+                      {{ item.status }}
+                    </span>
                   </td>
-                  <td>{{ item.lora_name }}</td>
-                  <td>{{ item.version }}</td>
-                  <td>{{ formatDate(item.downloaded_at) }}</td>
+                  <td>
+                    <span class="p-column-title">LoRA Name</span>
+                    <span class="history-lora-name">{{ item.lora_name }}</span>
+                    <small class="history-version-id">CivitAI version #{{ item.version_id }}</small>
+                  </td>
+                  <td>
+                    <span class="p-column-title">Version</span>
+                    {{ item.version }}
+                  </td>
+                  <td>
+                    <span class="p-column-title">Processed At</span>
+                    {{ formatDate(item.downloaded_at) }}
+                  </td>
                   <td class="error-cell">
-                    @if (item.error_message) {
-                      <span [pTooltip]="item.error_message" tooltipPosition="left" class="error-snippet">
-                        {{ item.error_message | slice:0:50 }}{{ item.error_message?.length > 50 ? '...' : '' }}
-                      </span>
-                    }
-                    @if (!item.error_message) {
-                      <span>-</span>
-                    }
+                    <span class="p-column-title">Failure Details</span>
+                    <span
+                      class="history-result-detail"
+                      [class.error-snippet]="item.status === 'failed'">
+                      {{ getDownloadFailureReason(item) }}
+                    </span>
                   </td>
                 </tr>
               </ng-template>

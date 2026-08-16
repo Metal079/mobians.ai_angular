@@ -693,7 +693,7 @@ export class StableDiffusionService {
     return this.http.get(url);
   }
 
-  getDownloadHistory(limit: number = 20): Observable<any> {
+  getDownloadHistory(limit: number = 100): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/download-history?limit=${limit}`;
     return this.http.get(url);
   }

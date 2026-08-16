@@ -144,6 +144,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   // Downloader status
   downloaderStatus: DownloaderStatus | null = null;
   downloadHistory: DownloadHistoryItem[] = [];
+  readonly downloadHistoryLimit = 100;
   loadingDownloaderStatus = false;
   videoAdminState: VideoAdminState | null = null;
   loadingVideoService = false;
@@ -1235,7 +1236,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   }
 
   loadDownloadHistory(): void {
-    this.sdService.getDownloadHistory(20).subscribe({
+    this.sdService.getDownloadHistory(this.downloadHistoryLimit).subscribe({
       next: (history: DownloadHistoryItem[]) => {
         this.runInView(() => {
           this.downloadHistory = history || [];
@@ -1899,11 +1900,26 @@ export class AdminComponent implements OnInit, OnDestroy {
 
   getHistoryStatusIcon(status: string): string {
     switch (status?.toLowerCase()) {
-      case 'success': return 'bi bi-check-circle-fill text-success';
+      case 'success':
+      case 'downloaded': return 'bi bi-check-circle-fill text-success';
+      case 'downloading': return 'bi bi-arrow-down-circle-fill text-warning';
       case 'failed': return 'bi bi-x-circle-fill text-danger';
       case 'skipped': return 'bi bi-skip-forward-fill text-warning';
       default: return 'bi bi-question-circle';
     }
+  }
+
+  getDownloadFailureReason(item: DownloadHistoryItem): string {
+    const status = item.status?.toLowerCase();
+    if (status === 'downloading') return 'Download in progress';
+    if (status !== 'failed') return 'Completed successfully';
+
+    const message = item.error_message?.trim();
+    if (!message) return 'No failure details were recorded.';
+    if (message === 'Download failed after retries') {
+      return 'CivitAI download failed. This legacy entry was recorded before upstream error details were captured.';
+    }
+    return message;
   }
 
   formatDate(dateStr: string | null): string {

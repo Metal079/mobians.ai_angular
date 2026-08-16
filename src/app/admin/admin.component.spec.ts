@@ -100,4 +100,22 @@ describe('AdminComponent manual LoRA upload', () => {
     expect(component.getCivitAILink({ version_id: -1 })).toBeNull();
     expect(component.hasCivitAILink({ version_id: -1 })).toBeFalse();
   });
+
+  it('recognizes downloaded history entries as successful', () => {
+    expect(component.getHistoryStatusIcon('downloaded')).toContain('text-success');
+  });
+
+  it('explains legacy download failures that lack upstream details', () => {
+    const reason = component.getDownloadFailureReason({
+      lora_name: 'Legacy LoRA',
+      version: 'v1',
+      status: 'failed',
+      error_message: 'Download failed after retries',
+      version_id: 123,
+      downloaded_at: '2026-08-16T12:00:00Z',
+    });
+
+    expect(reason).toContain('legacy entry');
+    expect(reason).toContain('upstream error details');
+  });
 });
