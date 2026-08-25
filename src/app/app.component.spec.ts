@@ -7,6 +7,7 @@ import { SharedService } from './shared.service';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
+    localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
@@ -43,6 +44,11 @@ describe('AppComponent', () => {
       .compileComponents();
   });
 
+  afterEach(() => {
+    localStorage.clear();
+    document.body.classList.remove('theme-navy', 'theme-606', 'theme-eggman', 'dark-input-fields');
+  });
+
   it('should create the app', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
@@ -56,7 +62,5 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     expect(document.body.classList.contains('theme-606')).toBeTrue();
-    localStorage.removeItem('panel-theme');
-    document.body.classList.remove('theme-606');
   });
 });

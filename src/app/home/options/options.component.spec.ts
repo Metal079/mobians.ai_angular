@@ -181,6 +181,7 @@ describe('OptionsComponent', () => {
 
   afterEach(() => {
     localStorage.clear();
+    document.body.classList.remove('theme-navy', 'theme-606', 'theme-eggman', 'dark-input-fields');
   });
 
   it('should create', () => {
