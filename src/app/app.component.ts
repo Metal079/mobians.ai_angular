@@ -140,8 +140,9 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  private normalizeTheme(theme: string | null | undefined): 'sonic' | 'navy' | 'eggman' {
+  private normalizeTheme(theme: string | null | undefined): 'sonic' | 'navy' | '606' | 'eggman' {
     if (theme === 'navy') return 'navy';
+    if (theme === '606') return '606';
     if (theme === 'eggman') return 'eggman';
     return 'sonic';
   }
@@ -150,6 +151,7 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       if (this.aprilFools.isAprilFools()) {
         document.body.classList.remove('theme-navy');
+        document.body.classList.remove('theme-606');
         document.body.classList.add('theme-eggman');
         document.body.classList.add('dark-input-fields');
         return;
@@ -157,6 +159,7 @@ export class AppComponent implements OnInit, OnDestroy {
       const storedTheme = localStorage.getItem('panel-theme');
       const theme = this.normalizeTheme(storedTheme);
       document.body.classList.toggle('theme-navy', theme === 'navy');
+      document.body.classList.toggle('theme-606', theme === '606');
       document.body.classList.toggle('theme-eggman', theme === 'eggman');
       const darkInputFields = localStorage.getItem('dark-input-fields') === 'true';
       document.body.classList.toggle('dark-input-fields', darkInputFields);

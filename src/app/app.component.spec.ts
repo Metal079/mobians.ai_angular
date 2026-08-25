@@ -48,4 +48,15 @@ describe('AppComponent', () => {
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
+
+  it("restores 606's theme during app startup", () => {
+    localStorage.setItem('panel-theme', '606');
+    const fixture = TestBed.createComponent(AppComponent);
+
+    fixture.detectChanges();
+
+    expect(document.body.classList.contains('theme-606')).toBeTrue();
+    localStorage.removeItem('panel-theme');
+    document.body.classList.remove('theme-606');
+  });
 });

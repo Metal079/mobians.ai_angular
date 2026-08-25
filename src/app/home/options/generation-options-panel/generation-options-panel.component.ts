@@ -10,7 +10,7 @@ import { HintComponent } from 'src/app/hint/hint.component';
 import { GenerationModelSettings, RegionalPromptPreset, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 
-type PanelTheme = 'sonic' | 'navy' | 'eggman';
+type PanelTheme = 'sonic' | 'navy' | '606' | 'eggman';
 
 @Component({
     selector: 'app-generation-options-panel',

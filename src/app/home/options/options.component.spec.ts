@@ -234,6 +234,19 @@ describe('OptionsComponent', () => {
     expect(component.generationRequest.guidance_scale).toBe(6);
   });
 
+  it("restores 606's theme and applies it to the page", async () => {
+    (component as any).modelSettings = [];
+    component.models_types = {};
+    localStorage.setItem('panel-theme', '606');
+
+    await component.loadSettings();
+
+    expect(component.panelTheme).toBe('606');
+    expect(document.body.classList.contains('theme-606')).toBeTrue();
+    expect(document.body.classList.contains('theme-navy')).toBeFalse();
+    expect(document.body.classList.contains('theme-eggman')).toBeFalse();
+  });
+
   it('uses the SDXL-sized defaults for Anima-baseV1', () => {
     expect((component as any).usesSdxlResolutionDefaults('Anima-baseV1')).toBeTrue();
     expect((component as any).supportsRegionalPrompting('Anima-baseV1')).toBeTrue();
