@@ -123,6 +123,46 @@ describe('ImageHistoryPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('stores a compressed history copy without replacing the generated PNG shared with the viewer', async () => {
+    const original = new Blob(['original'], { type: 'image/png' });
+    const compressed = new Blob(['compressed'], { type: 'image/webp' });
+    const image = { ...createImage({ UUID: 'format-fixture' }), blob: original, url: URL.createObjectURL(original) };
+    const migration = TestBed.inject(BlobMigrationService);
+    spyOn(migration, 'convertToWebP').and.resolveTo(compressed);
+    const databaseName = 'image-format-test-' + Math.random();
+    const storeName = (component as any).storeName;
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(databaseName, 1);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore(storeName, { keyPath: 'UUID' });
+        request.result.createObjectStore('blobStore', { keyPath: 'UUID' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    spyOn(component as any, 'getDatabase').and.resolveTo(db);
+    try {
+      expect(await (component as any).persistGeneratedImage(image)).toBeTrue();
+      const stored = await new Promise<any>((resolve, reject) => {
+        const request = db.transaction('blobStore', 'readonly').objectStore('blobStore').get(image.UUID);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      expect(stored.blob.type).toBe('image/webp');
+      expect(await stored.blob.text()).toBe('compressed');
+      expect(image.blob).toBe(original);
+      expect((await (await fetch(image.url)).blob()).type).toBe('image/png');
+    } finally {
+      URL.revokeObjectURL(image.url);
+      db.close();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+  });
+
   it('toggleFavorite should persist and refresh favorites and tag counts', async () => {
     const image = createImage({ UUID: 'img-1', favorite: false });
     const callOrder: string[] = [];

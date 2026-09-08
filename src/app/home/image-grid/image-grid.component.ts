@@ -469,7 +469,10 @@ export class ImageGridComponent implements OnDestroy {
     return `mobians-${id}.${ext}`;
   }
 
-  expandImage(imageIndex: number, event: Event) {
+  private imageExpansionId = 0;
+
+  async expandImage(imageIndex: number, event: Event) {
+    const expansionId = ++this.imageExpansionId;
     // If a reference image is set, don't expand the image and delete it
     if (this.sharedService.getReferenceImageValue() && !this.imagesJustChanged) {
       // if there are no regular images, show the instructions
@@ -483,23 +486,34 @@ export class ImageGridComponent implements OnDestroy {
       }
     }
     else {
+      const imageInfo = this.sharedService.getImage(imageIndex);
+      if (!imageInfo) return;
+
+      // Native right-click/long-press saving uses the displayed blob, so apply
+      // the same preference as the download button before expanding it.
+      let blob: Blob | null;
+      try {
+        blob = await this.getDownloadBlob(imageInfo);
+      } catch (error) {
+        console.warn('Failed to prepare image for viewing', error);
+        return;
+      }
+      if (!blob || expansionId !== this.imageExpansionId
+        || this.sharedService.getImage(imageIndex) !== imageInfo) return;
+
       this.imagesJustChanged = false;
 
-      // Create new image element to get dimensions
-      let img = new Image();
-      const imageInfo = this.sharedService.getImage(imageIndex);
-
       // Calculate the aspect ratio (Square, Portrait, Landscape)
-      let tempAspectRatio = imageInfo!.width / imageInfo!.height;
+      const tempAspectRatio = imageInfo.width / imageInfo.height;
 
       // Set the reference image
       const referenceImage = {
-        url: imageInfo!.url,
-        width: img.naturalWidth,
-        height: img.naturalHeight,
+        url: imageInfo.url,
+        width: imageInfo.width,
+        height: imageInfo.height,
         aspectRatio: tempAspectRatio > 1.2 ? 'landscape' : tempAspectRatio < 0.80 ? 'portrait' : 'square',
-        blob: imageInfo!.blob,
-        UUID: imageInfo!.UUID,
+        blob,
+        UUID: imageInfo.UUID,
         rating: imageInfo?.rating
       };
       this.sharedService.setReferenceImage(referenceImage);
@@ -509,6 +523,7 @@ export class ImageGridComponent implements OnDestroy {
   }
 
   ngOnDestroy() {
+    this.imageExpansionId++;
     this.stopQueueMessageRotation();
     // Revoke any object URLs created for local files to avoid memory leaks
     this.objectUrls.forEach((u) => {

@@ -201,6 +201,37 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  for (const fallback of [false, true]) {
+    for (const lossy of [false, true]) {
+      it('preserves the returned image format after ' + (fallback ? 'fallback' : 'individual') + ' downloads with WebP ' + lossy, async () => {
+        const original = new Blob(['image'], { type: lossy ? 'image/webp' : 'image/png' });
+        const sd = TestBed.inject(StableDiffusionService) as any;
+        sd.getJobImage = jasmine.createSpy().and.returnValue(of(original));
+        sd.getJob = jasmine.createSpy().and.returnValue(of({ status: 'completed', result: Array(4).fill('fixture') }));
+        const migration = TestBed.inject(BlobMigrationService) as any;
+        migration.base64ToBlob = () => original;
+        migration.convertToWebP = jasmine.createSpy().and.resolveTo(new Blob(['compressed'], { type: 'image/webp' }));
+        const shared = TestBed.inject(SharedService) as any;
+        shared.disableInstructions = () => {};
+        shared.setImages = jasmine.createSpy();
+        const ingest = jasmine.createSpy().and.resolveTo(undefined);
+        (component as any).historyPanel = { ingestGeneratedImages: ingest };
+        component.generationRequest.lossy_images = lossy;
+
+        await (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('fixture');
+
+        const images = shared.setImages.calls.mostRecent().args[0];
+        expect(images.length).toBe(4);
+        expect(ingest).toHaveBeenCalledWith(images);
+        for (const image of images) {
+          expect(image.blob).toBe(original);
+          expect((await (await fetch(image.url)).blob()).type).toBe(original.type);
+        }
+        expect(migration.convertToWebP).not.toHaveBeenCalled();
+      });
+    }
+  }
+
   it('submits the selected look with unchanged fixture credit estimates and snapshots its account', async () => {
     const characters = TestBed.inject(CharactersService);
     characters.activeCharacter.set({ id: 'amy', imageId: 'beach-look', name: 'Amy Rose' });

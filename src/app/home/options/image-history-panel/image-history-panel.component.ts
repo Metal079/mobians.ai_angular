@@ -302,7 +302,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (blobToStore.type === 'image/png') {
       blobToStore = await this.blobMigrationService.convertToWebP(blobToStore);
     }
-    image.blob = blobToStore;
+    // The grid shares this image object. Compress only the stored copy so expanding
+    // a freshly generated PNG does not silently switch its browser-save format.
 
     try {
       const db = await this.getDatabase();

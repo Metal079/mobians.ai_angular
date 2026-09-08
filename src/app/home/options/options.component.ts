@@ -1871,13 +1871,7 @@ export class OptionsComponent implements OnInit {
     this.removePendingJob();
     this.lockService.release();
 
-    // Convert to webp if image is png (non-blocking for UI)
-    if (generatedImages[0]?.blob?.type === 'image/png') {
-      for (let i = 0; i < generatedImages.length; i++) {
-        if (!generatedImages[i].blob) continue;
-        generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob!);
-      }
-    }
+    // History compresses its own stored copy; keep the original format for viewing/saving.
     await this.historyPanel?.ingestGeneratedImages(generatedImages);
   }
 
@@ -1949,12 +1943,7 @@ export class OptionsComponent implements OnInit {
         this.removePendingJob();
         this.lockService.release();
 
-        if (generatedImages[0]?.blob?.type === 'image/png') {
-          for (let i = 0; i < generatedImages.length; i++) {
-            if (!generatedImages[i].blob) continue;
-            generatedImages[i].blob = await this.blobMigrationService.convertToWebP(generatedImages[i].blob!);
-          }
-        }
+        // Preserve the original here too, including when the bulk-download fallback is used.
         await this.historyPanel?.ingestGeneratedImages(generatedImages);
         return; // success
       } catch (err: any) {
