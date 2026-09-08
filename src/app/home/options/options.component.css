@@ -342,6 +342,27 @@
 .prompt-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; margin-bottom: .25rem; color: var(--theme-surface-text); }
 .prompt-header label { margin: 0; flex-shrink: 0; font-size: .85rem; font-weight: 700; }
 .prompt-header app-character-picker { min-width: 0; }
+
+/* Match the stacked tablet layout in Home. Center the prompt itself, rather
+   than leaving its desktop inset inside the wider settings column. */
+@media (min-width: 601px) and (max-width: 1023px) and (hover: none) and (pointer: coarse) {
+  .input-button-container {
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .prompt-editor {
+    width: min(100%, 512px);
+    margin-inline: auto;
+  }
+
+  .button-group {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 480px) {
   .prompt-editor { width: 100%; margin-left: 0; }
   .prompt-header { padding-inline: .5rem .25rem; }

@@ -56,9 +56,18 @@ h2 {
   font-size: .93rem;
 }
 
-.collection-header > button {
+.collection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
   flex-shrink: 0;
 }
+
+.collection-actions .collection-delete-toggle { padding-inline: .75rem; background: transparent; }
+.selection-help { margin: -1rem 0 1rem; font-size: .88rem; line-height: 1.5; }
+.delete-selection-list { max-height: min(240px, 35vh); overflow-y: auto; padding-left: 1.5rem; }
+.delete-selection-list li { padding-block: .25rem; overflow-wrap: anywhere; }
 
 .collection-toolbar {
   display: flex;

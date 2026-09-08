@@ -11,6 +11,10 @@ import { GenerationModelSettings, RegionalPromptPreset, StableDiffusionService }
 import { AprilFoolsService } from 'src/app/april-fools.service';
 
 type PanelTheme = 'sonic' | 'navy' | '606' | 'eggman';
+interface RegionControl {
+  key: 'x' | 'y' | 'width' | 'height' | 'denoise_strength' | 'feather';
+  label: string; unit: string; scale: number; min: number; max: number; step: number; hint: string;
+}
 
 @Component({
     selector: 'app-generation-options-panel',
@@ -57,6 +61,14 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   workspaceExpanded = false;
   newPresetName = '';
   regionalPresets: Array<{ id: string; name: string; regions: RegionalPromptRegion[] }> = [];
+  readonly regionControls: RegionControl[] = [
+    { key: 'x', label: 'X', unit: '%', scale: 100, min: 0, max: 100, step: 1, hint: 'Horizontal position of the region. Position is kept inside the image.' },
+    { key: 'y', label: 'Y', unit: '%', scale: 100, min: 0, max: 100, step: 1, hint: 'Vertical position of the region. Position is kept inside the image.' },
+    { key: 'width', label: 'Width', unit: '%', scale: 100, min: 5, max: 100, step: 1, hint: 'How much horizontal area this region covers.' },
+    { key: 'height', label: 'Height', unit: '%', scale: 100, min: 5, max: 100, step: 1, hint: 'How much vertical area this region covers.' },
+    { key: 'denoise_strength', label: 'Region Influence', unit: '', scale: 1, min: 0, max: 1, step: 0.05, hint: 'How strongly this region prompt affects the result in this area.' },
+    { key: 'feather', label: 'Edge Softness', unit: 'px', scale: 1, min: 0, max: 96, step: 2, hint: 'Softens boundaries between regions. Lower values reduce concept bleeding.' },
+  ];
   private syncingPresets = false;
 
   private draggingRegionIndex: number | null = null;
@@ -436,6 +448,26 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
         this.syncingPresets = false;
       }
     });
+  }
+
+  regionControlValue(region: RegionalPromptRegion, control: RegionControl): number {
+    return Number((region[control.key] * control.scale).toFixed(control.key === 'denoise_strength' ? 2 : 0));
+  }
+
+  setRegionValue(region: RegionalPromptRegion, control: RegionControl, value: number): void {
+    if (!this.regionalEnabled || !Number.isFinite(value)) return;
+    const bounded = this.clampRange(value, control.min, control.max);
+    const stepped = Number((Math.round(bounded / control.step) * control.step).toFixed(2));
+    region[control.key] = stepped / control.scale;
+    this.normalizeRegion(region);
+  }
+
+  commitRegionValue(region: RegionalPromptRegion, control: RegionControl, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    // Commit a whole typed value, so clearing or typing the first digit does
+    // not move the region. Invalid entries restore the last valid value.
+    this.setRegionValue(region, control, input.valueAsNumber);
+    input.value = String(this.regionControlValue(region, control));
   }
 
   normalizeRegion(region: RegionalPromptRegion) {

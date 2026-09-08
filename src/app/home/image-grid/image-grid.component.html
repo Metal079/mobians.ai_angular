@@ -1,4 +1,5 @@
 <div class="image-grid" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
+     [style.aspect-ratio]="aspectRatio.width + ' / ' + aspectRatio.height"
      [ngStyle]="{'width.px': isMobileView() ? '100%' : aspectRatio.width, 
      'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
   <!-- Prompt instructions -->

@@ -7,8 +7,12 @@
 .card-body {
   min-height: 75vh;
   max-height: fit-content;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* This panel grows with its content. Let the page own scrolling instead of
+     creating a second scroll container around the regional editor. */
+  overflow: visible;
+  /* Expanding regions and editing their fields should not let the browser
+     re-anchor the page to controls the user is trying to scroll away from. */
+  overflow-anchor: none;
   transition: height 0.5s ease-in-out;
   max-width: min(1120px, 100%);
 }
@@ -111,7 +115,8 @@
   border: 1px solid rgba(79, 146, 255, 0.38);
   border-radius: 12px;
   padding: 0.85rem;
-  overflow: hidden;
+  /* Clip the decorative background without introducing a scroll container. */
+  overflow: clip;
   background:
     linear-gradient(120deg, rgba(38, 109, 255, 0.11), rgba(0, 0, 0, 0.03)),
     var(--theme-surface-bg);
@@ -211,6 +216,8 @@
 }
 
 .regional-workspace-shell {
+  container-type: inline-size;
+  container-name: regional-workspace;
   position: relative;
   border: 1px solid rgba(147, 195, 255, 0.35);
   border-radius: 10px;
@@ -243,11 +250,15 @@
 
 .regional-editor-column {
   min-width: 0;
+  container-type: inline-size;
+  container-name: region-controls;
 }
 
 .regional-preview {
   position: relative;
   width: 100%;
+  max-width: 320px;
+  margin-inline: auto;
 }
 
 .regional-preview-frame {
@@ -344,17 +355,25 @@
 
 .regional-grid {
   display: grid;
-  gap: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
 }
 
-.regional-slider-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.55rem;
-}
+.regional-control-wide { grid-column: 1 / -1; }
+.regional-precision-hint { margin: .75rem 0 .5rem; font-size: .85rem; }
+.regional-value-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.regional-number-wrap { display: inline-flex; align-items: center; gap: .35rem; }
+.regional-number { width: 5.5rem; min-height: 44px; font-size: 1rem; padding: .4rem .5rem; }
+.regional-grid .form-range { min-height: 44px; margin: 0; }
+.regional-grid .form-range::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -8px; }
+.regional-grid .form-range::-moz-range-thumb { width: 24px; height: 24px; }
 
 .regional-slider-item {
   min-width: 0;
+}
+
+@container region-controls (max-width: 420px) {
+  .regional-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .regional-grid .form-label {
@@ -379,9 +398,11 @@
   line-height: 1;
 }
 
-@media (min-width: 992px) {
+/* A wide viewport can still contain a narrow settings panel (especially iPad
+   desktop mode). Only split the editor when the panel itself has enough room. */
+@container regional-workspace (min-width: 680px) {
   .regional-workspace {
-    grid-template-columns: minmax(260px, 42%) minmax(0, 58%);
+    grid-template-columns: minmax(0, 40fr) minmax(0, 60fr);
     align-items: start;
   }
 
@@ -394,7 +415,6 @@
 @media (max-width: 480px) {
   .card-body {
     min-height: 70vh;
-    overflow-y: auto;
     transition: height 0.5s ease-in-out;
   }
 

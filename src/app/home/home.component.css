@@ -15,6 +15,19 @@
     min-width: 0;
   }
 
+  /* Portrait tablets cannot fit the image plus usable controls side by side.
+     Keep this separate from the established desktop and phone layouts. */
+  @media (min-width: 601px) and (max-width: 1023px) and (hover: none) and (pointer: coarse) {
+    #generation-space {
+      flex-direction: column;
+      align-items: center;
+    }
+    #generation-space > app-options {
+      flex: none;
+      width: min(600px, calc(100% - 40px));
+    }
+  }
+
   @media screen and (max-width: 600px) {
     #generation-space {
       flex-direction: column;

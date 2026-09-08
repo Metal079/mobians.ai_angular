@@ -62,9 +62,20 @@
         </div>
       }
     } @else {
-      <header class="collection-header"><div><h1>My Characters</h1><p>Your favorite characters, ready for the next idea.</p></div>@if (characters().length) { <button class="primary-action" (click)="pickImage()" ><i class="bi bi-plus-lg" aria-hidden="true"></i> Save a character</button> }</header>
+      <header class="collection-header"><div><h1>My Characters</h1><p>Your favorite characters, ready for the next idea.</p></div>@if (characters().length) {
+        <div class="collection-actions">
+          @if (collectionSelectionMode()) {
+            <button type="button" (click)="cancelCollectionSelection()" [disabled]="busy()">Cancel</button>
+            <button type="button" class="danger-action" (click)="requestCollectionDelete()" [disabled]="busy() || !collectionSelection().length"><i class="bi bi-trash3" aria-hidden="true"></i> Delete ({{ collectionSelection().length }})</button>
+          } @else {
+            <button type="button" class="primary-action" (click)="pickImage()" [disabled]="busy()"><i class="bi bi-plus-lg" aria-hidden="true"></i> Save a character</button>
+            <button type="button" class="collection-delete-toggle" (click)="startCollectionSelection()" [disabled]="busy()" aria-label="Select characters to delete"><i class="bi bi-trash3" aria-hidden="true"></i> Delete</button>
+          }
+        </div>
+      }</header>
       @if (characters().length) {
-        <app-character-browser class="collection-browser" [showCreate]="true" [disabled]="busy()" (chosen)="openResult($event)" (create)="createResult($event)"></app-character-browser>
+        @if (collectionSelectionMode()) { <p class="selection-help" role="status">{{ collectionSelection().length }} selected. Choose characters to delete. All their saved looks will also be deleted.</p> }
+        <app-character-browser #collectionBrowser class="collection-browser" [showCreate]="true" [selectionMode]="collectionSelectionMode()" [selectedCharacterIds]="selectedCharacterIds()" [destinationsOnly]="collectionSelectionMode()" [disabled]="busy()" (chosen)="openResult($event)" (create)="createResult($event)" (selectionToggle)="toggleCollectionSelection($event)"></app-character-browser>
       } @else if (!error()) {
         <section class="welcome panel"><span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h2>Like a character? Keep them.</h2><p>Choose a favorite image and give your character a name. Their prompts will be ready to reuse in the generator.</p><div class="welcome-actions"><button class="primary-action" (click)="pickImage()">Choose from history <i class="bi bi-arrow-right" aria-hidden="true"></i></button><a routerLink="/">Create an image first</a></div><small>Private to you · Free to save</small></section>
       }
@@ -91,8 +102,16 @@
   <p-dialog styleClass="character-dialog" header="Rename character" [visible]="renameOpen()" (visibleChange)="renameOpen.set($event)" [modal]="true" [closable]="!busy()" [style]="{width: 'min(420px, 94vw)'}">
     @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }<form (ngSubmit)="rename()"><label for="rename-character">Name</label><input id="rename-character" name="name" [(ngModel)]="renameValue" required maxlength="80" [disabled]="busy()"><div class="dialog-actions"><button type="button" (click)="renameOpen.set(false)" [disabled]="busy()">Cancel</button><button class="primary-action" [disabled]="busy() || !renameValue.trim()">Save name</button></div></form>
   </p-dialog>
-  <p-dialog styleClass="character-dialog" [header]="deleteMode() === 'character' ? 'Delete character?' : 'Remove saved look?'" [visible]="!!deleteMode()" (visibleChange)="!$event && deleteMode.set(null)" [modal]="true" [closable]="!busy()" [style]="{width: 'min(420px, 94vw)'}">
-    @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }<p>{{ deleteMode() === 'character' ? 'This deletes ' + character()?.name + ' and all of their saved looks from My Characters.' : 'This removes the selected image and its setup from this character.' }}</p><p>Your original image history is kept.</p><div class="dialog-actions"><button (click)="deleteMode.set(null)" [disabled]="busy()">Cancel</button><button class="danger-action" (click)="confirmDelete()" [disabled]="busy()">{{ busy() ? 'Removing…' : 'Delete' }}</button></div>
+  <p-dialog styleClass="character-dialog" [header]="deleteMode() === 'collection' ? 'Delete selected characters?' : deleteMode() === 'character' ? 'Delete character?' : 'Remove saved look?'" [visible]="!!deleteMode()" (visibleChange)="!$event && cancelDelete()" [modal]="true" [draggable]="false" [closable]="!busy()" [closeOnEscape]="!busy()" [style]="{width: 'min(420px, 94vw)'}">
+    @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+    @if (deleteMode() === 'collection') {
+      <p>Delete {{ collectionSelection().length }} {{ collectionSelection().length === 1 ? 'character' : 'characters' }} and all of their saved looks from My Characters?</p>
+      <ul class="delete-selection-list">@for (target of collectionSelection(); track target.characterId) { <li>{{ target.name }}</li> }</ul>
+      <p>This cannot be undone.</p>
+    } @else {
+      <p>{{ deleteMode() === 'character' ? 'This deletes ' + character()?.name + ' and all of their saved looks from My Characters.' : 'This removes the selected image and its setup from this character.' }}</p>
+    }
+    <p>Your original image history is kept.</p><div class="dialog-actions"><button (click)="cancelDelete()" [disabled]="busy()">Cancel</button><button class="danger-action" (click)="confirmDelete()" [disabled]="busy() || (deleteMode() === 'collection' && !collectionSelection().length)">{{ busy() ? 'Removing…' : deleteMode() === 'collection' ? 'Delete selected (' + collectionSelection().length + ')' : 'Delete' }}</button></div>
   </p-dialog>
 </main>
 

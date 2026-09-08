@@ -222,54 +222,29 @@
                     </label>
                   </div>
 
+                  <p class="regional-precision-hint">Drag a slider or type an exact value.</p>
                   <div class="regional-grid">
-                    <div class="regional-slider-pair">
-                      <div class="regional-slider-item">
-                        <label class="form-label">X: {{ (region.x * 100).toFixed(0) }}%
-                          <app-hint text="Horizontal position of the region." variant="regional"></app-hint>
-                        </label>
-                        <input type="range" class="form-range" min="0" max="1" step="0.01"
-                          [(ngModel)]="region.x" (ngModelChange)="normalizeRegion(region)">
+                    @for (control of regionControls; track control.key) {
+                      <div class="regional-slider-item" [class.regional-control-wide]="control.scale === 1">
+                        <div class="regional-value-row">
+                          <label class="form-label" [for]="'region-value-' + control.key">{{ control.label }}
+                            <app-hint [text]="control.hint" variant="regional"></app-hint>
+                          </label>
+                          <div class="regional-number-wrap">
+                            <input type="number" class="form-control regional-number" [id]="'region-value-' + control.key"
+                              [attr.aria-label]="control.label + (control.unit === '%' ? ' (percent)' : control.unit ? ' (' + control.unit + ')' : '')"
+                              inputmode="decimal" [min]="control.min" [max]="control.max" [step]="control.step"
+                              [value]="regionControlValue(region, control)" [disabled]="!regionalEnabled"
+                              (change)="commitRegionValue(region, control, $event)">
+                            @if (control.unit) { <span aria-hidden="true">{{ control.unit }}</span> }
+                          </div>
+                        </div>
+                        <input type="range" class="form-range" [attr.aria-label]="control.label + ' slider'"
+                          [attr.aria-valuetext]="regionControlValue(region, control) + control.unit"
+                          [min]="control.min" [max]="control.max" [step]="control.step" [disabled]="!regionalEnabled"
+                          [ngModel]="regionControlValue(region, control)" (ngModelChange)="setRegionValue(region, control, $event)">
                       </div>
-
-                      <div class="regional-slider-item">
-                        <label class="form-label">Y: {{ (region.y * 100).toFixed(0) }}%
-                          <app-hint text="Vertical position of the region." variant="regional"></app-hint>
-                        </label>
-                        <input type="range" class="form-range" min="0" max="1" step="0.01"
-                          [(ngModel)]="region.y" (ngModelChange)="normalizeRegion(region)">
-                      </div>
-                    </div>
-
-                    <div class="regional-slider-pair">
-                      <div class="regional-slider-item">
-                        <label class="form-label">Width: {{ (region.width * 100).toFixed(0) }}%
-                          <app-hint text="How much horizontal area this region covers." variant="regional"></app-hint>
-                        </label>
-                        <input type="range" class="form-range" min="0.05" max="1" step="0.01"
-                          [(ngModel)]="region.width" (ngModelChange)="normalizeRegion(region)">
-                      </div>
-
-                      <div class="regional-slider-item">
-                        <label class="form-label">Height: {{ (region.height * 100).toFixed(0) }}%
-                          <app-hint text="How much vertical area this region covers." variant="regional"></app-hint>
-                        </label>
-                        <input type="range" class="form-range" min="0.05" max="1" step="0.01"
-                          [(ngModel)]="region.height" (ngModelChange)="normalizeRegion(region)">
-                      </div>
-                    </div>
-
-                    <label class="form-label">Region Influence: {{ region.denoise_strength.toFixed(2) }}
-                      <app-hint text="How strongly this region prompt affects the result in this area." variant="regional"></app-hint>
-                    </label>
-                    <input type="range" class="form-range" min="0" max="1" step="0.05"
-                      [(ngModel)]="region.denoise_strength" (ngModelChange)="normalizeRegion(region)">
-
-                    <label class="form-label">Edge Softness: {{ region.feather }} px
-                      <app-hint text="Softens boundaries between regions. Lower values reduce concept bleeding." variant="regional"></app-hint>
-                    </label>
-                    <input type="range" class="form-range" min="0" max="96" step="2"
-                      [(ngModel)]="region.feather" (ngModelChange)="normalizeRegion(region)">
+                    }
                   </div>
                 </article>
               } @else {

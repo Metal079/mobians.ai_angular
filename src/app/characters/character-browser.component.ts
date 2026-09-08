@@ -15,8 +15,11 @@ export class CharacterBrowserComponent implements OnChanges {
   @Input() destinationsOnly = false;
   @Input() disabled = false;
   @Input() showCreate = false;
+  @Input() selectionMode = false;
+  @Input() selectedCharacterIds: string[] = [];
   @Output() chosen = new EventEmitter<CharacterChoice>();
   @Output() create = new EventEmitter<CharacterChoice>();
+  @Output() selectionToggle = new EventEmitter<CharacterChoice>();
   query = '';
   rows = signal<any[]>([]);
   loading = signal(false);
@@ -56,5 +59,15 @@ export class CharacterBrowserComponent implements OnChanges {
   }
   choice(row: any): CharacterChoice {
     return { characterId: row.character_id || row.id, imageId: row.character_id ? row.id : undefined, name: row.name };
+  }
+  isSelected(row: any): boolean { return this.selectedCharacterIds.includes(this.choice(row).characterId); }
+  activate(row: any): void {
+    if (this.disabled) return;
+    (this.selectionMode ? this.selectionToggle : this.chosen).emit(this.choice(row));
+  }
+  removeCharacter(id: string): void {
+    ++this.version; clearTimeout(this.timer);
+    this.rows.update(rows => rows.filter(row => (row.character_id || row.id) !== id));
+    this.loading.set(false);
   }
 }

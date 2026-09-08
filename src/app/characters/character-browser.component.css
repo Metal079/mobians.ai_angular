@@ -10,4 +10,10 @@
 .browser-result { min-width: 0; }
 .browser-more, .browser-create { min-height: 44px; border: 1px solid var(--theme-border-strong); border-radius: 10px; color: var(--theme-surface-text); background: var(--theme-surface-alt-bg); padding: .5rem .8rem; cursor: pointer; }
 .browser-more { display: block; margin: 1rem auto 0; }
-.browser-create { width: 100%; margin-top: .35rem; }
+.browser-actions { display: flex; gap: .4rem; margin-top: .35rem; }
+.browser-create { flex: 1; min-width: 0; }
+.selection-card { position: relative; }
+.selection-selected { box-shadow: inset 0 0 0 3px var(--theme-primary); }
+.selection-indicator { position: absolute; top: .65rem; right: .65rem; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; background: var(--theme-input-bg); color: var(--theme-input-text); box-shadow: 0 1px 5px #0005; font-size: 1.25rem; }
+.selection-selected .selection-indicator { background: var(--theme-primary); color: var(--theme-primary-text); }
+.picker-card:focus-visible { outline: 3px solid var(--theme-surface-text); outline-offset: 2px; }

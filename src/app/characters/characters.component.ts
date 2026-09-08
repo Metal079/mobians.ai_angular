@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -24,6 +24,7 @@ import { CharacterDisclosureComponent } from './character-disclosure.component';
   templateUrl: './characters.component.html', styleUrls: ['./characters.shared.css', './characters.component.css'],
 })
 export class CharactersComponent {
+  @ViewChild('collectionBrowser') private collectionBrowser?: CharacterBrowserComponent;
   readonly service = inject(CharactersService);
   private readonly shared = inject(SharedService);
   private readonly route = inject(ActivatedRoute);
@@ -35,10 +36,13 @@ export class CharactersComponent {
   characters = signal<CharacterSummary[]>([]); character = signal<CharacterDetail | null>(null);
   selected = signal<CharacterImage | null>(null); models = signal<GenerationModelSettings[]>([]);
   preview = signal(''); previewLoading = signal(false); dirty = signal(false); search = signal('');
-  pickerOpen = signal(false); renameOpen = signal(false); deleteMode = signal<'character' | 'image' | null>(null);
+  pickerOpen = signal(false); renameOpen = signal(false); deleteMode = signal<'character' | 'image' | 'collection' | null>(null);
   editingOpen = signal(false); lookPickerOpen = signal(false); moreLooksLoading = signal(false);
   modelsLoading = signal(false); modelsError = signal(false);
   unavailableSetup = signal(false);
+  collectionSelectionMode = signal(false);
+  collectionSelection = signal<CharacterChoice[]>([]);
+  readonly selectedCharacterIds = computed(() => this.collectionSelection().map(choice => choice.characterId));
   get lookCount(): number { return this.character()?.image_count ?? this.character()?.images.length ?? 0; }
 
   filteredCharacters = computed(() => this.characters().filter(c => c.name.toLowerCase().includes(this.search().toLowerCase())));
@@ -79,6 +83,7 @@ export class CharactersComponent {
     ++this.loadVersion; ++this.mediaVersion; this.revokePreview();
     this.character.set(null); this.selected.set(null); this.characters.set([]); this.recipe = null;
     this.pickerOpen.set(false); this.renameOpen.set(false); this.deleteMode.set(null);
+    this.collectionSelectionMode.set(false); this.collectionSelection.set([]);
     this.editingOpen.set(false); this.lookPickerOpen.set(false); this.nextScene = '';
     this.error.set(''); this.unavailableSetup.set(false); this.notice.set(''); this.loading.set(false); this.busy.set(false); this.dirty.set(false);
   }
@@ -240,9 +245,39 @@ export class CharactersComponent {
     });
   }
 
+  startCollectionSelection(): void {
+    if (this.busy() || this.character()) return;
+    this.collectionSelection.set([]); this.collectionSelectionMode.set(true);
+    this.error.set(''); this.notice.set('');
+  }
+
+  toggleCollectionSelection(choice: CharacterChoice): void {
+    if (!this.collectionSelectionMode() || this.busy() || this.deleteMode()) return;
+    this.collectionSelection.update(selected => selected.some(item => item.characterId === choice.characterId)
+      ? selected.filter(item => item.characterId !== choice.characterId)
+      : [...selected, { characterId: choice.characterId, name: choice.name }]);
+  }
+
+  cancelCollectionSelection(): void {
+    if (this.busy()) return;
+    this.collectionSelectionMode.set(false); this.collectionSelection.set([]); this.error.set('');
+  }
+
+  requestCollectionDelete(): void {
+    if (this.busy() || !this.collectionSelectionMode() || !this.collectionSelection().length) return;
+    this.error.set(''); this.deleteMode.set('collection');
+  }
+
+  cancelDelete(): void {
+    if (this.busy()) return;
+    this.deleteMode.set(null); this.error.set('');
+  }
+
   async confirmDelete(): Promise<void> {
-    if (!this.character()) return;
-    const id = this.character()!.id, imageId = this.selected()?.id, mode = this.deleteMode();
+    if (this.deleteMode() === 'collection') { await this.confirmCollectionDelete(); return; }
+    const id = this.character()?.id;
+    const imageId = this.selected()?.id, mode = this.deleteMode();
+    if (!id || !mode) return;
     await this.run(async current => {
       if (mode === 'character') {
         await this.service.remove(id);
@@ -253,6 +288,41 @@ export class CharactersComponent {
         await this.service.removeImage(id, imageId);
         if (!current()) return;
         this.deleteMode.set(null); this.dirty.set(false); this.busy.set(false); await this.load();
+      }
+    });
+  }
+
+  private async confirmCollectionDelete(): Promise<void> {
+    const targets = [...this.collectionSelection()], owner = this.service.owner;
+    if (!owner || !this.collectionSelectionMode() || !targets.length) return;
+    await this.run(async current => {
+      const isCurrent = () => current() && owner === this.service.owner;
+      let deleted = 0;
+      try {
+        for (const target of targets) {
+          if (!isCurrent()) return;
+          try { await this.service.remove(target.characterId); }
+          catch (error: any) {
+            // A retry after a lost success response may find it already deleted.
+            if (error?.status !== 404) throw error;
+          }
+          if (!isCurrent()) return;
+          ++deleted;
+          this.collectionBrowser?.removeCharacter(target.characterId);
+          this.characters.update(items => items.filter(item => item.id !== target.characterId));
+          this.collectionSelection.update(items => items.filter(item => item.characterId !== target.characterId));
+        }
+        this.deleteMode.set(null); this.collectionSelectionMode.set(false);
+        this.notice.set(targets.length === 1 ? targets[0].name + ' and their saved looks were deleted.' : deleted + ' characters and their saved looks were deleted.');
+      } catch (error) {
+        if (isCurrent()) throw new Error((deleted ? `Deleted ${deleted} of ${targets.length} characters. ` : '') + characterError(error) + ' The remaining characters are still selected; you can retry.');
+      } finally {
+        if (deleted && isCurrent()) {
+          try {
+            const list = await this.service.list();
+            if (isCurrent()) this.characters.set(list.characters);
+          } catch { /* Successful deletions are already reflected locally. */ }
+        }
       }
     });
   }

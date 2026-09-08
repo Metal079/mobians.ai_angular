@@ -25,6 +25,15 @@
   border: 0;
 }
 
+/* Only shrink oversized previews on narrow touch tablets. The inline aspect
+   ratio preserves the selected shape when overriding the fixed desktop height. */
+@media (min-width: 601px) and (max-width: 1023px) and (hover: none) and (pointer: coarse) {
+  .image-grid {
+    max-width: calc(100vw - 2rem);
+    height: auto !important;
+  }
+}
+
 #loading-container {
   position: absolute;
   top: 50%;

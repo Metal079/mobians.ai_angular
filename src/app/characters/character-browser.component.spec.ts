@@ -42,4 +42,55 @@ describe('Character search browser', () => {
     finish({ characters:[{ id:'private' }] }); await pending;
     expect(component.rows()).toEqual([]);
   });
+
+  it('selects cards without opening a look, hides Create, and exposes the selected state', async () => {
+    const fixture = TestBed.createComponent(CharacterBrowserComponent), component = fixture.componentInstance;
+    fixture.detectChanges(); await fixture.whenStable();
+    component.rows.set([{ id:'beach', character_id:'amy', name:'Amy Rose', recipe:{label:'Beach day'} }]);
+    fixture.detectChanges(); expect(fixture.nativeElement.querySelector('.browser-delete')).toBeNull();
+    component.showCreate = true; component.selectionMode = true; fixture.detectChanges();
+    const toggle = spyOn(component.selectionToggle, 'emit'), choose = spyOn(component.chosen, 'emit');
+    const card = fixture.nativeElement.querySelector('.picker-card') as HTMLButtonElement;
+    card.click();
+    expect(toggle).toHaveBeenCalledOnceWith({ characterId:'amy', imageId:'beach', name:'Amy Rose' });
+    expect(choose).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.browser-create')).toBeNull();
+    expect(card.getAttribute('aria-pressed')).toBe('false');
+    component.selectedCharacterIds = ['amy']; fixture.detectChanges();
+    expect(card.getAttribute('aria-pressed')).toBe('true');
+    component.disabled = true; fixture.detectChanges();
+    card.click(); expect(toggle).toHaveBeenCalledTimes(1);
+    component.disabled = false; component.selectionMode = false; fixture.detectChanges(); card.click();
+    expect(choose).toHaveBeenCalledOnceWith({ characterId:'amy', imageId:'beach', name:'Amy Rose' });
+  });
+
+  it('keeps parent selection through pagination and searches distinct characters', async () => {
+    const fixture = TestBed.createComponent(CharacterBrowserComponent), component = fixture.componentInstance;
+    component.selectionMode = true; component.destinationsOnly = true; component.selectedCharacterIds = ['amy'];
+    service.list.and.resolveTo({ characters:[{id:'amy', name:'Amy'}], next_cursor:'next' });
+    await component.load();
+    service.list.and.resolveTo({ characters:[{id:'ash', name:'Ash'}], next_cursor:null });
+    await component.load(true);
+    expect(component.isSelected(component.rows()[0])).toBeTrue();
+    component.query = 'bikini amy';
+    service.list.and.resolveTo({ characters:[{id:'amy', name:'Amy'}], next_cursor:null });
+    await component.load();
+    expect(service.list).toHaveBeenCalledWith('bikini amy', undefined);
+    expect(service.search).not.toHaveBeenCalled();
+    expect(component.isSelected(component.rows()[0])).toBeTrue();
+  });
+
+  it('removes all looks for a deleted character while preserving search, pagination and other cards', async () => {
+    const fixture = TestBed.createComponent(CharacterBrowserComponent), component = fixture.componentInstance;
+    component.query = 'amy'; component.cursor.set('next-page');
+    component.rows.set([{id:'beach',character_id:'amy'}, {id:'spy',character_id:'amy'}, {id:'other',character_id:'other'}]);
+    let finish!: (value: any) => void;
+    service.search.and.returnValue(new Promise(resolve => finish = resolve));
+    const pending = component.load(true);
+    component.removeCharacter('amy');
+    finish({items:[{id:'late',character_id:'amy'}],next_cursor:null}); await pending;
+    expect(component.rows()).toEqual([{id:'other',character_id:'other'}]);
+    expect(component.query).toBe('amy'); expect(component.cursor()).toBe('next-page');
+    expect(component.loading()).toBeFalse();
+  });
 });

@@ -7,11 +7,16 @@
 <div class="picker-grid" [attr.aria-busy]="loading()">
   @for (row of rows(); track row.id) {
     <div class="browser-result">
-      <button type="button" class="picker-card" (click)="chosen.emit(choice(row))" [disabled]="disabled" [attr.aria-label]="row.name + (row.recipe ? ' · ' + row.recipe.label : '')">
+      <button type="button" class="picker-card" [class.selection-card]="selectionMode" [class.selection-selected]="selectionMode && isSelected(row)" (click)="activate(row)" [disabled]="disabled" [attr.aria-pressed]="selectionMode ? isSelected(row) : null" [attr.aria-label]="(selectionMode ? 'Select character ' : '') + row.name + (row.recipe ? ' · ' + row.recipe.label : '')">
+        @if (selectionMode) { <span class="selection-indicator" aria-hidden="true"><i class="bi" [class.bi-check-square-fill]="isSelected(row)" [class.bi-square]="!isSelected(row)"></i></span> }
         <span class="picker-image">@if (row.thumbnail) { <img [src]="row.thumbnail" alt="" loading="lazy"> } @else { <i class="bi bi-person-heart" aria-hidden="true"></i> }</span>
         <span class="picker-name">{{ row.name }}@if (row.recipe) {<span class="look-name"> · {{ row.recipe.label }}</span>}</span>
       </button>
-      @if (showCreate) { <button type="button" class="browser-create" (click)="create.emit(choice(row))" [disabled]="disabled">Create</button> }
+      @if (showCreate && !selectionMode) {
+        <div class="browser-actions">
+          <button type="button" class="browser-create" (click)="create.emit(choice(row))" [disabled]="disabled">Create</button>
+        </div>
+      }
     </div>
   }
 </div>

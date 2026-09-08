@@ -45,6 +45,7 @@ describe('CharactersComponent', () => {
       setDefault: jasmine.createSpy('setDefault').and.callFake(async (_id: string, imageId: string) => ({ id: 'ash', default_image_id: imageId })),
       updateRecipe: jasmine.createSpy('updateRecipe').and.callFake(async (_id: string, _imageId: string, recipe: CharacterRecipe) => ({ recipe: structuredClone(recipe) })),
       requestSave: jasmine.createSpy('requestSave'),
+      remove: jasmine.createSpy('remove').and.resolveTo(),
     };
     await TestBed.configureTestingModule({
       imports: [CharactersComponent],
@@ -79,6 +80,87 @@ describe('CharactersComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
   }
+
+  async function selectCollection(...ids: string[]): Promise<void> {
+    params.next(convertToParamMap({})); await fixture.whenStable(); fixture.detectChanges();
+    component.startCollectionSelection();
+    for (const id of ids) component.toggleCollectionSelection({ characterId: id, name: id === 'ash' ? 'Ash' : id });
+    component.requestCollectionDelete();
+  }
+
+  it('requires selection and confirmation, keeping selection when confirmation is canceled', async () => {
+    await selectCollection();
+    expect(component.deleteMode()).toBeNull();
+    component.toggleCollectionSelection({ characterId: 'ash', name: 'Ash' });
+    component.requestCollectionDelete();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Delete 1 character and all of their saved looks');
+    component.cancelDelete();
+    expect(component.selectedCharacterIds()).toEqual(['ash']); expect(component.deleteMode()).toBeNull();
+    component.cancelCollectionSelection();
+    expect(component.selectedCharacterIds()).toEqual([]); expect(component.collectionSelectionMode()).toBeFalse();
+    expect(service.remove).not.toHaveBeenCalled();
+  });
+
+  it('deletes a collection character once and shows the empty collection after the final deletion', async () => {
+    await selectCollection('ash');
+    let finish!: () => void;
+    service.remove.and.returnValue(new Promise<void>(resolve => finish = resolve));
+    const deleting = component.confirmDelete(); await component.confirmDelete();
+    expect(service.remove).toHaveBeenCalledOnceWith('ash');
+    service.list.and.resolveTo({ characters: [], next_cursor: null }); finish(); await deleting;
+    expect(component.characters()).toEqual([]); expect(component.deleteMode()).toBeNull();
+    expect(component.notice()).toContain('Ash');
+    expect(TestBed.inject(Router).navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps the collection deletion confirmation and cards available after an API error', async () => {
+    await selectCollection('ash');
+    service.remove.and.rejectWith(new Error('Connection interrupted. Retry.'));
+    await component.confirmDelete();
+    expect(component.deleteMode()).toBe('collection'); expect(component.selectedCharacterIds()).toEqual(['ash']);
+    expect(component.characters().length).toBe(1); expect(component.busy()).toBeFalse();
+    expect(component.error()).toContain('Connection interrupted');
+  });
+
+  it('ignores completion of a collection deletion after the account changes', async () => {
+    await selectCollection('ash', 'bob');
+    let finish!: () => void;
+    service.remove.and.returnValue(new Promise<void>(resolve => finish = resolve));
+    const deleting = component.confirmDelete(); service.owner = ''; user.next(null); finish(); await deleting;
+    expect(component.selectedCharacterIds()).toEqual([]); expect(component.deleteMode()).toBeNull();
+    expect(service.remove).toHaveBeenCalledOnceWith('ash');
+    expect(component.notice()).toBe(''); expect(component.characters()).toEqual([]);
+  });
+
+  it('retries only remaining characters after a partial failure', async () => {
+    await selectCollection('ash', 'bob', 'cara');
+    service.remove.and.callFake(async (id: string) => { if (id === 'bob') throw new Error('Connection interrupted'); });
+    service.list.and.resolveTo({ characters: [{ id:'bob', name:'Bob' }, { id:'cara', name:'Cara' }] });
+    await component.confirmDelete();
+    expect(service.remove.calls.allArgs()).toEqual([['ash'], ['bob']]);
+    expect(component.selectedCharacterIds()).toEqual(['bob', 'cara']);
+    expect(component.error()).toContain('Deleted 1 of 3');
+    expect(component.deleteMode()).toBe('collection');
+    service.remove.and.resolveTo(); service.list.and.resolveTo({ characters:[] });
+    await component.confirmDelete();
+    expect(service.remove.calls.allArgs()).toEqual([['ash'], ['bob'], ['bob'], ['cara']]);
+    expect(component.selectedCharacterIds()).toEqual([]); expect(component.deleteMode()).toBeNull();
+    expect(component.busy()).toBeFalse();
+  });
+
+  it('handles already deleted characters and toggles selection by character rather than look', async () => {
+    await selectCollection();
+    component.toggleCollectionSelection({ characterId:'ash', imageId:'forest', name:'Ash' });
+    component.toggleCollectionSelection({ characterId:'ash', imageId:'jacket', name:'Ash' });
+    expect(component.selectedCharacterIds()).toEqual([]);
+    component.toggleCollectionSelection({ characterId:'ash', imageId:'forest', name:'Ash' });
+    component.requestCollectionDelete();
+    service.remove.and.rejectWith({ status:404 }); service.list.and.resolveTo({ characters:[] });
+    await component.confirmDelete();
+    expect(component.error()).toBe(''); expect(component.deleteMode()).toBeNull();
+    expect(component.notice()).toContain('Ash');
+  });
 
   it('uses a one-off scene from the form without dirtying or persisting the saved look', async () => {
     const saved = structuredClone(component.selected()!.recipe);
