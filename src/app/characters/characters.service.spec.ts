@@ -31,6 +31,16 @@ describe('Character workflows', () => {
   });
   afterEach(() => { http.verify(); localStorage.removeItem('mobians:pending-job'); });
 
+  it('deletes the selected character through the existing endpoint and preserves API failures for retry', async () => {
+    const deleting = service.remove('character');
+    const request = http.expectOne(req => req.url.endsWith('/characters/character'));
+    expect(request.request.method).toBe('DELETE'); request.flush(null); await deleting;
+    const retry = service.remove('other');
+    const failed = expectAsync(retry).toBeRejected();
+    http.expectOne(req => req.url.endsWith('/characters/other')).flush({detail:'Unavailable'}, {status:503, statusText:'Unavailable'});
+    await failed;
+  });
+
   it('keeps model-specific setup and LoRA weights without unrelated runtime settings', () => {
     const recipe = recipeFromImage(image);
     expect(recipe.model).toBe('illustrious'); expect(recipe.loras[0].strength).toBe(.7);
