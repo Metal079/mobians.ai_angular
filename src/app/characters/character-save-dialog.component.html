@@ -42,10 +42,10 @@
                 <ng-template><div class="disclosure-content">
                   <label for="save-look-label">Look name <span class="optional">Optional</span></label>
                   <input id="save-look-label" name="label" [(ngModel)]="recipe.label" maxlength="80" placeholder="e.g. Everyday look">
-                  <label for="save-character-appearance">Character prompt</label>
+                  <label for="save-character-appearance">Saved prompt for this look</label>
                   <textarea id="save-character-appearance" name="appearance" [(ngModel)]="recipe.appearance" rows="4" maxlength="8002" required aria-describedby="save-appearance-help"></textarea>
-                  <small id="save-appearance-help">Keep the details you want to reuse. You can change the scene each time you create.</small>
-                  @if (recipe.appearance.length > 8002) { <p class="notice error" role="alert">Shorten the character prompt to 8,002 characters to save this look.</p> }
+                  <small id="save-appearance-help">Keep the details you want to reuse whenever you choose this look. Include an outfit or art style if you want to reuse those too.</small>
+                  @if (recipe.appearance.length > 8002) { <p class="notice error" role="alert">Shorten the saved prompt to 8,002 characters to save this look.</p> }
                 </div></ng-template>
               </app-character-disclosure>
               <app-character-disclosure [(expanded)]="settingsExpanded" panelId="save-model-details">

@@ -14,12 +14,13 @@ import { GenerationModelSettings, StableDiffusionService } from '../stable-diffu
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { CharacterBrowserComponent } from './character-browser.component';
 import { CharacterDraftsService } from './character-drafts.service';
-import { CharacterChoice, normalizeSavedRecipe } from './characters.service';
+import { CharacterChoice, characterPrompt, normalizeSavedRecipe } from './characters.service';
 import { CharacterLookSettingsComponent } from './character-look-settings.component';
+import { CharacterDisclosureComponent } from './character-disclosure.component';
 
 @Component({
   selector: 'app-characters', standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, DialogModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, CharacterLookSettingsComponent, CharacterBrowserComponent],
+  imports: [CommonModule, FormsModule, RouterLink, DialogModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, CharacterLookSettingsComponent, CharacterBrowserComponent, CharacterDisclosureComponent],
   templateUrl: './characters.component.html', styleUrls: ['./characters.shared.css', './characters.component.css'],
 })
 export class CharactersComponent {
@@ -42,6 +43,12 @@ export class CharactersComponent {
 
   filteredCharacters = computed(() => this.characters().filter(c => c.name.toLowerCase().includes(this.search().toLowerCase())));
   recipe: CharacterRecipe | null = null; renameValue = ''; nextScene = ''; private addTargetId?: string;
+  get imagePrompt(): string {
+    const recipe = this.selected()?.recipe;
+    // Use the same normalization and prompt assembly as the generator handoff,
+    // including scene text preserved in older saved looks.
+    return recipe ? characterPrompt({ ...normalizeSavedRecipe(recipe), scene: this.nextScene }) : '';
+  }
   private loadVersion = 0; private mediaVersion = 0; private owner = '';
   readonly model = computed(() => this.models().find(m => m.model_id === this.selected()?.recipe.model && m.is_active !== false));
   get setupReady(): boolean {

@@ -24,9 +24,16 @@
               <label for="choose-look">Look</label><button id="choose-look" type="button" (click)="lookPickerOpen.set(true)" [disabled]="busy()" [attr.aria-label]="'Look: ' + image.recipe.label" aria-haspopup="dialog">{{ image.recipe.label }} <i class="bi bi-chevron-down" aria-hidden="true"></i></button>
 
             }
-            <label for="next-scene">Scene for this image <span class="optional">Optional</span></label><textarea id="next-scene" [(ngModel)]="nextScene" rows="3" maxlength="2000" placeholder="A new outfit, a different pose, somewhere new…" [disabled]="busy()" aria-describedby="scene-hint"></textarea>
-            <p class="quiet" id="scene-hint">Added to the character’s saved prompts for this image. Your saved look stays the same.</p>
-            <div class="create-actions"><button class="primary-action" (click)="use('create')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-stars" aria-hidden="true"></i> {{ busy() ? 'Opening…' : 'Create new image' }} <i class="bi bi-arrow-right" aria-hidden="true"></i></button><p class="quiet action-note">Review in the generator before spending credits.</p></div>
+            <label for="next-scene">Extra details for this image <span class="optional">Optional</span></label><textarea id="next-scene" [(ngModel)]="nextScene" rows="3" maxlength="2000" placeholder="Sitting on a park bench, holding a book, watercolor painting" [disabled]="busy()" aria-describedby="scene-hint"></textarea>
+            <p class="quiet" id="scene-hint">These details are added after the selected look’s saved prompt when you open the generator. They don’t replace existing details or change the saved look.</p>
+            <app-character-disclosure class="prompt-preview" panelId="character-prompt-preview">
+              <span disclosure-title>Preview prompt for this image</span>
+              <ng-template>
+                <p class="combined-prompt" tabindex="0" aria-label="Combined prompt for this image">{{ imagePrompt }}</p>
+                <p class="quiet">If the saved prompt says “red dress” and you add “blue jacket,” both are included. Remove conflicting details in the generator before generating. Leave extra details empty to use just the saved prompt.</p>
+              </ng-template>
+            </app-character-disclosure>
+            <div class="create-actions"><button class="primary-action" (click)="use('create')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-stars" aria-hidden="true"></i> {{ busy() ? 'Opening…' : 'Open in generator' }} <i class="bi bi-arrow-right" aria-hidden="true"></i></button><p class="quiet action-note">Review and edit the prompt there.</p></div>
             <div class="setup-summary"><i class="bi bi-sliders" aria-hidden="true"></i><span>{{ image.recipe.model ? (model()?.display_name || 'Saved model') + (image.recipe.loras.length ? ' + ' + image.recipe.loras.length + ' LoRA' + (image.recipe.loras.length === 1 ? '' : 's') : '') : 'Uses your current model and LoRAs' }}</span><button class="quiet-button" (click)="editingOpen.set(true)" [disabled]="busy()">Edit look</button></div>
             @if (image.recipe.model && !model()) {
               @if (modelsLoading()) { <p role="status">Checking saved model...</p> }
@@ -35,11 +42,17 @@
               <button type="button" (click)="use('create', true)" [disabled]="busy()">Use prompts this time</button>
             }
 
-            <details class="prompt-preview"><summary>Saved character prompts</summary><p>{{ image.recipe.appearance }}</p></details>
           </section>
           <section class="gallery panel" aria-label="Saved looks">
             <div class="portrait"><img [src]="preview() || image.thumbnail" [alt]="character.name + ' — ' + image.recipe.label"><span class="portrait-caption">{{ image.recipe.label }}</span>@if (previewLoading()) { <span class="image-loading" role="status">Loading image…</span> }</div>
             <div class="gallery-heading"><h2>Saved looks <span>{{ lookCount }}</span></h2><button class="quiet-button" (click)="pickImage(true)" [disabled]="busy()"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add look</button></div>
+            <app-character-disclosure class="looks-help" panelId="saved-looks-help">
+              <span disclosure-title>How saved looks work</span>
+              <ng-template>
+                <p><strong>One look is enough to start.</strong> Each look saves a picture, its prompt, and any attached model or LoRAs. You choose one look at a time.</p>
+                <p><strong>Open in generator</strong> reuses the selected look’s prompt and settings. <strong>Edit image</strong> also uses its picture as a reference. New images may still vary in appearance.</p>
+              </ng-template>
+            </app-character-disclosure>
             <div class="filmstrip">@for (saved of character.images; track saved.id) { <button class="thumbnail" [class.selected]="saved.id === image.id" [attr.aria-pressed]="saved.id === image.id" [attr.aria-label]="'Select ' + saved.recipe.label + (isDefault(saved) ? ', default look' : '')" [title]="saved.recipe.label" (click)="selectImage(saved)" [disabled]="busy()"><img [src]="saved.thumbnail" alt="">@if (isDefault(saved)) { <i class="bi bi-star-fill" aria-hidden="true"></i> }</button> }</div>
             @if (character.next_cursor) { <button type="button" (click)="moreLooks()" [disabled]="moreLooksLoading() || busy()">{{ moreLooksLoading() ? 'Loading...' : 'Load more looks' }}</button> }
             <button type="button" class="quiet-button" (click)="lookPickerOpen.set(true)" [disabled]="busy()">Search looks</button>
@@ -53,7 +66,7 @@
       @if (characters().length) {
         <app-character-browser class="collection-browser" [showCreate]="true" [disabled]="busy()" (chosen)="openResult($event)" (create)="createResult($event)"></app-character-browser>
       } @else if (!error()) {
-        <section class="welcome panel"><span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h2>Like a character? Keep them.</h2><p>Choose a favorite image and give your character a name. Their prompts will be ready to reuse in the generator.</p><div class="welcome-actions"><button class="primary-action" (click)="pickImage()">Choose from history <i class="bi bi-arrow-right" aria-hidden="true"></i></button><a routerLink="/">Create an image first</a></div><small>Private to you · Free to save · No model required</small></section>
+        <section class="welcome panel"><span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h2>Like a character? Keep them.</h2><p>Choose a favorite image and give your character a name. Their prompts will be ready to reuse in the generator.</p><div class="welcome-actions"><button class="primary-action" (click)="pickImage()">Choose from history <i class="bi bi-arrow-right" aria-hidden="true"></i></button><a routerLink="/">Create an image first</a></div><small>Private to you · Free to save</small></section>
       }
     }
   }
@@ -67,7 +80,7 @@
       @else if (modelsError()) { <p class="notice" role="alert">Model choices could not be loaded. <button type="button" (click)="loadModels()" [disabled]="busy()">Retry</button></p> }
       <form (ngSubmit)="saveRecipe()"><fieldset [disabled]="busy()">
         <label for="look-label">Look name</label><input id="look-label" name="label" [(ngModel)]="recipe.label" (ngModelChange)="changeRecipe()" maxlength="80" required>
-        <label for="character-appearance">Character &amp; style</label><textarea id="character-appearance" name="appearance" [(ngModel)]="recipe.appearance" (ngModelChange)="changeRecipe()" rows="5" maxlength="8002" required></textarea><p class="quiet">Keep appearance, trigger words and style here. Use “Scene for this image” for one-off scenes.</p>
+        <label for="character-appearance">Saved prompt for this look</label><textarea id="character-appearance" name="appearance" [(ngModel)]="recipe.appearance" (ngModelChange)="changeRecipe()" rows="5" maxlength="8002" required aria-describedby="look-prompt-hint"></textarea><p class="quiet" id="look-prompt-hint">Keep the details you want to reuse whenever you choose this look. Include an outfit or art style if you want to reuse those too.</p>
         <details class="model-details" [open]="!!recipe.model"><summary>Model &amp; LoRAs <span class="optional">Optional</span></summary><app-character-look-settings [recipe]="recipe" [models]="models()" [catalogReady]="!modelsLoading() && !modelsError()" idPrefix="character-look" [disabled]="busy()" (changed)="changeRecipe()"></app-character-look-settings></details>
         <details class="model-details"><summary>More settings</summary><label for="character-negative">Negative prompt</label><textarea id="character-negative" name="negative" [(ngModel)]="recipe.negative_prompt" (ngModelChange)="changeRecipe()" rows="3" maxlength="8000"></textarea>@if (recipe.model) { <label for="character-cfg">Guidance (CFG)</label><input type="number" id="character-cfg" name="cfg" [(ngModel)]="recipe.guidance_scale" (ngModelChange)="changeRecipe()" min="1" max="30" step="0.1" required> }</details>
         <div class="dialog-actions"><button type="button" (click)="closeEditor()">{{ dirty() ? 'Discard changes' : 'Cancel' }}</button><button type="submit" class="primary-action" [disabled]="!dirty() || !setupReady || !recipe.appearance.trim() || !recipe.label.trim()">{{ busy() ? 'Saving…' : 'Save look' }}</button></div>

@@ -345,17 +345,36 @@ h2 {
   font-size: .8rem;
 }
 
-.prompt-preview summary {
-  cursor: pointer;
-  padding: .75rem 0;
-}
-
 .prompt-preview p {
   margin: .4rem 0 0;
   line-height: 1.6;
+}
+
+.prompt-preview .combined-prompt {
+  padding: .75rem;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 10px;
+  background: var(--theme-surface-alt-bg);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   max-height: 210px;
   overflow: auto;
+}
+
+.combined-prompt:focus-visible {
+  outline: 3px solid var(--theme-surface-text);
+  outline-offset: 2px;
+}
+
+.looks-help {
+  margin: 0 .15rem .5rem;
+  border-bottom: 1px solid var(--theme-border-strong);
+}
+
+.looks-help p {
+  font-size: .85rem;
+  line-height: 1.6;
+  margin: 0 0 .85rem;
 }
 
 /* Saved images and look selection */

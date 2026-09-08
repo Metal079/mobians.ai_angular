@@ -101,6 +101,39 @@ describe('CharactersComponent', () => {
     expect(component.dirty()).toBeFalse();
   });
 
+  it('previews extra details as they are typed and cleared without changing the saved look', async () => {
+    const saved = structuredClone(component.selected()!.recipe);
+    const toggle = fixture.nativeElement.querySelector('[aria-controls="character-prompt-preview"]') as HTMLButtonElement;
+    toggle.click(); fixture.detectChanges();
+    const preview = () => fixture.nativeElement.querySelector('.combined-prompt').textContent.trim();
+    expect(preview()).toBe('blue fox, green eyes');
+    await enter('#next-scene', '  sitting on a park bench, watercolor painting  ');
+    expect(preview()).toBe('blue fox, green eyes, sitting on a park bench, watercolor painting');
+    toggle.click(); fixture.detectChanges();
+    toggle.click(); fixture.detectChanges();
+    expect(preview()).toContain('watercolor painting');
+    await enter('#next-scene', '   ');
+    expect(preview()).toBe('blue fox, green eyes');
+    expect(component.selected()!.recipe).toEqual(saved);
+    expect(component.recipe).toEqual(saved);
+    expect(component.dirty()).toBeFalse();
+    expect(service.useImage).not.toHaveBeenCalled();
+    expect(service.updateRecipe).not.toHaveBeenCalled();
+  });
+
+  it('includes preserved legacy text in the preview and refreshes it when a different look is chosen', async () => {
+    const look = component.selected()!;
+    component.selected.set({ ...look, recipe: { ...look.recipe, scene: 'red dress' } });
+    const toggle = fixture.nativeElement.querySelector('[aria-controls="character-prompt-preview"]') as HTMLButtonElement;
+    toggle.click(); fixture.detectChanges();
+    await enter('#next-scene', 'blue jacket');
+    expect(fixture.nativeElement.querySelector('.combined-prompt').textContent.trim()).toBe('blue fox, green eyes, red dress, blue jacket');
+    await component.chooseLook({ characterId: 'ash', imageId: 'jacket', name: 'Ash' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.combined-prompt').textContent.trim()).toBe('blue fox, green eyes');
+    expect(component.nextScene).toBe('');
+  });
+
   it('starts with an empty scene when selecting another look', async () => {
     await enter('#next-scene', 'a temporary beach scene');
     await component.chooseLook({ characterId: 'ash', imageId: 'jacket', name: 'Ash' });
@@ -225,7 +258,7 @@ describe('CharactersComponent', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('#character-scene')).toBeNull();
     expect(fixture.nativeElement.querySelector('#character-appearance')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('label[for="next-scene"]').textContent).toContain('Scene for this image');
+    expect(fixture.nativeElement.querySelector('label[for="next-scene"]').textContent).toContain('Extra details for this image');
     expect(component.nextScene).toBe('');
   });
 });

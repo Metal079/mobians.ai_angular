@@ -76,7 +76,7 @@ export class CharacterLookSettingsComponent implements OnInit {
     });
     const removed = before - this.recipe.loras.length;
     this.modelNotice = removed
-      ? `${removed} LoRA selection(s) were cleared because compatibility with this model could not be confirmed. Review any trigger words in Character & style.`
+      ? `${removed} LoRA selection(s) were cleared because compatibility with this model could not be confirmed. Review any trigger words in Saved prompt for this look.`
       : 'Future images will use this model. Your saved image stays the same; new results may look different.';
     this.changed.emit();
     if (!this.catalog.length) void this.loadLoras();
