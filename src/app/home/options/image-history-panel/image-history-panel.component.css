@@ -584,3 +584,5 @@
     padding: 0.25rem 0.5rem;
   }
 }
+.save-character-history { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); min-width: 44px; min-height: 44px; border: 1px solid #ffffff70; border-radius: 50%; background: #081b32df; color: white; z-index: 3; cursor: pointer; }
+.save-character-history:focus-visible { outline: 3px solid white; outline-offset: 2px; }

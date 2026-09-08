@@ -1,3 +1,4 @@
+export type VideoGenerationMode = 'fl2v' | 'ref2v';
 export type VideoAspect = 'square' | 'landscape' | 'portrait';
 export type VideoOutputFormat = 'video' | 'gif';
 export type VideoJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired';
@@ -25,7 +26,24 @@ export interface VideoAspectConfig {
   comfy_value: string;
 }
 
+export interface VideoPriceQuote {
+  pricing_version: string;
+  credit_cost: number;
+  base_cost: number;
+  reference_cost: number;
+  effective_video_seconds: number[];
+}
+
 export interface VideoConfig {
+  pricing_version?: string;
+  generation_modes?: VideoGenerationMode[];
+  max_reference_images?: number;
+  max_reference_videos?: number;
+  max_reference_video_bytes?: number;
+  max_reference_total_bytes?: number;
+  reference_video_min_seconds?: number;
+  reference_video_max_seconds?: number;
+  accepted_reference_video_types?: string[];
   service: VideoServiceState;
   prices: Record<string, number>;
   aspects: Record<VideoAspect, VideoAspectConfig>;
@@ -37,6 +55,9 @@ export interface VideoConfig {
 }
 
 export interface VideoJob {
+  generation_mode?: VideoGenerationMode;
+  reference_image_count?: number;
+  reference_video_count?: number;
   id: string;
   status: VideoJobStatus;
   created_at: string;
@@ -79,4 +100,16 @@ export interface VideoAdminState {
     processing_count: number;
     retained_count: number;
   };
+}
+
+export interface VideoReference {
+  id: string;
+  kind: 'image' | 'video';
+  file: File;
+  previewUrl: string;
+  source: 'upload' | 'history';
+  useAudio: boolean;
+  width: number;
+  height: number;
+  duration?: number;
 }

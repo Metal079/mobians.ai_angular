@@ -160,6 +160,7 @@ export class ImageSyncService {
 
       const payload = {
         image_uuid: image.UUID,
+        character_id: image.characterId, character_look_id: image.characterLookId,
         prompt: image.prompt || '',
         prompt_summary: image.promptSummary || '',
         prompt_template: image.promptTemplate || null,
@@ -297,6 +298,7 @@ export class ImageSyncService {
       for (const item of response) {
         const image: MobiansImage = {
           UUID: item.image_uuid,
+          characterId: item.character_id || undefined, characterLookId: item.character_look_id || undefined,
           prompt: item.prompt,
           promptSummary: item.prompt_summary,
           promptTemplate: item.prompt_template,

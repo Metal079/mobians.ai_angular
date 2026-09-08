@@ -1,9 +1,21 @@
+import { characterDraftGuard } from './characters/character-drafts.service';
 import { Routes } from '@angular/router';
 import { AdminGuard } from './auth/admin.guard';
 
 export const routes: Routes = [
   {
+    path: 'characters',
+    canDeactivate: [characterDraftGuard],
+    loadComponent: () => import('./characters/characters.component').then(m => m.CharactersComponent)
+  },
+  {
+    path: 'characters/:id',
+    canDeactivate: [characterDraftGuard],
+    loadComponent: () => import('./characters/characters.component').then(m => m.CharactersComponent)
+  },
+  {
     path: '',
+    canDeactivate: [characterDraftGuard],
     loadComponent: () => import('./home/home.component').then((m) => m.HomeComponent)
   },
   {
@@ -12,6 +24,7 @@ export const routes: Routes = [
   },
   {
     path: 'video',
+    canDeactivate: [characterDraftGuard],
     loadComponent: () => import('./video/video.component').then((m) => m.VideoComponent)
   },
   {
@@ -19,6 +32,7 @@ export const routes: Routes = [
     children: [
       {
         path: '',
+    canDeactivate: [characterDraftGuard],
         loadComponent: () => import('./train/train.component').then((m) => m.TrainComponent)
       },
       {

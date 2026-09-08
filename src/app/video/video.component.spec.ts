@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, NgZone } from '@angular/core';
-import { fakeAsync, tick } from '@angular/core/testing';
-import { NEVER, of } from 'rxjs';
+import { fakeAsync, tick, TestBed } from '@angular/core/testing';
+import { CharactersService } from '../characters/characters.service';
+import { NEVER, of, Subject, throwError } from 'rxjs';
 import { AccountCtaService } from '../auth/account-cta.service';
 import { AuthService } from '../auth/auth.service';
 import { VideoGenerationService } from '../video-generation.service';
@@ -23,17 +24,56 @@ describe('VideoComponent', () => {
   }
 
   function createComponent(): VideoComponent {
-    return new VideoComponent(videoService, authService, accountCta, zone, changeDetector);
+    return TestBed.runInInjectionContext(() => new VideoComponent(videoService, authService, accountCta, zone, changeDetector));
   }
 
   beforeEach(() => {
-    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob']);
+    TestBed.configureTestingModule({ providers: [{ provide: CharactersService, useValue: { takeVideoHandoff: () => null } }] });
+    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob', 'getQuote']);
     changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges']);
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
     accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
     zone = { run: (update: () => void) => update() } as NgZone;
 
     component = createComponent();
+  });
+
+  it('preserves separate mode prompts and existing uploads when switching', () => {
+    component.config = { generation_modes: ['fl2v', 'ref2v'] } as any;
+    component.prompt = 'Frame prompt';
+    component.audioPrompt = 'Wind';
+    component.changeMode('ref2v');
+    expect(component.prompt).toBe('');
+    component.prompt = 'Reference prompt';
+    component.changeMode('fl2v');
+    expect(component.prompt).toBe('Frame prompt');
+    expect(component.audioPrompt).toBe('Wind');
+    component.changeMode('ref2v');
+    expect(component.prompt).toBe('Reference prompt');
+  });
+
+  it('keeps prompt references attached to their images when an earlier image is removed', () => {
+    component.generationMode = 'ref2v';
+    component.prompt = '<Picture 1> meets <Picture 3> near <Video 1>';
+    component.removedReference({ kind: 'image', index: 2 });
+    expect(component.prompt).toBe('<Picture 1> meets <Picture 2> near <Video 1>');
+    expect(component.referencePromptNeedsReview).toBeFalse();
+    component.removedReference({ kind: 'image', index: 1 });
+    expect(component.prompt).toBe('[removed image] meets <Picture 1> near <Video 1>');
+    expect(component.referencePromptNeedsReview).toBeTrue();
+  });
+
+  it('keeps removed-reference review tied to its draft across mode switches and edits', () => {
+    component.config = { generation_modes: ['fl2v', 'ref2v'] } as any;
+    component.changeMode('ref2v');
+    component.prompt = '<Picture 1> waves';
+    component.removedReference({ kind: 'image', index: 1 });
+    component.changeMode('fl2v');
+    component.prompt = 'An unrelated frame prompt';
+    component.changeMode('ref2v');
+    expect(component.referencePromptNeedsReview).toBeTrue();
+    component.prompt = 'The remaining character waves';
+    expect(component.referencePromptNeedsReview).toBeFalse();
   });
 
   it('updates the view after an uploaded frame finishes loading asynchronously', async () => {
@@ -211,6 +251,74 @@ describe('VideoComponent', () => {
 
     expect(component.durations).toEqual([5, 15]);
     expect(component.selectedCost).toBe(400);
+  });
+
+  function reference(id: string, kind: 'image' | 'video' = 'video', duration = 5.167): any {
+    return { id, kind, duration, file: new File(['test'], id), source: 'upload', previewUrl: '', useAudio: false, width: 512, height: 768 };
+  }
+
+  const quote = { pricing_version: 'ref2v-04mp-v1', credit_cost: 230, base_cost: 80, reference_cost: 150, effective_video_seconds: [5.167] };
+
+  it('blocks a stale quote while duration or references change and ignores older responses', () => {
+    component.generationMode = 'ref2v';
+    const first = new Subject<any>();
+    const second = new Subject<any>();
+    videoService.getQuote.and.returnValues(first, second);
+    component.onReferencesChanged([reference('a')]);
+    expect(component.quoteLoading).toBeTrue();
+    expect(component.selectedPriceAvailable).toBeFalse();
+    component.selectDuration(10);
+    first.next(quote);
+    expect(component.selectedPriceAvailable).toBeFalse();
+    second.next({ ...quote, credit_cost: 440, base_cost: 240, reference_cost: 200 });
+    expect(component.selectedCost).toBe(440);
+    expect(component.quoteLoading).toBeFalse();
+    component.references = [reference('different')];
+    expect(component.selectedPriceAvailable).toBeFalse();
+    component.ngOnDestroy();
+  });
+
+  it('uses the FL2V base after a mode switch and rechecks retained references', () => {
+    component.config = { prices: { '5': 80 }, generation_modes: ['fl2v','ref2v'] } as any;
+    component.generationMode = 'ref2v';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.onReferencesChanged([reference('a')]);
+    expect(component.selectedCost).toBe(230);
+    component.changeMode('fl2v');
+    expect(component.selectedCost).toBe(80);
+    component.changeMode('ref2v');
+    expect(component.selectedCost).toBe(230);
+    expect(videoService.getQuote).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps generation unavailable after a quote timeout and permits retry', fakeAsync(() => {
+    component.generationMode = 'ref2v';
+    videoService.getQuote.and.returnValues(NEVER, of(quote));
+    component.onReferencesChanged([reference('a')]);
+    tick(15001);
+    expect(component.quoteLoading).toBeFalse();
+    expect(component.selectedPriceAvailable).toBeFalse();
+    expect(component.quoteError).toContain('try again');
+    component.refreshQuote();
+    expect(component.selectedCost).toBe(230);
+    expect(component.quoteError).toBe('');
+  }));
+
+  it('sends the displayed price and shows a checked price change without resubmitting', () => {
+    authService.isLoggedIn.and.returnValue(true);
+    component.config = { prices: { '5': 80 }, generation_modes: ['fl2v','ref2v'], service: { accepting_jobs: true } } as any;
+    component.generationMode = 'ref2v';
+    component.currentCredits = 1000;
+    component.prompt = 'Motion test';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.onReferencesChanged([reference('a')]);
+    videoService.submitJob.and.returnValue(throwError(() => ({ status:409, error:{detail:{code:'video_price_changed',message:'Review 240 credits. No credits were charged.',quote:{...quote,credit_cost:240,reference_cost:160}}}})));
+    component.submit();
+    expect(videoService.submitJob).toHaveBeenCalledOnceWith(jasmine.objectContaining({ expectedCreditCost:230,pricingVersion:'ref2v-04mp-v1' }));
+    expect(component.selectedCost).toBe(240);
+    expect(component.submitting).toBeFalse();
+    expect(component.errorMessage).toContain('No credits were charged');
+    expect(authService.updateCredits).not.toHaveBeenCalled();
   });
 
   it('uses a transition-focused example when a last frame is selected', () => {

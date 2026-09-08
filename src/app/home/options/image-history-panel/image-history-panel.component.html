@@ -48,6 +48,9 @@
                       <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
                       (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
                     </div>
+                    @if (!pickerMode) {
+                      <button type="button" class="save-character-history" (click)="saveCharacter(image, $event)" aria-label="Save to My Characters" title="Save to My Characters"><i class="bi bi-person-plus" aria-hidden="true"></i></button>
+                    }
                     <div class="bottom-left-icon">
                       <i class="bi bi-download"
                         (click)="$event.stopPropagation(); downloadImage(image, $event)"
@@ -250,6 +253,9 @@
                           </div>
                         }
                         @if (!bulkSelectMode) {
+                          @if (!pickerMode) {
+                            <button type="button" class="save-character-history" (click)="saveCharacter(image, $event)" aria-label="Save to My Characters" title="Save to My Characters"><i class="bi bi-person-plus" aria-hidden="true"></i></button>
+                          }
                           <div class="bottom-left-icon">
                             <i class="bi bi-download"
                               (click)="$event.stopPropagation(); downloadImage(image, $event)"

@@ -14,6 +14,8 @@ export interface DynamicPromptingConfig {
 }
 
 export interface GenerationRequest {
+    character_id?: string;
+    character_look_id?: string;
     prompt: string;
     image?: string;
     mask_image?: string;

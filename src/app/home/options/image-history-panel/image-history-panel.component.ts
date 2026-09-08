@@ -13,6 +13,7 @@ import { SharedService } from 'src/app/shared.service';
 import { ImageTag, MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
 import { DialogModule } from 'primeng/dialog';
+import { CharactersService } from 'src/app/characters/characters.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { TabsModule } from 'primeng/tabs';
 
@@ -24,6 +25,16 @@ import { TabsModule } from 'primeng/tabs';
     imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
+  private readonly characters = inject(CharactersService);
+  async saveCharacter(image: MobiansImage, event: Event): Promise<void> {
+    event.stopPropagation();
+    const blob = await this.getDownloadBlob(image);
+    if (!blob) {
+      this.messageService.add({ severity: 'warn', summary: 'Image unavailable', detail: 'Open this image from history and try again.' });
+      return;
+    }
+    this.characters.requestSave({ ...image, blob }, image.characterId);
+  }
   private readonly destroyRef = inject(DestroyRef);
 
   // Large downloads can fail (or appear to “never start”) on slower devices if we revoke
@@ -1975,6 +1986,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
           cfg: image.cfg,
           tags: image.tags,
           syncPriority: image.syncPriority,
+          characterId: image.characterId, characterLookId: image.characterLookId,
           lastModified: image.lastModified
         } as MobiansImageMetadata;
       });

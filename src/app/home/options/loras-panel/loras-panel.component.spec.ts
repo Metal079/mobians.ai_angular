@@ -112,6 +112,34 @@ describe('LorasPanelComponent', () => {
     ]);
   });
 
+  it('keeps an incoming character LoRA selection when the character also changes model family', () => {
+    const previous = { version_id: 1, name: 'Old style', base_model: 'Illustrious', strength: .4, tags: [] };
+    const saved = { version_id: 2, name: 'Character look', base_model: 'Anima', strength: .8, tags: [] };
+    component.loras = [previous, { ...saved, strength: 1 }];
+    component.selectedLoras = [previous];
+    (component as any).lastModelId = 'old-model';
+    component.generationRequest = { model: 'anima-model', loras: [saved], prompt: 'blue fox' };
+
+    component.ngDoCheck();
+
+    expect(component.generationRequest.loras.map((lora: any) => lora.version_id)).toEqual([2]);
+    expect(component.selectedLoras[0].strength).toBe(.8);
+    expect(component.generationRequest.prompt).toBe('blue fox');
+  });
+
+  it('still removes incompatible current LoRAs on an ordinary model change', () => {
+    const previous = { version_id: 1, name: 'Old style', base_model: 'Illustrious', strength: .4, tags: [] };
+    component.loras = [previous];
+    component.selectedLoras = [previous];
+    (component as any).lastModelId = 'old-model';
+    component.generationRequest = { model: 'anima-model', loras: component.selectedLoras, prompt: '' };
+
+    component.ngDoCheck();
+
+    expect(component.generationRequest.loras).toEqual([]);
+    expect(component.selectedLoras).toEqual([]);
+  });
+
   it('refilters LoRAs when model type mapping arrives after LoRAs load', () => {
     component.modelsTypes = {};
     component.loras = [

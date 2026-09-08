@@ -11,7 +11,7 @@
 
 /* Includes prompt input box and generate button */
 #prompt-input-box {
-  padding-left: 10px;
+  padding-left: 0;
   padding-bottom: 10px;
   flex-grow: 1;
   width: 100%;
@@ -187,7 +187,7 @@
   .input-button-container {
     flex-direction: column;
     align-items: flex-start;
-    width: 100vw;
+    width: 100%;
     flex-grow: 1;
     padding-left: 0;
     padding-bottom: 5%;
@@ -336,4 +336,13 @@
     justify-content: center;
     width: 100%;
   }
+}
+/* Keep character selection attached to the prompt, with one control at every width. */
+.prompt-editor { width: calc(100% - 10px); min-width: 0; margin-left: 10px; }
+.prompt-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; margin-bottom: .25rem; color: var(--theme-surface-text); }
+.prompt-header label { margin: 0; flex-shrink: 0; font-size: .85rem; font-weight: 700; }
+.prompt-header app-character-picker { min-width: 0; }
+@media (max-width: 480px) {
+  .prompt-editor { width: 100%; margin-left: 0; }
+  .prompt-header { padding-inline: .5rem .25rem; }
 }

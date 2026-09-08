@@ -1,0 +1,85 @@
+<main class="character-ui characters-page">
+  <app-generation-mode-switch active="characters"></app-generation-mode-switch>
+  @if (!signedIn()) {
+    <section class="welcome panel">
+      <span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h1>Keep your characters close.</h1>
+      <p>Save a favorite image and its prompts. Next time, choose your character in the generator and try something new.</p>
+      <button class="primary-action" (click)="login()">Sign in to save characters <i class="bi bi-arrow-right" aria-hidden="true"></i></button><small><i class="bi bi-lock" aria-hidden="true"></i> Private to you. Free to save.</small>
+    </section>
+  } @else {
+    @if (error() && !renameOpen() && !deleteMode() && !editingOpen()) { <div class="notice error" role="alert">{{ error() }} @if (!busy() && !character()) { <button type="button" class="quiet-button" (click)="load()">Reload</button> }</div> }
+    @if (unavailableSetup() && character() && !editingOpen()) { <div class="look-actions"><button type="button" (click)="editingOpen.set(true)" [disabled]="busy()">Edit saved look</button><button type="button" (click)="use('create', true)" [disabled]="busy()">Use prompts this time</button></div> }
+    @if (notice()) { <p class="notice" role="status">{{ notice() }}</p> }
+    @if (loading()) { <div class="loading-state panel" role="status">Opening your characters…</div> }
+    @else if (character(); as character) {
+      <a class="back-link" routerLink="/characters"><i class="bi bi-arrow-left" aria-hidden="true"></i> All characters</a>
+      <header class="detail-header"><div><h1>{{ character.name }}</h1><p>{{ lookCount }} {{ lookCount === 1 ? 'saved look' : 'saved looks' }} · Private to you</p></div>
+        <details class="character-menu"><summary aria-label="Manage character"><i class="bi bi-three-dots" aria-hidden="true"></i></summary><div><button (click)="openRename()" [disabled]="busy()">Rename character</button><button class="quiet-button" (click)="deleteMode.set('character')" [disabled]="busy()">Delete character</button></div></details>
+      </header>
+      @if (selected(); as image) {
+        <div class="workspace">
+          <section class="create-panel panel" aria-labelledby="create-heading">
+            <div class="selected-look"><img [src]="image.thumbnail" alt=""><div><span class="eyebrow">{{ isDefault(image) ? 'Default look' : 'Selected look' }}</span><h2 id="create-heading">Create with {{ character.name }}</h2></div></div>
+            @if (lookCount > 1) {
+              <label for="choose-look">Look</label><button id="choose-look" type="button" (click)="lookPickerOpen.set(true)" [disabled]="busy()" [attr.aria-label]="'Look: ' + image.recipe.label" aria-haspopup="dialog">{{ image.recipe.label }} <i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+
+            }
+            <label for="next-scene">Scene for this image <span class="optional">Optional</span></label><textarea id="next-scene" [(ngModel)]="nextScene" rows="3" maxlength="2000" placeholder="A new outfit, a different pose, somewhere new…" [disabled]="busy()" aria-describedby="scene-hint"></textarea>
+            <p class="quiet" id="scene-hint">Added to the character’s saved prompts for this image. Your saved look stays the same.</p>
+            <div class="create-actions"><button class="primary-action" (click)="use('create')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-stars" aria-hidden="true"></i> {{ busy() ? 'Opening…' : 'Create new image' }} <i class="bi bi-arrow-right" aria-hidden="true"></i></button><p class="quiet action-note">Review in the generator before spending credits.</p></div>
+            <div class="setup-summary"><i class="bi bi-sliders" aria-hidden="true"></i><span>{{ image.recipe.model ? (model()?.display_name || 'Saved model') + (image.recipe.loras.length ? ' + ' + image.recipe.loras.length + ' LoRA' + (image.recipe.loras.length === 1 ? '' : 's') : '') : 'Uses your current model and LoRAs' }}</span><button class="quiet-button" (click)="editingOpen.set(true)" [disabled]="busy()">Edit look</button></div>
+            @if (image.recipe.model && !model()) {
+              @if (modelsLoading()) { <p role="status">Checking saved model...</p> }
+              @else if (modelsError()) { <p class="notice">Model choices could not be loaded. <button type="button" (click)="loadModels()">Retry</button></p> }
+              @else { <p class="notice">This look’s model is unavailable. Open Edit look to choose another model.</p> }
+              <button type="button" (click)="use('create', true)" [disabled]="busy()">Use prompts this time</button>
+            }
+
+            <details class="prompt-preview"><summary>Saved character prompts</summary><p>{{ image.recipe.appearance }}</p></details>
+          </section>
+          <section class="gallery panel" aria-label="Saved looks">
+            <div class="portrait"><img [src]="preview() || image.thumbnail" [alt]="character.name + ' — ' + image.recipe.label"><span class="portrait-caption">{{ image.recipe.label }}</span>@if (previewLoading()) { <span class="image-loading" role="status">Loading image…</span> }</div>
+            <div class="gallery-heading"><h2>Saved looks <span>{{ lookCount }}</span></h2><button class="quiet-button" (click)="pickImage(true)" [disabled]="busy()"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add look</button></div>
+            <div class="filmstrip">@for (saved of character.images; track saved.id) { <button class="thumbnail" [class.selected]="saved.id === image.id" [attr.aria-pressed]="saved.id === image.id" [attr.aria-label]="'Select ' + saved.recipe.label + (isDefault(saved) ? ', default look' : '')" [title]="saved.recipe.label" (click)="selectImage(saved)" [disabled]="busy()"><img [src]="saved.thumbnail" alt="">@if (isDefault(saved)) { <i class="bi bi-star-fill" aria-hidden="true"></i> }</button> }</div>
+            @if (character.next_cursor) { <button type="button" (click)="moreLooks()" [disabled]="moreLooksLoading() || busy()">{{ moreLooksLoading() ? 'Loading...' : 'Load more looks' }}</button> }
+            <button type="button" class="quiet-button" (click)="lookPickerOpen.set(true)" [disabled]="busy()">Search looks</button>
+            <div class="look-actions"><button class="quiet-button" (click)="makeDefault()" [disabled]="busy() || isDefault(image)"><i class="bi" [class.bi-star-fill]="isDefault(image)" [class.bi-star]="!isDefault(image)" aria-hidden="true"></i> {{ isDefault(image) ? 'Default look' : 'Make default' }}</button><button class="quiet-button" (click)="deleteMode.set('image')" [disabled]="busy() || lookCount <= 1" aria-label="Remove selected look" title="Remove selected look"><i class="bi bi-trash3" aria-hidden="true"></i></button></div>
+            <div class="secondary-actions"><button (click)="use('edit')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-brush" aria-hidden="true"></i> Edit image</button><button (click)="use('animate')" [disabled]="busy()"><i class="bi bi-camera-reels" aria-hidden="true"></i> Animate image</button></div><p class="quiet image-note">New images may vary in appearance. Edit this image to start from the saved picture.</p>
+          </section>
+        </div>
+      }
+    } @else {
+      <header class="collection-header"><div><h1>My Characters</h1><p>Your favorite characters, ready for the next idea.</p></div>@if (characters().length) { <button class="primary-action" (click)="pickImage()" ><i class="bi bi-plus-lg" aria-hidden="true"></i> Save a character</button> }</header>
+      @if (characters().length) {
+        <app-character-browser class="collection-browser" [showCreate]="true" [disabled]="busy()" (chosen)="openResult($event)" (create)="createResult($event)"></app-character-browser>
+      } @else if (!error()) {
+        <section class="welcome panel"><span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h2>Like a character? Keep them.</h2><p>Choose a favorite image and give your character a name. Their prompts will be ready to reuse in the generator.</p><div class="welcome-actions"><button class="primary-action" (click)="pickImage()">Choose from history <i class="bi bi-arrow-right" aria-hidden="true"></i></button><a routerLink="/">Create an image first</a></div><small>Private to you · Free to save · No model required</small></section>
+      }
+    }
+  }
+  <p-dialog styleClass="character-dialog" header="Find a look" [visible]="lookPickerOpen()" (visibleChange)="lookPickerOpen.set($event)" [modal]="true" [style]="{width: 'min(620px, 94vw)'}">
+    @if (lookPickerOpen() && character(); as current) { <app-character-browser [characterId]="current.id" [disabled]="busy()" (chosen)="chooseLook($event)"></app-character-browser> }
+  </p-dialog>
+  <p-dialog styleClass="character-dialog" header="Edit saved look" [visible]="editingOpen()" (visibleChange)="!$event && closeEditor()" [modal]="true" [draggable]="false" [closable]="!busy() && !dirty()" [closeOnEscape]="!busy() && !dirty()" [style]="{width: 'min(600px, 94vw)'}">
+    @if (editingOpen()) { @if (recipe; as recipe) {
+      @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+      @if (modelsLoading()) { <p role="status">Loading model choices...</p> }
+      @else if (modelsError()) { <p class="notice" role="alert">Model choices could not be loaded. <button type="button" (click)="loadModels()" [disabled]="busy()">Retry</button></p> }
+      <form (ngSubmit)="saveRecipe()"><fieldset [disabled]="busy()">
+        <label for="look-label">Look name</label><input id="look-label" name="label" [(ngModel)]="recipe.label" (ngModelChange)="changeRecipe()" maxlength="80" required>
+        <label for="character-appearance">Character &amp; style</label><textarea id="character-appearance" name="appearance" [(ngModel)]="recipe.appearance" (ngModelChange)="changeRecipe()" rows="5" maxlength="8002" required></textarea><p class="quiet">Keep appearance, trigger words and style here. Use “Scene for this image” for one-off scenes.</p>
+        <details class="model-details" [open]="!!recipe.model"><summary>Model &amp; LoRAs <span class="optional">Optional</span></summary><app-character-look-settings [recipe]="recipe" [models]="models()" [catalogReady]="!modelsLoading() && !modelsError()" idPrefix="character-look" [disabled]="busy()" (changed)="changeRecipe()"></app-character-look-settings></details>
+        <details class="model-details"><summary>More settings</summary><label for="character-negative">Negative prompt</label><textarea id="character-negative" name="negative" [(ngModel)]="recipe.negative_prompt" (ngModelChange)="changeRecipe()" rows="3" maxlength="8000"></textarea>@if (recipe.model) { <label for="character-cfg">Guidance (CFG)</label><input type="number" id="character-cfg" name="cfg" [(ngModel)]="recipe.guidance_scale" (ngModelChange)="changeRecipe()" min="1" max="30" step="0.1" required> }</details>
+        <div class="dialog-actions"><button type="button" (click)="closeEditor()">{{ dirty() ? 'Discard changes' : 'Cancel' }}</button><button type="submit" class="primary-action" [disabled]="!dirty() || !setupReady || !recipe.appearance.trim() || !recipe.label.trim()">{{ busy() ? 'Saving…' : 'Save look' }}</button></div>
+      </fieldset></form>
+    } }
+  </p-dialog>
+  <p-dialog styleClass="character-dialog" header="Choose a favorite image" [visible]="pickerOpen()" (visibleChange)="pickerOpen.set($event)" [modal]="true" [draggable]="false" [style]="{ width: 'min(960px, 96vw)' }">@if (pickerOpen()) { <p>Choose an image to keep with your character.</p><app-image-history-panel [pickerMode]="true" (imageSelected)="onImagePicked($event)"></app-image-history-panel> }</p-dialog>
+  <p-dialog styleClass="character-dialog" header="Rename character" [visible]="renameOpen()" (visibleChange)="renameOpen.set($event)" [modal]="true" [closable]="!busy()" [style]="{width: 'min(420px, 94vw)'}">
+    @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }<form (ngSubmit)="rename()"><label for="rename-character">Name</label><input id="rename-character" name="name" [(ngModel)]="renameValue" required maxlength="80" [disabled]="busy()"><div class="dialog-actions"><button type="button" (click)="renameOpen.set(false)" [disabled]="busy()">Cancel</button><button class="primary-action" [disabled]="busy() || !renameValue.trim()">Save name</button></div></form>
+  </p-dialog>
+  <p-dialog styleClass="character-dialog" [header]="deleteMode() === 'character' ? 'Delete character?' : 'Remove saved look?'" [visible]="!!deleteMode()" (visibleChange)="!$event && deleteMode.set(null)" [modal]="true" [closable]="!busy()" [style]="{width: 'min(420px, 94vw)'}">
+    @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }<p>{{ deleteMode() === 'character' ? 'This deletes ' + character()?.name + ' and all of their saved looks from My Characters.' : 'This removes the selected image and its setup from this character.' }}</p><p>Your original image history is kept.</p><div class="dialog-actions"><button (click)="deleteMode.set(null)" [disabled]="busy()">Cancel</button><button class="danger-action" (click)="confirmDelete()" [disabled]="busy()">{{ busy() ? 'Removing…' : 'Delete' }}</button></div>
+  </p-dialog>
+</main>
+

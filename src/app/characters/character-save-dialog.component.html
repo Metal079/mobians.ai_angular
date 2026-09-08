@@ -1,0 +1,74 @@
+<p-dialog styleClass="character-dialog character-save-dialog" [header]="savedId() ? 'Character saved' : 'Save to My Characters'"
+  [visible]="visible()" (visibleChange)="!$event && close()" [modal]="true" [closable]="!saving() && !openingGenerator()"
+  [dismissableMask]="false" [draggable]="false" position="top" [style]="{ width: 'min(560px, 94vw)' }">
+  @if (visible()) {
+    <div class="character-ui save-dialog">
+      @if (savedId()) {
+        <div class="saved-character">
+          <div class="saved-portrait"><img [src]="preview" [alt]="savedName"><i class="bi bi-check-circle-fill" aria-hidden="true"></i></div>
+          <div><span class="eyebrow">Ready for your next idea</span><h2>{{ savedName }}</h2><p role="status">Your image and prompts are saved privately.</p></div>
+        </div>
+        @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+        <div class="saved-actions">
+          <button class="primary-action" type="button" (click)="createFromSaved()" [disabled]="openingGenerator()"><i class="bi bi-stars" aria-hidden="true"></i>{{ openingGenerator() ? 'Opening generator…' : 'Create with character' }}</button>
+          <a class="view-character" [routerLink]="['/characters', savedId()]" (click)="close()">View character <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+        </div>
+      } @else {
+        <form (ngSubmit)="save()">
+          <fieldset [disabled]="loading() || saving()">
+            <div class="save-identity">
+              <img class="character-portrait" [src]="preview" alt="Character image to save">
+              <div class="identity-fields">
+                @if (characters.length || destinationRequired) {
+                  <label>Save to</label><button type="button" (click)="destinationOpen = !destinationOpen" [attr.aria-expanded]="destinationOpen">{{ targetCharacter?.name || 'New character' }} <i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                }
+                @if (!targetId) {
+                  <label for="save-character-name">Character name</label>
+                  <input id="save-character-name" name="name" [(ngModel)]="name" maxlength="80" required placeholder="e.g. Amy Rose" autocomplete="off">
+                } @else {
+                  <p class="adding-look">Add this image as a new look for <strong>{{ targetCharacter?.name }}</strong>.</p>
+                }
+              </div>
+            </div>
+            @if (destinationOpen) {
+              <div class="save-destination"><button type="button" (click)="changeTarget('')">Save as a new character</button><app-character-browser [destinationsOnly]="true" [disabled]="saving()" (chosen)="chooseDestination($event)"></app-character-browser></div>
+            }
+            <p class="save-explanation">Keep this image and its prompts ready for your next creation.</p>
+            @if (loading()) { <p class="quiet" role="status">Loading your characters…</p> }
+            @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+            <div class="save-customization">
+              <app-character-disclosure [(expanded)]="promptExpanded" panelId="save-prompt-details">
+                <span disclosure-title><i class="bi bi-text-left" aria-hidden="true"></i> Edit prompt &amp; look name</span>
+                <ng-template><div class="disclosure-content">
+                  <label for="save-look-label">Look name <span class="optional">Optional</span></label>
+                  <input id="save-look-label" name="label" [(ngModel)]="recipe.label" maxlength="80" placeholder="e.g. Everyday look">
+                  <label for="save-character-appearance">Character prompt</label>
+                  <textarea id="save-character-appearance" name="appearance" [(ngModel)]="recipe.appearance" rows="4" maxlength="8002" required aria-describedby="save-appearance-help"></textarea>
+                  <small id="save-appearance-help">Keep the details you want to reuse. You can change the scene each time you create.</small>
+                  @if (recipe.appearance.length > 8002) { <p class="notice error" role="alert">Shorten the character prompt to 8,002 characters to save this look.</p> }
+                </div></ng-template>
+              </app-character-disclosure>
+              <app-character-disclosure [(expanded)]="settingsExpanded" panelId="save-model-details">
+                <span disclosure-title><i class="bi bi-sliders" aria-hidden="true"></i> Model &amp; LoRAs <small>{{ recipe.model ? 'Attached' : 'Optional' }}</small></span>
+                <ng-template><div class="disclosure-content">
+                  @if (loadingModels()) { <p class="quiet" role="status">Loading model choices…</p> }
+                  @else {
+                    @if (modelsError()) { <p class="notice" role="alert">Model choices could not be loaded. Your prompts can still be saved. <button type="button" (click)="loadModels()">Retry</button></p> }
+                    @if (canUseImageSettings && !recipe.model) { <button class="reuse-settings" type="button" (click)="useImageSettings()"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>Use this image’s model &amp; LoRAs</button> }
+                    <app-character-look-settings [recipe]="recipe" [models]="models" [catalogReady]="!modelsError()" idPrefix="save-look" [disabled]="saving()"></app-character-look-settings>
+                  }
+                </div></ng-template>
+              </app-character-disclosure>
+            </div>
+            @if (hasRegions) { <p class="notice">This saves the main prompt. Choose a single-character image for best results.</p> }
+            <p class="save-note"><i class="bi bi-lock" aria-hidden="true"></i> Private to you. {{ recipe.model ? 'Your selected model and LoRAs will load with this look.' : 'Uses your current generator settings.' }}</p>
+            <div class="dialog-actions"><button type="button" class="quiet-button" (click)="close()">Cancel</button>
+              <button class="primary-action" type="submit" [disabled]="!canSave"><i class="bi bi-bookmark-plus" aria-hidden="true"></i>{{ saving() ? 'Saving…' : targetId ? 'Add look' : 'Save character' }}</button>
+            </div>
+          </fieldset>
+        </form>
+      }
+    </div>
+  }
+</p-dialog>
+

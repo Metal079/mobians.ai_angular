@@ -1,0 +1,13 @@
+:host { display: block; width: 100%; }
+/* Full-page collections grow with their cards; dialogs keep the picker height cap. */
+:host(.collection-browser) .picker-grid { max-height: none; overflow: visible; }
+.picker-search input { padding-right: 3rem; }
+.picker-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search-clear { position: absolute; right: 1px; top: 1px; min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--theme-input-text); font-size: 1.3rem; cursor: pointer; }
+.picker-card { width: 100%; }
+.picker-name small { display: block; font-weight: 400; margin-top: .25rem; }
+.picker-loading { min-height: 44px; }
+.browser-result { min-width: 0; }
+.browser-more, .browser-create { min-height: 44px; border: 1px solid var(--theme-border-strong); border-radius: 10px; color: var(--theme-surface-text); background: var(--theme-surface-alt-bg); padding: .5rem .8rem; cursor: pointer; }
+.browser-more { display: block; margin: 1rem auto 0; }
+.browser-create { width: 100%; margin-top: .35rem; }

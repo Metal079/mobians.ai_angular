@@ -50,6 +50,12 @@
 
 <!-- Prompt input box and advanced options button -->
 <div class="input-button-container d-flex flex-wrap align-items-center justify-content-start">
+  <div class="prompt-editor">
+    <div class="prompt-header">
+      <label for="prompt-input">Prompt</label>
+      <app-character-picker [disabled]="hasPendingJob || !modelSettings.length" [loadedName]="loadedCharacterName" [canUndo]="canUndoCharacter" (undo)="undoCharacter()" (detach)="dismissCharacter()"></app-character-picker>
+      <span class="visually-hidden" role="status">{{ loadedCharacterName ? loadedCharacterName + ' loaded' : '' }}</span>
+    </div>
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1" [class.dynamic-prompt-input-active]="isDynamicPromptActive()">
     <div class="prompt-textarea-shell" [class.dynamic-prompt-shell-active]="isDynamicPromptActive()">
       @if (isDynamicPromptActive()) {
@@ -81,6 +87,8 @@
         {{ cancelInProgress ? 'Cancelling...' : (aprilFools.isAprilFools() ? aprilFools.getCancelButtonText() : 'Cancel') }}
       </button>
     }
+  </div>
+
   </div>
 
   <!-- buttons that show with reference images expanded -->

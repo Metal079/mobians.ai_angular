@@ -1,0 +1,13 @@
+:host { display: block; }
+.disclosure-toggle { display: flex; align-items: center; justify-content: space-between; gap: .65rem; width: 100%; min-height: 48px; padding: .8rem 0; border: 0; border-radius: 0; background: transparent; color: var(--theme-surface-text); font: inherit; font-size: .86rem; font-weight: 650; text-align: left; cursor: pointer; }
+.disclosure-toggle:disabled { opacity: .55; cursor: not-allowed; }
+.disclosure-toggle:focus-visible { outline: 3px solid var(--theme-surface-text); outline-offset: -3px; }
+.disclosure-title { flex: 1; min-width: 0; }
+.disclosure-toggle > i { flex-shrink: 0; transition: transform 220ms ease; }
+.disclosure-toggle > i.expanded { transform: rotate(180deg); }
+.disclosure-panel { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows 220ms ease, visibility 0s linear 220ms; }
+.disclosure-panel.expanded { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
+.disclosure-inner { min-height: 0; overflow: hidden; padding-inline: 3px; margin-inline: -3px; }
+@media (prefers-reduced-motion: reduce) {
+  .disclosure-panel, .disclosure-toggle > i { transition: none; }
+}

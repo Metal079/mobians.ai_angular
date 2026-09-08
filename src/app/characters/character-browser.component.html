@@ -1,0 +1,20 @@
+<div class="picker-search">
+  <i class="bi bi-search" aria-hidden="true"></i>
+  <input type="search" [attr.aria-label]="characterId ? 'Search saved looks' : 'Search characters and looks'" [placeholder]="characterId ? 'Search looks and prompts' : 'Search names, looks and prompts'" [ngModel]="query" (ngModelChange)="search($event)" [disabled]="disabled" maxlength="300">
+  @if (query) { <button type="button" class="search-clear" aria-label="Clear search" (click)="search('')" [disabled]="disabled">×</button> }
+</div>
+@if (error()) { <p class="picker-error" role="alert">{{ error() }} <button type="button" (click)="load(!!rows().length)" [disabled]="disabled">Retry</button></p> }
+<div class="picker-grid" [attr.aria-busy]="loading()">
+  @for (row of rows(); track row.id) {
+    <div class="browser-result">
+      <button type="button" class="picker-card" (click)="chosen.emit(choice(row))" [disabled]="disabled" [attr.aria-label]="row.name + (row.recipe ? ' · ' + row.recipe.label : '')">
+        <span class="picker-image">@if (row.thumbnail) { <img [src]="row.thumbnail" alt="" loading="lazy"> } @else { <i class="bi bi-person-heart" aria-hidden="true"></i> }</span>
+        <span class="picker-name">{{ row.name }}@if (row.recipe) {<span class="look-name"> · {{ row.recipe.label }}</span>}</span>
+      </button>
+      @if (showCreate) { <button type="button" class="browser-create" (click)="create.emit(choice(row))" [disabled]="disabled">Create</button> }
+    </div>
+  }
+</div>
+@if (loading()) { <p class="picker-loading" role="status">Loading…</p> }
+@else if (!rows().length && !error()) { <p class="picker-empty-search">{{ query ? 'No matching characters or looks.' : 'No saved looks yet. Save a favorite image to get started.' }}</p> }
+@if (cursor() && !error()) { <button class="browser-more" type="button" (click)="load(true)" [disabled]="loading() || disabled">Load more</button> }

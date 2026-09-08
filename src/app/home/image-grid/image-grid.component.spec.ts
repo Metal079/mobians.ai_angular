@@ -32,6 +32,7 @@ describe('ImageGridComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ImageGridComponent],
       providers: [
+        { provide: CharactersService, useValue: { requestSave: () => {} } },
         {
           provide: SharedService,
           useValue: sharedServiceStub
@@ -70,3 +71,4 @@ describe('ImageGridComponent', () => {
     expect(result).toBe(pngBlob);
   });
 });
+import { CharactersService } from 'src/app/characters/characters.service';

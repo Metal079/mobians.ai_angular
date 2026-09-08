@@ -9,5 +9,5 @@ import { RouterLink } from '@angular/router';
   styleUrls: ['./generation-mode-switch.component.css'],
 })
 export class GenerationModeSwitchComponent {
-  @Input() active: 'image' | 'video' = 'image';
+  @Input() active: 'image' | 'video' | 'characters' = 'image';
 }

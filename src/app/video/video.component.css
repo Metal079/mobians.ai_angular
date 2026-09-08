@@ -1111,3 +1111,13 @@
     border-radius: 0;
   }
 }
+
+.video-mode-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.6rem; margin-bottom:1.2rem; }
+.video-mode-options button { display:flex; align-items:center; gap:.65rem; min-width:0; padding:.85rem; text-align:left; color:var(--theme-surface-text); background:var(--theme-surface-alt-bg); border:1px solid var(--theme-border-strong); border-radius:12px; cursor:pointer; }
+.video-mode-options button.selected { border-color:var(--theme-primary); background:color-mix(in srgb,var(--theme-primary) 16%,var(--theme-surface-bg)); box-shadow:inset 0 0 0 1px var(--theme-primary); }
+.video-mode-options button:focus-visible { outline:3px solid var(--theme-primary); outline-offset:2px; }
+.video-mode-options button:disabled { opacity:.5; cursor:not-allowed; }
+.video-mode-options i { font-size:1.15rem; }
+.video-mode-options strong { display:block; font-size:.86rem; line-height:1.35; }
+.video-mode-options small { display:block; margin-top:.2rem; font-size:.72rem; opacity:.8; line-height:1.4; }
+@media(max-width:440px) { .video-mode-options button { flex-direction:column; align-items:flex-start; padding:.7rem; gap:.4rem; } }

@@ -98,6 +98,7 @@ describe('ImageHistoryPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ImageHistoryPanelComponent],
       providers: [
+        { provide: CharactersService, useValue: { requestSave: () => {} } },
         { provide: MessageService, useClass: MessageServiceStub },
         { provide: BlobMigrationService, useClass: BlobMigrationServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
@@ -291,3 +292,4 @@ describe('ImageHistoryPanelComponent', () => {
     expect(result).toBe(pngBlob);
   });
 });
+import { CharactersService } from 'src/app/characters/characters.service';

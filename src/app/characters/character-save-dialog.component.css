@@ -1,0 +1,36 @@
+.save-dialog { padding-top: .15rem; }
+.save-identity { display: flex; gap: 1.1rem; align-items: center; }
+.character-portrait { flex: 0 0 auto; width: 104px; height: 130px; border-radius: 14px; object-fit: cover; background: var(--theme-image-bg); }
+.identity-fields { flex: 1; min-width: 0; }
+.identity-fields label:first-child { margin-top: 0; }
+.identity-fields select { margin-bottom: .75rem; }
+.adding-look { margin: .65rem 0 0; font-size: .85rem; line-height: 1.5; }
+.save-explanation { margin: 1rem 0 1.15rem; font-size: .9rem; line-height: 1.5; }
+.save-customization { border-block: 1px solid var(--theme-border); }
+[disclosure-title] { display: inline-flex; align-items: center; flex-wrap: wrap; column-gap: .55rem; }
+[disclosure-title] small { display: inline; font-weight: 400; font-size: .76rem; margin: 0; opacity: .8; }
+.save-customization > app-character-disclosure + app-character-disclosure { border-top: 1px solid var(--theme-border); }
+.disclosure-content { padding: 0 0 1rem; }
+.disclosure-content label:first-child { margin-top: .2rem; }
+.character-ui .reuse-settings { font-size: .8rem; margin: .2rem 0 .6rem; }
+.save-note { display: flex; align-items: baseline; gap: .4rem; margin: 1rem 0 0; font-size: .77rem; line-height: 1.5; }
+.dialog-actions { margin-top: 1rem; flex-wrap: nowrap; }
+.saved-character { display: flex; gap: 1.1rem; align-items: center; padding: .4rem 0 1.3rem; }
+.saved-portrait { position: relative; flex: 0 0 auto; }
+.saved-portrait img { display: block; width: 104px; height: 130px; border-radius: 14px; object-fit: cover; background: var(--theme-image-bg); }
+.saved-portrait > i { position: absolute; right: -.35rem; bottom: -.35rem; border: 3px solid var(--theme-surface-bg); background: var(--theme-surface-bg); color: var(--theme-surface-text); border-radius: 50%; font-size: 1.4rem; line-height: 1; }
+.saved-character h2 { margin: .35rem 0 .4rem; font-size: 1.5rem; overflow-wrap: anywhere; }
+.saved-character p { margin: 0; font-size: .85rem; line-height: 1.5; }
+.saved-character .eyebrow { font-size: .63rem; letter-spacing: .07em; }
+.saved-actions { display: flex; flex-direction: column; gap: .4rem; }
+.view-character { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; color: var(--theme-surface-text); text-decoration: none; font-size: .88rem; font-weight: 650; border-radius: 12px; }
+.view-character:hover { text-decoration: underline; }
+@media (max-width: 440px) {
+  .save-identity, .saved-character { gap: .8rem; }
+  .character-portrait, .saved-portrait img { width: 84px; height: 112px; }
+  .identity-fields label { font-size: .81rem; }
+  .identity-fields input, .identity-fields select { padding: .6rem; }
+  .save-explanation { font-size: .84rem; }
+  .dialog-actions .primary-action { flex: 1; }
+  .saved-character h2 { font-size: 1.3rem; }
+}

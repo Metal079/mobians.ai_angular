@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { CharactersService } from '../characters/characters.service';
 import { FormsModule } from '@angular/forms';
 import { Subscription, finalize, fromEvent, interval, merge, timeout } from 'rxjs';
 import { AccountCtaService } from '../auth/account-cta.service';
@@ -8,7 +9,9 @@ import { GenerationModeSwitchComponent } from '../generation-mode-switch/generat
 import { ImageHistoryPanelComponent } from '../home/options/image-history-panel/image-history-panel.component';
 import { VideoGenerationService } from '../video-generation.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { VideoAspect, VideoConfig, VideoJob } from 'src/_shared/video-generation.interface';
+import { VideoAspect, VideoConfig, VideoJob, VideoGenerationMode, VideoReference, VideoPriceQuote } from 'src/_shared/video-generation.interface';
+
+import { ReferenceInputsComponent } from './reference-inputs/reference-inputs.component';
 
 interface SelectedFrame {
   file: File;
@@ -48,15 +51,29 @@ interface CameraMotionOption {
 @Component({
   selector: 'app-video',
   standalone: true,
-  imports: [CommonModule, FormsModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent],
+  imports: [CommonModule, FormsModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent],
   templateUrl: './video.component.html',
   styleUrls: ['./video.component.css'],
 })
 export class VideoComponent implements OnInit, OnDestroy {
+  private readonly characters = inject(CharactersService);
   config: VideoConfig | null = null;
   jobs: VideoJob[] = [];
   firstFrame: SelectedFrame | null = null;
   lastFrame: SelectedFrame | null = null;
+  generationMode: VideoGenerationMode = 'fl2v';
+  references: VideoReference[] = [];
+  referencesBusy = false;
+  referenceQuote: VideoPriceQuote | null = null;
+  quoteLoading = false;
+  quoteError = '';
+  private quoteSelection = '';
+  private quoteSubscription: Subscription | null = null;
+  @ViewChild(ReferenceInputsComponent) referenceInputs?: ReferenceInputsComponent;
+  private modeDrafts: Record<VideoGenerationMode, { prompt: string; audioPrompt: string; cameraMotion: VideoCameraMotion; seed: number | null }> = {
+    fl2v: { prompt: '', audioPrompt: '', cameraMotion: 'auto', seed: null },
+    ref2v: { prompt: '', audioPrompt: '', cameraMotion: 'auto', seed: null },
+  };
   prompt = '';
   audioPrompt = '';
   disableSound = false;
@@ -68,7 +85,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   seed: number | null = null;
   aspectWasManuallyChanged = false;
   pickerOpen = false;
-  pickerTarget: 'first' | 'last' = 'first';
+  pickerTarget: FrameTarget | 'reference' = 'first';
   submitting = false;
   loadingJobs = false;
   configLoading = true;
@@ -122,6 +139,8 @@ export class VideoComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    const characterImage = this.characters.takeVideoHandoff();
+    if (characterImage) void this.onHistoryImageSelected(characterImage);
     this.creditsSubscription = this.authService.credits$.subscribe((credits) => {
       this.runInView(() => this.currentCredits = credits?.credits ?? 0);
     });
@@ -152,6 +171,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.pollSubscription?.unsubscribe();
     this.foregroundSubscription?.unsubscribe();
     this.creditsSubscription?.unsubscribe();
+    this.quoteSubscription?.unsubscribe();
     if (this.copiedPromptResetTimer) clearTimeout(this.copiedPromptResetTimer);
     this.revokeFrame(this.firstFrame);
     this.revokeFrame(this.lastFrame);
@@ -177,7 +197,54 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get selectedCost(): number {
+    if (this.generationMode === 'ref2v' && this.references.length) {
+      return this.quoteSelection === this.pricingSelection ? this.referenceQuote?.credit_cost ?? 0 : 0;
+    }
     return this.config?.prices?.[String(this.durationSeconds)] ?? 0;
+  }
+
+  private get pricingSelection(): string {
+    return JSON.stringify([this.generationMode, this.durationSeconds,
+      this.references.map(item => [item.id, item.kind, item.duration])]);
+  }
+
+  selectDuration(duration: number): void {
+    this.durationSeconds = duration;
+    this.refreshQuote();
+  }
+
+  onReferencesChanged(references: VideoReference[]): void {
+    this.references = references;
+    this.refreshQuote();
+  }
+
+  refreshQuote(): void {
+    this.quoteSubscription?.unsubscribe();
+    this.referenceQuote = null;
+    this.quoteSelection = '';
+    this.quoteLoading = false;
+    this.quoteError = '';
+    if (this.generationMode !== 'ref2v' || !this.references.length || this.componentDestroyed) return;
+    const selection = this.pricingSelection;
+    this.quoteLoading = true;
+    this.quoteSubscription = this.videoService.getQuote(this.durationSeconds, this.references)
+      .pipe(timeout({ first: 15000 })).subscribe({
+        next: quote => {
+          if (selection !== this.pricingSelection || this.componentDestroyed) return;
+          this.runInView(() => {
+            this.referenceQuote = quote;
+            this.quoteSelection = selection;
+            this.quoteLoading = false;
+          });
+        },
+        error: () => {
+          if (selection !== this.pricingSelection || this.componentDestroyed) return;
+          this.runInView(() => {
+            this.quoteLoading = false;
+            this.quoteError = 'The price could not be checked. Please try again.';
+          });
+        },
+      });
   }
 
   get selectedPriceAvailable(): boolean {
@@ -189,7 +256,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get adaptationWarning(): string | null {
-    if (!this.firstFrame) return null;
+    if (this.generationMode === 'ref2v' || !this.firstFrame) return null;
     const sourceRatio = this.firstFrame.width / this.firstFrame.height;
     const target = this.aspectDimensions(this.aspectRatio);
     const targetRatio = target.width / target.height;
@@ -198,7 +265,46 @@ export class VideoComponent implements OnInit, OnDestroy {
     return `Your ${this.firstFrame.width}×${this.firstFrame.height} frame will be adapted to ${target.width}×${target.height}. Some cropping or padding may occur.`;
   }
 
+  get referencePromptNeedsReview(): boolean {
+    const referencePrompt = this.generationMode === 'ref2v' ? this.prompt : this.modeDrafts.ref2v.prompt;
+    return referencePrompt.includes('[removed image]') || referencePrompt.includes('[removed video]');
+  }
+
+  get referenceModeAvailable(): boolean { return !!this.config?.generation_modes?.includes('ref2v'); }
+
+  changeMode(mode: VideoGenerationMode): void {
+    if (mode === this.generationMode || (mode === 'ref2v' && !this.referenceModeAvailable)) return;
+    this.modeDrafts[this.generationMode] = { prompt: this.prompt, audioPrompt: this.audioPrompt, cameraMotion: this.cameraMotion, seed: this.seed };
+    this.generationMode = mode;
+    Object.assign(this, this.modeDrafts[mode]);
+    this.errorMessage = '';
+    this.refreshQuote();
+  }
+
+  insertReference(reference: { kind: 'image' | 'video'; index: number }): void {
+    const tag = `<${reference.kind === 'image' ? 'Picture' : 'Video'} ${reference.index}>`;
+    if (this.prompt.length + tag.length + 1 > this.maxUserPromptLength) return;
+    this.prompt = `${this.prompt}${this.prompt && !this.prompt.endsWith(' ') ? ' ' : ''}${tag} `;
+    document.getElementById('videoPrompt')?.focus();
+  }
+
+  removedReference(reference: { kind: 'image' | 'video'; index: number }): void {
+    const tag = reference.kind === 'image' ? 'Picture' : 'Video';
+    const current = this.generationMode === 'ref2v' ? this.prompt : this.modeDrafts.ref2v.prompt;
+    const updated = current.replace(new RegExp(`<${tag} (\\d+)>`, 'g'), (match, number) => {
+      const index = Number(number);
+      if (index === reference.index) {
+        return `[removed ${reference.kind}]`;
+      }
+      return index > reference.index ? `<${tag} ${index - 1}>` : match;
+    });
+    this.modeDrafts.ref2v.prompt = updated;
+    if (this.generationMode === 'ref2v') this.prompt = updated;
+    if (this.referencePromptNeedsReview) this.errorMessage = 'A reference used in your prompt was removed. Update the marked text before generating.';
+  }
+
   get promptPlaceholder(): string {
+    if (this.generationMode === 'ref2v') return 'The character in <Picture 1> walks through the setting in <Picture 2>. Describe the action, camera, and mood.';
     return this.lastFrame
       ? 'She turns naturally and settles into the ending pose while the camera slowly moves closer.'
       : 'Her hair moves in the breeze as she looks toward the camera and smiles.';
@@ -220,7 +326,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get canSubmit(): boolean {
-    return !!this.firstFrame
+    return (this.generationMode === 'fl2v' ? !!this.firstFrame : this.referenceModeAvailable && this.references.length > 0 && !this.referencesBusy && !this.referencePromptNeedsReview)
       && !!this.composedPrompt
       && this.composedPrompt.length <= this.composedPromptMaxLength
       && this.audioPrompt.length <= this.audioPromptMaxLength
@@ -240,6 +346,7 @@ export class VideoComponent implements OnInit, OnDestroy {
             this.durationSeconds = config.durations[0];
           }
           this.configLoading = false;
+          this.refreshQuote();
         });
       },
       error: () => {
@@ -317,7 +424,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     if (file) await this.setFrame(file, target, 'upload');
   }
 
-  openHistory(target: FrameTarget): void {
+  openHistory(target: FrameTarget | 'reference'): void {
     this.pickerTarget = target;
     this.pickerOpen = true;
     document.body.classList.add('video-picker-open');
@@ -334,7 +441,11 @@ export class VideoComponent implements OnInit, OnDestroy {
     const file = new File([image.blob], `history-${image.UUID || Date.now()}.${extension}`, {
       type: image.blob.type || 'image/webp',
     });
-    await this.setFrame(file, this.pickerTarget, 'history');
+    if (this.pickerTarget === 'reference') {
+      await this.referenceInputs?.addFiles([file], 'image', 'history');
+    } else {
+      await this.setFrame(file, this.pickerTarget, 'history');
+    }
     this.runInView(() => this.closeHistory());
   }
 
@@ -379,11 +490,16 @@ export class VideoComponent implements OnInit, OnDestroy {
       this.openCreditPurchase();
       return;
     }
-    if (!this.canSubmit || !this.firstFrame) return;
+    if (!this.canSubmit) return;
     this.submitting = true;
+    const submittedSelection = this.pricingSelection;
     this.videoService.submitJob({
-      firstFrame: this.firstFrame.file,
-      firstFrameSource: this.firstFrame.source,
+      expectedCreditCost: this.selectedCost,
+      pricingVersion: this.generationMode === 'ref2v' ? this.referenceQuote?.pricing_version : this.config?.pricing_version,
+      generationMode: this.generationMode,
+      references: this.references,
+      firstFrame: this.firstFrame?.file,
+      firstFrameSource: this.firstFrame?.source,
       lastFrame: this.lastFrame?.file,
       lastFrameSource: this.lastFrame?.source,
       prompt: this.composedPrompt,
@@ -408,7 +524,19 @@ export class VideoComponent implements OnInit, OnDestroy {
       error: (error) => {
         this.runInView(() => {
           this.submitting = false;
-          if (error?.status === 402) {
+          if (error?.status === 409 && error?.error?.detail?.code === 'video_price_changed') {
+            if (submittedSelection === this.pricingSelection) {
+              this.quoteSubscription?.unsubscribe();
+              this.referenceQuote = error.error.detail.quote;
+              this.quoteSelection = submittedSelection;
+              this.quoteLoading = false;
+              this.quoteError = '';
+              this.errorMessage = error.error.detail.message;
+            } else {
+              this.refreshQuote();
+              this.errorMessage = 'Your inputs changed. Review the current price before generating again.';
+            }
+          } else if (error?.status === 402) {
             this.openCreditPurchase();
           } else {
             this.errorMessage = this.apiError(error, 'The video job could not be queued.');

@@ -1,6 +1,7 @@
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { signal } from '@angular/core';
+import { NO_ERRORS_SCHEMA, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { NEVER, of } from 'rxjs';
+import { NEVER, Subject, of } from 'rxjs';
 import { SwPush } from '@angular/service-worker';
 import { MessageService } from 'primeng/api';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -108,6 +109,9 @@ const dynamicPromptLibraryResponse: DynamicPromptLibraryResponse = {
 };
 
 class StableDiffusionServiceStub {
+  getGenerationModels() {
+    return of({ default_model: 'novaMobianXL_v20', models: testModelSettings });
+  }
   getDynamicPromptLibrary() {
     return of(dynamicPromptLibraryResponse);
   }
@@ -126,8 +130,13 @@ class StableDiffusionServiceStub {
 }
 
 class SharedServiceStub {
+  user = { user_id: 'owner-a', token: 'token-a' };
+  getUserDataValue() { return this.user; }
+  getPrompt() { return of(''); }
+  getReferenceImage() { return of(null); }
   setGenerationRequest() {}
   setPrompt() {}
+  setReferenceImage() {}
 }
 class MessageServiceStub {
   add() {}
@@ -143,8 +152,11 @@ class BlobMigrationServiceStub {
 }
 class GenerationLockServiceStub {
   release() {}
+  isLockedByOther() { return false; }
+  tryAcquire() { return true; }
 }
 class AuthServiceStub {
+  credits$ = of(null);
   isLoggedIn() {
     return false;
   }
@@ -158,6 +170,7 @@ describe('OptionsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OptionsComponent],
       providers: [
+        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: jasmine.createSpy('clearActiveCharacter').and.callFake(function(this: any) { this.activeCharacter.set(null); }) } },
         { provide: StableDiffusionService, useClass: StableDiffusionServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
         { provide: MessageService, useClass: MessageServiceStub },
@@ -186,6 +199,163 @@ describe('OptionsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('submits the selected look with unchanged fixture credit estimates and snapshots its account', async () => {
+    const characters = TestBed.inject(CharactersService);
+    characters.activeCharacter.set({ id: 'amy', imageId: 'beach-look', name: 'Amy Rose' });
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const reply = new Subject<any>(); sd.submitJob = jasmine.createSpy().and.returnValue(reply);
+    spyOn(component, 'getJob');
+    component.queueType = 'free';
+    component.generationRequest.model = 'novaMobianXL_v20';
+    component.generationRequest.prompt = 'pink quills, bikini'; component.generationRequest.loras = [];
+    component.updateCreditCost(); expect(component.creditCost).toBe(15);
+    await component.submitJob();
+    expect(sd.submitJob.calls.mostRecent().args[0]).toEqual(jasmine.objectContaining({ character_id: 'amy', character_look_id: 'beach-look', prompt: 'pink quills, bikini', queue_type: 'free' }));
+    const shared = TestBed.inject(SharedService) as any;
+    shared.user = { user_id: 'owner-b', token: 'token-b' };
+    characters.activeCharacter.set(null);
+    reply.next({ job_id: 'fixture-only', character_id: 'amy', character_look_id: 'beach-look' }); reply.complete();
+    const pending = JSON.parse(localStorage.getItem('mobians:pending-job')!);
+    expect(pending.request.character_owner).toBe('owner-a');
+    expect((component as any).getCharacterAttributionSnapshot()).toEqual({});
+    shared.user = { user_id: 'owner-a', token: 'token-a' };
+    expect((component as any).getCharacterAttributionSnapshot()).toEqual({ characterId: 'amy', characterLookId: 'beach-look' });
+  });
+
+  it('keeps attribution during ordinary prompt edits and removes stale request IDs after unlink', async () => {
+    const characters = TestBed.inject(CharactersService);
+    characters.activeCharacter.set({ id: 'amy', imageId: 'spy-look', name: 'Amy' });
+    component.onPromptInputChange('Amy in a forest');
+    expect(characters.activeCharacter()?.imageId).toBe('spy-look');
+    component.generationRequest.character_id = 'stale-character'; component.generationRequest.character_look_id = 'stale-look';
+    component.dismissCharacter();
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.submitJob = jasmine.createSpy().and.returnValue(NEVER);
+    component.queueType = 'free'; await component.submitJob();
+    expect(sd.submitJob.calls.mostRecent().args[0].character_id).toBeUndefined();
+    expect(sd.submitJob.calls.mostRecent().args[0].character_look_id).toBeUndefined();
+  });
+
+  it('loads a character setup without stale masks, regions, dynamic prompts, or a fixed seed', () => {
+    const characters = TestBed.inject(CharactersService);
+    spyOn(characters, 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {
+      label: 'Forest', model: 'novaMobianXL_v20', appearance: 'blue fox', scene: 'forest',
+      negative_prompt: 'blurry', width: 512, height: 768, guidance_scale: 5,
+      loras: [{ id: 7, name: 'Fox', strength: .7 }],
+    } });
+    component.generationRequest.mask_image = 'old mask';
+    component.generationRequest.seed = 123;
+    component.generationRequest.regional_prompting = { enabled: true, regions: [] };
+    component.generationRequest.dynamic_prompting = { enabled: true, template: '_old_' };
+    spyOn(component, 'saveSettings');
+
+    (component as any).applyCharacterHandoff();
+
+    expect(component.generationRequest.prompt).toBe('blue fox, forest');
+    expect(component.generationRequest.model).toBe('novaMobianXL_v20');
+    expect(component.generationRequest.loras[0].strength).toBe(.7);
+    expect(component.generationRequest.guidance_scale).toBe(5);
+    expect(component.generationRequest.mask_image).toBeUndefined();
+    expect(component.generationRequest.seed).toBeUndefined();
+    expect(component.generationRequest.regional_prompting.enabled).toBeFalse();
+    expect(component.generationRequest.dynamic_prompting.enabled).toBeFalse();
+    expect(component.generationRequest.job_type).toBe('txt2img');
+    expect(component.loadedCharacterName).toBe('Ash');
+  });
+
+  it('loads prompt-only characters using the current model, LoRAs, guidance and image size', () => {
+    spyOn(TestBed.inject(CharactersService), 'takeImageHandoff').and.returnValue({ name: 'Ash', currentModel: 'current-model', currentLoras: [{ id: 8, name: 'Current style', strength: .6 }], recipe: {
+      label: 'Prompts', model: '', appearance: 'blue fox', scene: 'forest', negative_prompt: 'blurry',
+      width: 512, height: 768, guidance_scale: 4, loras: [],
+    } });
+    component.generationRequest.model = 'current-model';
+    component.generationRequest.loras = []; // The route was recreated with default selections.
+    component.generationRequest.guidance_scale = 7;
+    component.generationRequest.width = 768; component.generationRequest.height = 512;
+    spyOn(component, 'saveSettings');
+    (component as any).applyCharacterHandoff();
+    expect(component.generationRequest.model).toBe('current-model');
+    expect(component.generationRequest.loras[0].id).toBe(8);
+    expect(component.generationRequest.loras[0].strength).toBe(.6);
+    expect(component.generationRequest.guidance_scale).toBe(7);
+    expect(component.generationRequest.width).toBe(768); expect(component.generationRequest.height).toBe(512);
+    expect(component.generationRequest.prompt).toBe('blue fox, forest');
+    expect(component.generationRequest.negative_prompt).toBe('blurry');
+  });
+
+  it('keeps the current request if a job started before the character handoff is consumed', () => {
+    spyOn(TestBed.inject(CharactersService), 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {} as any });
+    const request = component.generationRequest;
+    component.hasPendingJob = true;
+    (component as any).applyCharacterHandoff();
+    expect(component.generationRequest).toBe(request);
+    expect(component.loadedCharacterName).toBe('');
+  });
+
+  it('loads a character selected while the generator route is already open without submitting', () => {
+    const characters = TestBed.inject(CharactersService);
+    const handoff = spyOn(characters, 'takeImageHandoff').and.returnValue(null);
+    spyOn(component, 'saveSettings');
+    const submit = spyOn(component, 'submitJob');
+    (component as any).connectCharacterHandoffs();
+    handoff.and.returnValue({ name: 'Ash', recipe: {
+      label: 'Default', model: '', appearance: 'blue fox', scene: 'forest', negative_prompt: '',
+      width: 512, height: 512, guidance_scale: 4, loras: [],
+    } });
+
+    characters.imageHandoffReady.next();
+
+    expect(component.generationRequest.prompt).toBe('blue fox, forest');
+    expect(component.loadedCharacterName).toBe('Ash');
+    expect(submit).not.toHaveBeenCalled();
+    fixture.destroy();
+    handoff.calls.reset();
+    characters.imageHandoffReady.next();
+    expect(handoff).not.toHaveBeenCalled();
+  });
+
+  it('undoes a character selection back to the previous prompt, model, LoRAs and image dimensions', () => {
+    const characters = TestBed.inject(CharactersService);
+    spyOn(characters, 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {
+      label: 'Default', model: 'Anima-baseV1', appearance: 'blue fox', scene: 'forest', negative_prompt: '',
+      width: 512, height: 512, guidance_scale: 4, loras: [],
+    } });
+    component.generationRequest.prompt = 'My original idea';
+    component.generationRequest.loras = [{ id: 5, name: 'Original style', strength: .5 }];
+    component.generationRequest.seed = 123;
+    component.generationRequest.width = 768;
+    const previous = structuredClone(component.generationRequest);
+    spyOn(component, 'saveSettings');
+
+    (component as any).applyCharacterHandoff();
+    expect(component.canUndoCharacter).toBeTrue();
+    component.undoCharacter();
+
+    expect(component.generationRequest).toEqual(previous);
+    expect(component.loadedCharacterName).toBe('');
+    expect(component.canUndoCharacter).toBeFalse();
+    expect(characters.clearActiveCharacter).toHaveBeenCalled();
+  });
+
+  it('does not undo while a new image job is running', () => {
+    (component as any).characterUndo = { request: { prompt: 'previous' } };
+    const current = component.generationRequest;
+    localStorage.setItem('mobians:pending-job', 'running');
+    component.undoCharacter();
+    expect(component.generationRequest).toBe(current);
+  });
+
+  it('keeps the request when another tab starts a job during character loading', () => {
+    const characters = TestBed.inject(CharactersService);
+    spyOn(characters, 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {} as any });
+    localStorage.setItem('mobians:pending-job', 'another-tab-job');
+    const current = component.generationRequest;
+    (component as any).applyCharacterHandoff();
+    expect(component.generationRequest).toBe(current);
+    expect(component.loadedCharacterName).toBe('');
+    expect(characters.clearActiveCharacter).toHaveBeenCalled();
   });
 
   it('keeps a pending image job when the route is destroyed and resumes polling immediately', fakeAsync(() => {
@@ -451,5 +621,71 @@ describe('OptionsComponent', () => {
     expect(component.generationRequest.prompt).toBe('A portrait of _mobian/characters_');
     expect(component.generationRequest.dynamic_prompting.template).toBe('_mobian/poses_');
     expect(localStorage.getItem('mobians:dynamic-prompt-category-syntax-v2')).toBe('done');
+  });
+});
+import { CharactersService } from 'src/app/characters/characters.service';
+
+describe('OptionsComponent asynchronous initial state', () => {
+  let fixture: ComponentFixture<OptionsComponent>;
+  let catalog: Subject<any>;
+  let credits: Subject<any>;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    catalog = new Subject();
+    credits = new Subject();
+    const sd = new StableDiffusionServiceStub();
+    spyOn(sd, 'getGenerationModels').and.returnValue(catalog);
+    await TestBed.configureTestingModule({
+      imports: [OptionsComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: () => {} } },
+        { provide: StableDiffusionService, useValue: sd },
+        { provide: SharedService, useClass: SharedServiceStub },
+        { provide: MessageService, useClass: MessageServiceStub },
+        { provide: NotificationService, useClass: NotificationServiceStub },
+        { provide: SwPush, useClass: SwPushStub },
+        { provide: DialogService, useClass: DialogServiceStub },
+        { provide: BlobMigrationService, useClass: BlobMigrationServiceStub },
+        { provide: GenerationLockService, useClass: GenerationLockServiceStub },
+        { provide: AuthService, useValue: { isLoggedIn: () => false, credits$: credits } },
+      ],
+    }).overrideComponent(OptionsComponent, {
+      set: { template: '<span class="cost">{{creditCost}}</span><span class="credits">{{userCredits}}</span><button [disabled]="!enableGenerationButton">Generate</button>' },
+    }).compileComponents();
+    fixture = TestBed.createComponent(OptionsComponent);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    fixture.destroy();
+    document.body.classList.remove('theme-navy', 'theme-606', 'theme-eggman', 'dark-input-fields');
+  });
+
+  it('renders model prices and credit refreshes when responses arrive after the first render', async () => {
+    expect(fixture.nativeElement.querySelector('.cost').textContent).toBe('0');
+    catalog.next({ default_model: 'novaMobianXL_v20', models: testModelSettings });
+    catalog.complete();
+    await Promise.resolve(); // Let firstValueFrom resume before waiting for its scheduled render.
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.cost').textContent).toBe('15');
+
+    credits.next({ credits: 120 });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.credits').textContent).toBe('120');
+    expect(() => fixture.checkNoChanges()).not.toThrow();
+  });
+
+  it('renders the disabled generator if the model response cannot be used', async () => {
+    spyOn(console, 'error');
+    catalog.next({ default_model: '', models: [] });
+    catalog.complete();
+    await Promise.resolve();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('button').disabled).toBeTrue();
+    expect(() => fixture.checkNoChanges()).not.toThrow();
   });
 });

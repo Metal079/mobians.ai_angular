@@ -1,0 +1,39 @@
+<section class="references" aria-label="Video references">
+  <div class="reference-heading"><div><h3>Reference images</h3><p>Guide characters, outfits, and settings. These images are not fixed first or last frames.</p></div><span>{{ images.length }} / {{ imageLimit }}</span></div>
+  <div class="reference-grid">
+    @for (item of images; track item.id; let i = $index) {
+      <article class="reference-card">
+        <div class="preview"><img [src]="item.previewUrl" [alt]="'Reference image ' + (i + 1)"><button type="button" [disabled]="busy" [attr.aria-label]="'Remove image ' + (i + 1)" (click)="remove(item)"><i class="bi bi-x-lg"></i></button></div>
+        <div class="reference-caption"><strong>Image {{ i + 1 }}</strong><small>{{ item.width }} &times; {{ item.height }}</small></div>
+        <button type="button" class="prompt-chip" (click)="promptReference.emit({ kind: 'image', index: i + 1 })"><i class="bi bi-plus"></i> Use in prompt</button>
+      </article>
+    }
+    @if (images.length < imageLimit) {
+      <div class="add-reference" (dragover)="$event.preventDefault()" (drop)="dropped($event, 'image')">
+        <i class="bi bi-images"></i><strong>Add images</strong><small>JPEG, PNG, WebP &middot; up to 15 MB each</small>
+        <div class="add-actions"><button type="button" [disabled]="busy" (click)="upload(imageInput)"><i class="bi bi-upload"></i> Upload</button><button type="button" [disabled]="busy" (click)="historyRequested.emit()"><i class="bi bi-clock-history"></i> History</button></div>
+      </div>
+    }
+  </div>
+  <input #imageInput type="file" hidden multiple accept="image/jpeg,image/png,image/webp" (change)="selected($event, 'image')">
+  <button type="button" class="video-toggle" [attr.aria-expanded]="showVideos" (click)="showVideos = !showVideos"><span><i class="bi bi-film"></i> Video references <small>Optional &middot; {{ videos.length }} / {{ videoLimit }}</small></span><i class="bi" [class.bi-chevron-down]="!showVideos" [class.bi-chevron-up]="showVideos"></i></button>
+  @if (showVideos) {
+    <p class="video-help">Guide motion or a scene with a short clip. MP4, MOV, or WebM &middot; 0.25&ndash;15 seconds &middot; up to 50 MB each.</p>
+    <div class="reference-grid">
+      @for (item of videos; track item.id; let i = $index) {
+        <article class="reference-card">
+          <div class="preview"><video [src]="item.previewUrl" controls muted playsinline preload="metadata" [attr.aria-label]="'Reference video ' + (i + 1)"></video><button type="button" [disabled]="busy" [attr.aria-label]="'Remove video ' + (i + 1)" (click)="remove(item)"><i class="bi bi-x-lg"></i></button></div>
+          <div class="reference-caption"><strong>Video {{ i + 1 }}</strong><small>{{ item.duration | number:'1.1-1' }}s</small></div>
+          <label class="audio-choice"><input type="checkbox" [(ngModel)]="item.useAudio" (ngModelChange)="changed()"> Use its audio as a reference</label>
+          <button type="button" class="prompt-chip" (click)="promptReference.emit({ kind: 'video', index: i + 1 })"><i class="bi bi-plus"></i> Use in prompt</button>
+        </article>
+      }
+      @if (videos.length < videoLimit) {
+        <div class="add-reference" (dragover)="$event.preventDefault()" (drop)="dropped($event, 'video')"><i class="bi bi-film"></i><strong>Add videos</strong><button type="button" [disabled]="busy" (click)="upload(videoInput)"><i class="bi bi-upload"></i> Upload videos</button></div>
+      }
+    </div>
+  }
+  <input #videoInput type="file" hidden multiple accept="video/mp4,video/quicktime,video/webm" (change)="selected($event, 'video')">
+  @if (busy) { <p class="reference-status" role="status">Reading references&hellip;</p> }
+  @if (error) { <p class="reference-error" role="alert">{{ error }}</p> }
+</section>

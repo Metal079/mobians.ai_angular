@@ -4,7 +4,10 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import {
   VideoAdminState,
+  VideoGenerationMode,
+  VideoReference,
   VideoConfig,
+  VideoPriceQuote,
   VideoDesiredState,
   VideoJob,
   VideoJobsResponse,
@@ -12,8 +15,12 @@ import {
 } from 'src/_shared/video-generation.interface';
 
 export interface VideoSubmission {
-  firstFrame: File;
-  firstFrameSource: 'upload' | 'history';
+  expectedCreditCost?: number;
+  pricingVersion?: string;
+  generationMode?: VideoGenerationMode;
+  references?: VideoReference[];
+  firstFrame?: File;
+  firstFrameSource?: 'upload' | 'history';
   lastFrame?: File | null;
   lastFrameSource?: 'upload' | 'history' | null;
   prompt: string;
@@ -35,6 +42,15 @@ export class VideoGenerationService {
     return this.http.get<VideoConfig>(`${this.baseUrl}/config`);
   }
 
+  getQuote(durationSeconds: number, references: VideoReference[]): Observable<VideoPriceQuote> {
+    const form = new FormData();
+    form.append('generation_mode', 'ref2v');
+    form.append('duration_seconds', String(durationSeconds));
+    form.append('reference_image_count', String(references.filter(item => item.kind === 'image').length));
+    form.append('reference_video_seconds', JSON.stringify(references.filter(item => item.kind === 'video').map(item => item.duration)));
+    return this.http.post<VideoPriceQuote>(`${this.baseUrl}/quote`, form);
+  }
+
   listJobs(): Observable<VideoJobsResponse> {
     return this.http.get<VideoJobsResponse>(`${this.baseUrl}/jobs`);
   }
@@ -45,10 +61,23 @@ export class VideoGenerationService {
 
   submitJob(submission: VideoSubmission): Observable<VideoSubmitResponse> {
     const form = new FormData();
-    form.append('first_frame', submission.firstFrame);
-    form.append('first_frame_source', submission.firstFrameSource);
-    if (submission.lastFrame) form.append('last_frame', submission.lastFrame);
-    if (submission.lastFrame && submission.lastFrameSource) form.append('last_frame_source', submission.lastFrameSource);
+    const mode = submission.generationMode ?? 'fl2v';
+    form.append('generation_mode', mode);
+    if (mode === 'fl2v') {
+      if (submission.firstFrame) form.append('first_frame', submission.firstFrame);
+      form.append('first_frame_source', submission.firstFrameSource ?? 'upload');
+      if (submission.lastFrame) form.append('last_frame', submission.lastFrame);
+      if (submission.lastFrame && submission.lastFrameSource) form.append('last_frame_source', submission.lastFrameSource);
+    } else {
+      const images = (submission.references ?? []).filter(item => item.kind === 'image');
+      const videos = (submission.references ?? []).filter(item => item.kind === 'video');
+      images.forEach(item => form.append('reference_images', item.file));
+      videos.forEach(item => form.append('reference_videos', item.file));
+      form.append('reference_image_sources', JSON.stringify(images.map(item => item.source)));
+      form.append('reference_video_audio', JSON.stringify(videos.map(item => item.useAudio)));
+    }
+    if (submission.expectedCreditCost !== undefined) form.append('expected_credit_cost', String(submission.expectedCreditCost));
+    if (submission.pricingVersion) form.append('pricing_version', submission.pricingVersion);
     form.append('prompt', submission.prompt);
     if (!submission.disableSound && submission.audioPrompt?.trim()) form.append('audio_prompt', submission.audioPrompt.trim());
     form.append('disable_sound', String(submission.disableSound));

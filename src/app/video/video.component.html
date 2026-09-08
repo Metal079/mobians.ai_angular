@@ -3,8 +3,8 @@
 
   <header class="video-header">
     <div>
-      <h1>Bring an image to life</h1>
-      <p>Create a short video from one image, or add an optional ending image to guide how it finishes.</p>
+      <h1>Create a video</h1>
+      <p>Animate an image, or use references to guide your characters, scenes, and motion.</p>
     </div>
     @if (config) {
       <div class="service-pill" [class.available]="config.service.accepting_jobs">
@@ -51,6 +51,12 @@
           </div>
         </div>
 
+        <div class="video-mode-options" role="group" aria-label="Video creation mode">
+          <button type="button" [class.selected]="generationMode === 'fl2v'" [attr.aria-pressed]="generationMode === 'fl2v'" (click)="changeMode('fl2v')"><i class="bi bi-image"></i><span><strong>Animate an image</strong><small>First frame + optional ending</small></span></button>
+          <button type="button" [class.selected]="generationMode === 'ref2v'" [attr.aria-pressed]="generationMode === 'ref2v'" [disabled]="!referenceModeAvailable" (click)="changeMode('ref2v')"><i class="bi bi-images"></i><span><strong>Use references</strong><small>Characters, settings, and motion</small></span></button>
+        </div>
+        <app-video-reference-inputs [hidden]="generationMode !== 'ref2v'" [config]="config" (referencesChange)="onReferencesChanged($event)" (busyChange)="referencesBusy = $event" (historyRequested)="openHistory('reference')" (promptReference)="insertReference($event)" (referenceRemoved)="removedReference($event)"></app-video-reference-inputs>
+        @if (generationMode === 'fl2v') {
         <div class="frames-row">
           <article class="frame-card required" (dragover)="$event.preventDefault()" (drop)="onFrameDrop($event, 'first')">
             <div class="frame-title"><span>First frame</span><small>Required</small></div>
@@ -99,9 +105,10 @@
           </article>
         </div>
 
+        }
         <label class="field-block" for="videoPrompt">
           <span>What happens in the video? <small>Required</small></span>
-          <p class="field-help">Describe the subject's movement, expression, and the action around them. You don't need to repeat what is already visible.</p>
+          <p class="field-help">{{ generationMode === 'ref2v' ? 'Describe how your references should appear and interact. Use the reference cards to insert image or video tags.' : "Describe the subject's movement, expression, and the action around them. You don't need to repeat what is already visible." }}</p>
           <textarea id="videoPrompt" [(ngModel)]="prompt" rows="4" [attr.maxlength]="maxUserPromptLength" [placeholder]="promptPlaceholder"></textarea>
           <em>{{ prompt.length }} / {{ maxUserPromptLength }}</em>
         </label>
@@ -139,7 +146,8 @@
             <li>Focus on one clear main action.</li>
             <li>Add expressions or movement in the environment.</li>
             <li>Use one camera movement for a more predictable result.</li>
-            <li>If you added a last frame, describe how the scene transitions into it.</li>
+            @if (generationMode === 'fl2v') { <li>If you added a last frame, describe how the scene transitions into it.</li> }
+            @else { <li>Describe which character or setting each reference supplies, and what should happen in the new video.</li> }
           </ul>
           <a class="prompt-guide-link" href="https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md" target="_blank" rel="noopener noreferrer">
             Read MiniMax's official prompting guide <i class="bi bi-box-arrow-up-right"></i>
@@ -193,7 +201,7 @@
             <legend>Length</legend>
             <div class="duration-options">
               @for (duration of durations; track duration) {
-                <button type="button" [class.selected]="durationSeconds === duration" (click)="durationSeconds = duration">
+                <button type="button" [class.selected]="durationSeconds === duration" (click)="selectDuration(duration)">
                   {{ duration }}s
                 </button>
               }
@@ -206,18 +214,26 @@
         </div>
 
         <div class="submit-panel">
-          <div class="price-summary">
-            <strong>{{ selectedPriceAvailable ? (selectedCost + ' credits') : 'Price unavailable' }}</strong>
+          <div class="price-summary" aria-live="polite" aria-atomic="true">
+            <strong>{{ quoteLoading ? 'Checking price...' : selectedPriceAvailable ? (selectedCost + ' credits') : 'Price unavailable' }}</strong>
             <span>{{ durationSeconds }} seconds · {{ outputAsGif ? 'GIF' : 'MP4' }} · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
+            @if (generationMode === 'ref2v' && selectedPriceAvailable && referenceQuote) {
+              <small>{{ referenceQuote.base_cost }} base + {{ referenceQuote.reference_cost }} for references</small>
+              <small>Reference audio included. Videos resized to 0.4 MP.</small>
+            }
           </div>
           <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" (click)="submit()">
             @if (submitting) { <span class="spinner"></span> Queuing… }
             @else if (activeJobs >= activeLimit) { Queue is full }
+            @else if (quoteLoading) { Checking price... }
             @else if (!selectedPriceAvailable) { Price unavailable }
             @else if (currentCredits < selectedCost) { Get credits to create }
             @else { <i class="bi bi-stars"></i> Generate {{ outputAsGif ? 'GIF' : 'video' }} }
           </button>
         </div>
+        @if (generationMode === 'ref2v' && quoteError) {
+          <p class="control-help" role="alert">{{ quoteError }} <button type="button" class="credit-link" (click)="refreshQuote()">Retry price</button></p>
+        }
         @if (selectedPriceAvailable && currentCredits < selectedCost) {
           <button type="button" class="credit-link" (click)="openCreditPurchase()">You have {{ currentCredits }} credits. Add credits to generate.</button>
         }
@@ -250,7 +266,7 @@
                       <video [src]="videoUrls.get(job.id)" controls playsinline preload="metadata" [poster]="thumbnailUrls.get(job.id) || ''"></video>
                     }
                   } @else if (thumbnailUrls.get(job.id)) {
-                    <img [src]="thumbnailUrls.get(job.id)" alt="Video first frame">
+                    <img [src]="thumbnailUrls.get(job.id)" alt="Video input preview">
                   } @else {
                     <div class="media-placeholder"><span class="spinner"></span></div>
                   }
@@ -280,6 +296,8 @@
                     </button>
                   </div>
                   <div class="job-meta">
+                    <span>{{ job.generation_mode === 'ref2v' ? 'References' : 'Animate image' }}</span>
+                    @if (job.generation_mode === 'ref2v') { <span>{{ job.reference_image_count || 0 }} {{ job.reference_image_count === 1 ? 'image' : 'images' }} &middot; {{ job.reference_video_count || 0 }} {{ job.reference_video_count === 1 ? 'video' : 'videos' }}</span> }
                     <span>{{ aspectLabel(job.aspect_ratio) }}</span>
                     <span>{{ job.output_format === 'gif' ? 'GIF' : (job.disable_sound ? 'Silent video' : 'Video with sound') }}</span>
                     <span>{{ job.credit_cost }} credits</span>
@@ -313,7 +331,7 @@
   <div class="history-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="history-picker-title" (click)="closeHistory()">
     <section class="history-picker" (click)="$event.stopPropagation()">
       <header>
-        <div><span class="step-label">{{ pickerTarget === 'first' ? 'First frame' : 'Last frame' }}</span><h2 id="history-picker-title">Choose from image history</h2></div>
+        <div><span class="step-label">{{ pickerTarget === 'reference' ? 'Reference image' : pickerTarget === 'first' ? 'First frame' : 'Last frame' }}</span><h2 id="history-picker-title">Choose from image history</h2></div>
         <button type="button" aria-label="Close image history" (click)="closeHistory()"><i class="bi bi-x-lg"></i></button>
       </header>
       <div class="history-picker-content">

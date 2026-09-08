@@ -1,0 +1,54 @@
+<div class="character-ui look-settings">
+  <label [for]="idPrefix + '-model'">Saved model <span class="optional">Optional</span></label>
+  @if (recipe.model && !model && catalogReady) {
+    <p class="notice" role="status">This saved model is unavailable. Choose “Use current generator model” to keep just the prompts, or select another model.</p>
+  }
+  <select [id]="idPrefix + '-model'" [ngModel]="recipe.model" (ngModelChange)="changeModel($event)" [ngModelOptions]="{standalone: true}" [disabled]="disabled">
+    <option value="">Use current generator model</option>
+    @if (recipe.model && !model) { <option [value]="recipe.model" disabled>{{ catalogReady ? 'Saved model unavailable' : 'Saved model (waiting for catalog)' }}</option> }
+    @for (model of activeModels; track model.model_id) { <option [value]="model.model_id">{{ modelName(model) }} · {{ model.base_model }}</option> }
+  </select>
+  @if (!recipe.model) { <p class="quiet">Use these prompts with the model and LoRAs already selected in your generator. Choose a saved model to optionally attach LoRAs to this look.</p> }
+  @if (modelNotice) { <p class="quiet" role="status">{{ modelNotice }}</p> }
+  @if (recipe.model) {
+  <app-character-disclosure class="lora-settings" [panelId]="idPrefix + '-loras'" [disabled]="disabled">
+    <span disclosure-title>LoRAs for this look <span>{{ recipe.loras.length ? recipe.loras.length + ' selected' : 'Optional' }}</span></span>
+    <ng-template>
+    <p class="quiet">Save character or style LoRAs and their strengths here. They load automatically whenever you use this look.</p>
+    @if (recipe.loras.length > 3) { <p class="notice" role="alert">This older look has more than 3 LoRAs. Remove extra selections before saving. Your saved look is kept until you save.</p> }
+    @for (lora of recipe.loras; track $index; let i = $index) {
+      <div class="selected-lora">
+        <strong>{{ lora.name || 'Saved LoRA' }}</strong>
+        <div class="lora-controls">
+          <label [for]="idPrefix + '-strength-' + i">Strength</label>
+          <input type="number" [id]="idPrefix + '-strength-' + i" [(ngModel)]="lora.strength" (ngModelChange)="changed.emit()" [ngModelOptions]="{standalone: true}" min="0" max="2" step="0.05" required [disabled]="disabled">
+          <button type="button" (click)="remove(i)" [disabled]="disabled" [attr.aria-label]="'Remove ' + lora.name">Remove</button>
+        </div>
+        @if (triggers(lora).length) { <small>Trigger words: {{ triggers(lora).join(', ') }}</small><button type="button" class="quiet-button" (click)="addTriggers(lora)" [disabled]="disabled">Add trigger words to character</button> }
+      </div>
+    }
+    @if (loadError) { <p class="notice" role="alert">{{ loadError }} <button type="button" (click)="loadLoras()" [disabled]="disabled">Retry</button></p> }
+    @if (loading) { <p role="status">Loading compatible LoRAs…</p> }
+    @else if (model) {
+      <label [for]="idPrefix + '-lora-search'">Find a LoRA</label>
+      <input type="search" [id]="idPrefix + '-lora-search'" [(ngModel)]="query" [ngModelOptions]="{standalone: true}" placeholder="Search by name" [disabled]="disabled">
+      <label class="nsfw-toggle"><input type="checkbox" [(ngModel)]="showNsfw" [ngModelOptions]="{standalone: true}" [disabled]="disabled"> Include NSFW LoRAs</label>
+      <div class="lora-results">
+        @for (lora of results; track lora.id) {
+          <div class="lora-result">
+            <div class="lora-thumbnail" aria-hidden="true">
+              @if (previewUrl(lora); as preview) {
+                <img [src]="preview" alt="" width="64" height="80" loading="lazy" decoding="async" (error)="previewFailed(lora)">
+              } @else { <span>No preview</span> }
+            </div>
+            <span class="lora-info">{{ lora.name }} <small>{{ lora.version }}</small></span>
+            <button type="button" (click)="add(lora)" [disabled]="disabled || recipe.loras.length >= 3" [attr.aria-label]="'Add ' + lora.name">Add</button>
+          </div>
+        } @empty { @if (!loadError) { <p class="quiet">No matching LoRAs for this model.</p> } }
+      </div>
+      <small>Choose up to 3 LoRAs. Showing up to 20 matches compatible with {{ model.base_model }}; search to narrow the list.</small>
+    }
+    </ng-template>
+  </app-character-disclosure>
+  }
+</div>

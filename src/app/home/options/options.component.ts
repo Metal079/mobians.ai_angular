@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
+import { effect, ChangeDetectorRef, Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -33,6 +33,9 @@ import { HintComponent } from 'src/app/hint/hint.component';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { AccountCtaService } from 'src/app/auth/account-cta.service';
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
+import { CharactersService, characterPrompt } from 'src/app/characters/characters.service';
+import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
+import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
 
 
 @Component({
@@ -52,10 +55,23 @@ import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library
       GenerationOptionsPanelComponent,
       ImageHistoryPanelComponent,
       LorasPanelComponent,
-      DynamicPromptHelperComponent
+      DynamicPromptHelperComponent,
+      CharacterPickerComponent
     ]
 })
 export class OptionsComponent implements OnInit {
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly characters = inject(CharactersService);
+  private readonly characterMask = inject(InpaintingMaskService);
+  get loadedCharacterName(): string { return this.characters.activeCharacter()?.name || ''; }
+  private applyingCharacter = false;
+  private readonly characterEffect = effect(() => { if (!this.characters.activeCharacter()) this.characterUndo = null; });
+
+  private characterUndo: {
+    request: any; referenceImage?: MobiansImage; aspectRatio: AspectRatio;
+    hiresEnabled: boolean; mask: string;
+  } | null = null;
+  get canUndoCharacter(): boolean { return !!this.characterUndo; }
   private subscription!: Subscription;
   private referenceImageSubscription!: Subscription;
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
@@ -385,11 +401,13 @@ export class OptionsComponent implements OnInit {
         summary: 'Model settings unavailable',
         detail: 'Generation models could not be loaded from the server. Please try again later.',
       });
+      this.cdr.markForCheck();
     }
   }
 
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
+      if (value !== this.generationRequest.prompt && !this.applyingCharacter) this.dismissCharacter();
       this.generationRequest.prompt = value;
     });
 
@@ -401,6 +419,7 @@ export class OptionsComponent implements OnInit {
       } else {
         this.userCredits = 0;
         this.isLoggedIn = this.authService.isLoggedIn();
+        if (!this.isLoggedIn) this.dismissCharacter();
       }
       if (!this.isLoggedIn && this.hiresEnabled) {
         this.hiresEnabled = false;
@@ -427,6 +446,7 @@ export class OptionsComponent implements OnInit {
 
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
+        if (!this.applyingCharacter) this.dismissCharacter();
         this.generationRequest.job_type = "img2img";
         // Only set image data if base64 is present; submitJob() will convert from blob if needed
         if (image.base64) {
@@ -465,6 +485,9 @@ export class OptionsComponent implements OnInit {
         this.loadingChange.emit(true);
         // Rehydrate minimal request context if available
         if (pending.request) {
+          if (pending.request.character_owner === this.sharedService.getUserDataValue()?.user_id && pending.request.character_id && pending.request.character_name) {
+            this.characters.activeCharacter.set({ id: pending.request.character_id, imageId: pending.request.character_look_id, name: pending.request.character_name });
+          }
           this.generationRequest = { ...this.generationRequest, ...pending.request };
           this.sharedService.setGenerationRequest(this.generationRequest);
           // Restore queue type if it was saved
@@ -490,6 +513,86 @@ export class OptionsComponent implements OnInit {
         this.getJob(pending.job_id);
       }
     }
+    this.connectCharacterHandoffs();
+  }
+
+  private connectCharacterHandoffs(): void {
+    // A picker selection on this route does not recreate the generator.
+    this.characters.imageHandoffReady.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.applyCharacterHandoff());
+    this.applyCharacterHandoff();
+  }
+
+  private applyCharacterHandoff(): void {
+    const pending = this.characters.takeImageHandoff();
+    if (!pending) return;
+    if (this.hasPendingJob || localStorage.getItem(this.pendingJobKey)) {
+      this.characters.clearActiveCharacter();
+      this.messageService.add({ severity: 'warn', summary: 'Image job in progress', detail: 'Finish or cancel this job, then reopen your character setup.' });
+      return;
+    }
+    const recipe = pending.recipe;
+    const currentLoras = pending.currentModel === this.generationRequest.model && pending.currentLoras
+      ? pending.currentLoras : this.generationRequest.loras;
+    if (recipe.model && !this.modelSettings.some(model => model.model_id === recipe.model && model.is_active !== false)) {
+      this.characters.clearActiveCharacter();
+      this.messageService.add({ severity: 'error', summary: 'Saved model unavailable', detail: 'Your character setup was not loaded. Return to My Characters and choose another look.' });
+      return;
+    }
+    this.characterUndo = {
+      request: structuredClone(this.generationRequest),
+      referenceImage: this.referenceImage,
+      aspectRatio: { ...this.aspectRatio },
+      hiresEnabled: this.hiresEnabled,
+      mask: this.characterMask.getCurrentCanvasData(),
+    };
+    this.applyingCharacter = true;
+    this.characterMask.clearCanvasData();
+    this.sharedService.setReferenceImage(null);
+    this.generationRequest = {
+      ...this.generationRequest,
+      model: recipe.model || this.generationRequest.model, prompt: characterPrompt(recipe), negative_prompt: recipe.negative_prompt,
+      guidance_scale: recipe.model ? recipe.guidance_scale : this.generationRequest.guidance_scale,
+      loras: this.snapshotLoras(recipe.model ? recipe.loras : currentLoras), seed: undefined,
+      image: undefined, image_UUID: undefined, mask_image: undefined, color_inpaint: undefined,
+      regional_prompting: { enabled: false, regions: [] }, dynamic_prompting: { enabled: false },
+      job_type: 'txt2img', strength: 0.35,
+    };
+    if (recipe.model) {
+      this.hiresEnabled = false;
+      this.changeAspectRatio(recipe.width > recipe.height ? 'landscape' : recipe.height > recipe.width ? 'portrait' : 'square');
+    }
+    if (pending.image) this.sharedService.setReferenceImage(pending.image);
+    this.characters.activeCharacter.set({ id: pending.characterId || '', imageId: pending.imageId || '', name: pending.name });
+    this.applyingCharacter = false;
+    this.characters.recordLoaded(pending.characterId || '', pending.imageId || '');
+    this.updateSharedPrompt(); this.sharedService.setGenerationRequest(this.generationRequest);
+    this.updateCreditCost(); this.saveSettings();
+  }
+
+  undoCharacter(): void {
+    const previous = this.characterUndo;
+    if (!previous || this.hasPendingJob || localStorage.getItem(this.pendingJobKey)) return;
+    this.applyingCharacter = true;
+    // Reference-image subscribers adjust size and job type; restore the exact request afterwards.
+    this.sharedService.setReferenceImage(previous.referenceImage || null);
+    this.characterMask.setCanvasData(previous.mask);
+    this.referenceImage = previous.referenceImage;
+    this.generationRequest = previous.request;
+    this.aspectRatio = previous.aspectRatio;
+    this.aspectRatioChange.emit(this.aspectRatio);
+    this.hiresEnabled = previous.hiresEnabled;
+    this.applyingCharacter = false;
+    this.dismissCharacter();
+    this.updateSharedPrompt();
+    this.sharedService.setGenerationRequest(this.generationRequest);
+    this.updateCreditCost();
+    this.saveSettings();
+  }
+
+  dismissCharacter(): void {
+    this.characterUndo = null;
+    this.characters.clearActiveCharacter();
+    delete this.generationRequest.character_id; delete this.generationRequest.character_look_id;
   }
 
   ngOnDestroy() {
@@ -560,6 +663,9 @@ export class OptionsComponent implements OnInit {
     this.upscaleCreditCost = (baseCost * 3) + (loraTotalCost * 3);
     this.hiresCreditCost = (baseCost * 4) + (loraTotalCost * 4);
     this.enforceHiresConstraints();
+    // Model and balance responses arrive outside template events. Notify zoneless
+    // change detection so prices and account state render as soon as they arrive.
+    this.cdr.markForCheck();
   }
 
   getUpscaleTooltip(): string {
@@ -942,6 +1048,7 @@ export class OptionsComponent implements OnInit {
     if (!confirm('Are you sure you want to reset all saved options? This will clear your saved preferences.')) {
       return;
     }
+    this.dismissCharacter();
     localStorage.removeItem("prompt-input");
     localStorage.removeItem("negative-prompt-input");
     localStorage.removeItem("custom-denoise");
@@ -1338,8 +1445,12 @@ export class OptionsComponent implements OnInit {
       });
     }
 
+    const activeCharacter = this.characters.activeCharacter();
+    const characterOwner = this.sharedService.getUserDataValue()?.user_id;
     const requestToSend = {
       ...this.generationRequest,
+      character_id: activeCharacter?.id || undefined,
+      character_look_id: activeCharacter?.imageId || undefined,
       job_type: jobTypeForRequest,
       queue_type: queueTypeForRequest,
       regional_prompting: this.sanitizeRegionalPrompting(this.generationRequest.regional_prompting, this.generationRequest.model),
@@ -1371,6 +1482,10 @@ export class OptionsComponent implements OnInit {
 
           // Persist pending job so we can resume after refresh
           this.savePendingJob(response.job_id, {
+            character_id: response.character_id,
+            character_look_id: response.character_look_id,
+            character_name: response.character_id ? activeCharacter?.name : undefined,
+            character_owner: characterOwner,
             prompt: response.expanded_prompt || requestToSend.prompt,
             promptTemplate: response.prompt_template,
             width: requestToSend.width,
@@ -1714,6 +1829,7 @@ export class OptionsComponent implements OnInit {
       if (!blob) continue;
       const blobUrl = URL.createObjectURL(blob);
       generatedImages.push({
+        ...this.getCharacterAttributionSnapshot(),
         blob: blob,
         width: this.generationRequest.width,
         height: this.generationRequest.height,
@@ -1810,6 +1926,7 @@ export class OptionsComponent implements OnInit {
           return {
             blob, width: this.generationRequest.width, height: this.generationRequest.height,
             aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv4(), rated: false, timestamp: new Date(),
+            ...this.getCharacterAttributionSnapshot(),
             prompt: historyPrompt, promptTemplate: historyPromptTemplate, loras: historyLoras, regional_prompting: historyRegionalPrompting,
             promptSummary: historyPromptSummary, url: blobUrl,
             model: this.generationRequest.model, seed: this.currentSeed,
@@ -2095,6 +2212,12 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.fast_pass_code = event.target.value.toLowerCase().replace(/\s/g, '');
     // Persist immediately
     this.saveSettings();
+  }
+
+  private getCharacterAttributionSnapshot(): Pick<MobiansImage, 'characterId' | 'characterLookId'> {
+    const request = this.getPendingJob()?.request;
+    if (!request?.character_owner || request.character_owner !== this.sharedService.getUserDataValue()?.user_id) return {};
+    return { characterId: request.character_id, characterLookId: request.character_look_id };
   }
 
   // Persistence helpers

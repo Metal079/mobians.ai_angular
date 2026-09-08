@@ -123,6 +123,8 @@ export interface ManualLoraUploadRequest {
 }
 
 export interface SubmitJobResponse {
+  character_id?: string;
+  character_look_id?: string;
   job_id: string;
   prompt_template?: string;
   expanded_prompt?: string;

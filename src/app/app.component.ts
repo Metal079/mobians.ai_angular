@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CharacterSaveDialogComponent } from './characters/character-save-dialog.component';
 import { SharedService } from './shared.service';
 import { SwUpdate } from '@angular/service-worker';
 import { AuthService } from './auth/auth.service';
@@ -15,7 +16,7 @@ import { AccountCtaService, CreditPurchaseCtaContext, LoginCtaContext } from './
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     standalone: true,
-    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent, CreditsPurchaseComponent]
+    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent, CreditsPurchaseComponent, CharacterSaveDialogComponent]
 })
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;
@@ -308,6 +309,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private updateRouteFlags(url: string): void {
     this.hideFloatingMenu = /^\/admin(?:\/|$)/.test(url || '');
-    this.minimizeFloatingMenu = /^\/video(?:\/|$)/.test(url || '');
+    this.minimizeFloatingMenu = /^\/(?:video|characters)(?:\/|$)/.test(url || '');
   }
 }

@@ -11,7 +11,7 @@ import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
 import { AddLorasComponent } from '../../add-loras/add-loras.component';
 import { HistoryLoadRequest, LoraHistoryPromptService } from '../lora-history-prompt.service';
-import { environment } from 'src/environments/environment';
+import { loraThumbnailUrl, resolveLoraImageUrl } from 'src/_shared/lora-image';
 import { DialogModule } from 'primeng/dialog';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
@@ -186,9 +186,17 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
   }
 
   private handleModelChange() {
+    const incomingLoras = this.generationRequest.loras;
+    const hasReplacementSelection = Array.isArray(incomingLoras) && incomingLoras !== this.selectedLoras;
     this.filterLoras();
     this.refreshLoraFiltersList();
 
+    // A saved character can replace the model and its selection together.
+    // Resolve that incoming selection before the old model's choices can overwrite it.
+    if (hasReplacementSelection) {
+      this.syncSelectedFromRequest(incomingLoras);
+      return;
+    }
     const filteredSelection = this.selectedLoras.filter(lora => this.filteredLoras.includes(lora));
     if (filteredSelection.length !== this.selectedLoras.length) {
       this.selectedLoras = filteredSelection;
@@ -568,46 +576,8 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.displayModal = true;
   }
 
-  /**
-   * Generate a thumbnail URL with width constraint for CivitAI images.
-   * CivitAI CDN supports /width=N/ path segment for server-side resizing.
-   */
-  getThumbUrl(imageUrl: string | undefined, width: number): string {
-    if (!imageUrl) return '';
-    imageUrl = this.resolveImageUrl(imageUrl);
-    // Local optimized images
-    if (imageUrl.includes('/lora-image/')) {
-      const separator = imageUrl.includes('?') ? '&' : '?';
-      return `${imageUrl}${separator}w=${width}`;
-    }
-    // CivitAI image URLs - only rewrite known patterns
-    if (imageUrl.includes('image.civitai.com')) {
-      const widthPattern = /(\/)(original=\w+|width=\d+)(\/)/;
-      if (widthPattern.test(imageUrl)) {
-        return imageUrl.replace(widthPattern, `$1width=${width}$3`);
-      }
-      try {
-        const parsed = new URL(imageUrl);
-        if (parsed.searchParams.has('width') || parsed.searchParams.has('w')) {
-          parsed.searchParams.set('width', String(width));
-          parsed.searchParams.delete('w');
-          return parsed.toString();
-        }
-      } catch {
-        return imageUrl;
-      }
-      // Unknown format - keep original to avoid broken URLs
-      return imageUrl;
-    }
-    return imageUrl;
-  }
-
-  private resolveImageUrl(imageUrl: string): string {
-    if (imageUrl.startsWith('/lora-image/')) {
-      return `${environment.apiBaseUrl}${imageUrl}`;
-    }
-    return imageUrl;
-  }
+  readonly getThumbUrl = loraThumbnailUrl;
+  private readonly resolveImageUrl = resolveLoraImageUrl;
 
   onLoraPreviewVisibleChange(visible: boolean) {
     this.displayModal = visible;

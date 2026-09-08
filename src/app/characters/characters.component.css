@@ -1,0 +1,598 @@
+/* Page and shared typography */
+
+.characters-page {
+  width: min(1240px, 100%);
+  margin: auto;
+  padding: .5rem clamp(1rem, 3vw, 2.5rem) 6rem;
+  box-sizing: border-box;
+}
+
+h1, h2, p {
+  overflow-wrap: anywhere;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  letter-spacing: -.045em;
+  margin: .4rem 0 .65rem;
+  line-height: 1.12;
+}
+
+h2 {
+  font-size: 1.25rem;
+  letter-spacing: -.02em;
+  margin: 0;
+}
+
+.panel {
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--theme-surface-bg) 94%, white 6%);
+}
+
+.collection-header, .detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.loading-state, .empty-search {
+  text-align: center;
+  padding: 3rem;
+}
+
+/* Collection and character cards */
+
+.collection-header h1 {
+  font-size: clamp(2rem, 4vw, 2.65rem);
+}
+
+.collection-header p {
+  max-width: 510px;
+  margin: 0;
+  line-height: 1.6;
+  font-size: .93rem;
+}
+
+.collection-header > button {
+  flex-shrink: 0;
+}
+
+.collection-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  font-size: .85rem;
+}
+
+.collection-toolbar input {
+  width: min(310px, 60%);
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.2rem;
+}
+
+.character-card {
+  display: block;
+  border-radius: 20px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  background: var(--theme-surface-bg);
+  border: 1px solid var(--theme-border-strong);
+  transition: transform .15s ease;
+}
+
+.character-card:hover {
+  transform: none;
+}
+
+.card-image {
+  position: relative;
+  background: var(--theme-image-bg);
+  display: block;
+  aspect-ratio: 4 / 4.1;
+}
+
+.card-image > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-caption {
+  padding: 1rem 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.card-caption h2 {
+  font-size: 1.2rem;
+  margin: 0 0 .25rem;
+}
+
+.card-caption span {
+  font-size: .8rem;
+}
+
+.card-caption a {
+  text-decoration: none;
+  color: inherit;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-caption a:hover h2 {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.card-caption .primary-action {
+  font-size: .83rem;
+  padding: .6rem .75rem;
+}
+
+/* Welcome and empty collection */
+
+.welcome {
+  margin: 2rem 0;
+  padding: clamp(2rem, 6vw, 4rem) 1.5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--theme-primary) 35%, transparent), transparent 70%), var(--theme-surface-bg);
+}
+
+.hero-icon {
+  width: 74px;
+  height: 74px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 1.5rem;
+  background: var(--theme-primary);
+  color: var(--theme-primary-text);
+  font-size: 2rem;
+  transform: rotate(-5deg);
+}
+
+.welcome h2 {
+  font-size: clamp(1.65rem, 3vw, 2.25rem);
+}
+
+.welcome > p {
+  max-width: 510px;
+  margin: 1rem auto 1.5rem;
+  line-height: 1.65;
+}
+
+.welcome small {
+  margin: 1.3rem 0 0;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.welcome-actions a, .back-link {
+  color: inherit;
+  text-underline-offset: 4px;
+}
+
+/* Character header and management menu */
+
+.back-link {
+  display: inline-flex;
+  gap: .5rem;
+  margin-top: 1.2rem;
+  font-size: .86rem;
+  text-decoration: none;
+}
+
+.detail-header {
+  margin-top: 1.2rem;
+  position: relative;
+  margin-bottom: 1.4rem;
+}
+
+.detail-header h1 {
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  margin-bottom: .35rem;
+}
+
+.detail-header p {
+  margin: 0;
+  font-size: .82rem;
+}
+
+.character-menu {
+  position: relative;
+  margin-left: auto;
+  align-self: center;
+}
+
+.character-menu summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 12px;
+  font-size: 1.3rem;
+}
+
+.character-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.character-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + .4rem);
+  width: 210px;
+  z-index: 5;
+  display: grid;
+  gap: .25rem;
+  padding: .5rem;
+  border-radius: 14px;
+  border: 1px solid var(--theme-border-strong);
+  background: var(--theme-surface-bg);
+  box-shadow: 0 12px 30px #0003;
+}
+
+.character-menu button {
+  justify-content: flex-start;
+  font-size: .85rem;
+}
+
+/* Create with a character */
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-areas: 'gallery create';
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.create-panel {
+  grid-area: create;
+  padding: clamp(1.1rem, 2.5vw, 1.75rem);
+}
+
+.selected-look {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin-bottom: 1.4rem;
+}
+
+.selected-look img {
+  flex-shrink: 0;
+  width: 58px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.selected-look h2 {
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  line-height: 1.3;
+  margin-top: .35rem;
+}
+
+.selected-look .eyebrow {
+  font-size: .65rem;
+}
+
+.create-panel > label {
+  margin-top: 1rem;
+}
+
+.create-panel .create-actions {
+  margin-top: 1.15rem;
+}
+
+.create-actions > button {
+  width: 100%;
+  min-height: 50px;
+}
+
+.action-note {
+  text-align: center;
+  font-size: .75rem !important;
+}
+
+.setup-summary {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  border-top: 1px solid var(--theme-border-strong);
+  margin-top: 1.35rem;
+  padding-top: .75rem;
+  font-size: .8rem;
+}
+
+.setup-summary > span {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.setup-summary > button {
+  flex-shrink: 0;
+  padding: .5rem;
+  font-size: .8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prompt-preview {
+  margin-top: .5rem;
+  font-size: .8rem;
+}
+
+.prompt-preview summary {
+  cursor: pointer;
+  padding: .75rem 0;
+}
+
+.prompt-preview p {
+  margin: .4rem 0 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 210px;
+  overflow: auto;
+}
+
+/* Saved images and look selection */
+
+.gallery {
+  padding: .75rem;
+  grid-area: gallery;
+}
+
+.portrait {
+  position: relative;
+  height: clamp(300px, 48vw, 560px);
+  border-radius: 15px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--theme-image-bg), black 25%);
+}
+
+.portrait > img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.portrait-caption {
+  position: absolute;
+  bottom: .8rem;
+  left: .8rem;
+  max-width: calc(100% - 1.6rem);
+  box-sizing: border-box;
+  background: #081725d9;
+  color: white;
+  padding: .4rem .7rem;
+  border-radius: 8px;
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}
+
+.image-loading {
+  position: absolute;
+  top: .75rem;
+  left: .75rem;
+  background: #081725d9;
+  color: white;
+  border-radius: 8px;
+  padding: .3rem .6rem;
+  font-size: .8rem;
+}
+
+.gallery-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: .7rem .15rem;
+  gap: .5rem;
+}
+
+.gallery-heading h2 {
+  font-size: .87rem;
+}
+
+.gallery-heading h2 span {
+  font-weight: 400;
+  margin-left: .3rem;
+}
+
+.gallery-heading button {
+  font-size: .8rem;
+  padding: .5rem;
+}
+
+.filmstrip {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding: .25rem .1rem .5rem;
+}
+
+.character-ui .thumbnail {
+  flex: 0 0 68px;
+  height: 80px;
+  border-radius: 10px;
+  padding: 3px;
+  background: transparent;
+  position: relative;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.character-ui .thumbnail.selected {
+  border: 2px solid var(--theme-surface-text);
+}
+
+.thumbnail > i {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  background: #081b32e8;
+  color: #ffe282;
+  width: 23px;
+  height: 23px;
+  border-radius: 5px;
+  font-size: .7rem;
+}
+
+.look-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding-bottom: .5rem;
+}
+
+.look-actions button {
+  font-size: .8rem;
+  padding: .5rem .65rem;
+}
+
+.look-actions button:disabled {
+  opacity: .8;
+}
+
+.secondary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .6rem;
+}
+
+.gallery .secondary-actions {
+  border-top: 1px solid var(--theme-border-strong);
+  padding-top: .85rem;
+  margin: 0 .2rem;
+}
+
+.gallery .secondary-actions button {
+  font-size: .85rem;
+}
+
+.image-note {
+  margin: .8rem .5rem .25rem;
+  font-size: .75rem !important;
+}
+
+/* Saved-look editor */
+
+.model-details {
+  margin-top: 1.2rem;
+  border-top: 1px solid var(--theme-border-strong);
+  padding-top: 1rem;
+}
+
+.model-details summary {
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 700;
+}
+
+/* Mobile: creation comes first; the gallery remains on the left on desktop. */
+
+@media (max-width: 760px) {
+  .collection-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .character-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .8rem;
+  }
+  .card-caption {
+    padding: .8rem;
+    gap: .75rem;
+  }
+  .card-caption h2 {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    grid-template-areas: 'create' 'gallery';
+  }
+  .characters-page {
+    padding-inline: 1rem;
+  }
+  .detail-header {
+    flex-direction: row;
+    align-items: center;
+    margin-block: 1rem;
+    gap: .5rem;
+  }
+  .detail-header h1 {
+    margin-top: 0;
+  }
+  .create-panel {
+    padding: 1.1rem;
+  }
+  .selected-look {
+    margin-bottom: 1rem;
+  }
+  .selected-look img {
+    width: 46px;
+    height: 54px;
+  }
+  .selected-look h2 {
+    font-size: 1.2rem;
+  }
+  .setup-summary {
+    margin-top: 1rem;
+  }
+  .card-caption > a, .card-caption > button {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .card-caption span {
+    font-size: .74rem;
+  }
+  .gallery .portrait {
+    height: min(90vw, 440px);
+  }
+  .collection-toolbar {
+    font-size: .75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character-card {
+    transition: none;
+  }
+  .character-card:hover {
+    transform: none;
+  }
+}

@@ -1,4 +1,15 @@
 /* You can add global styles to this file, and also import other style files */
+.p-dialog.character-dialog,
+.p-dialog.character-dialog .p-dialog-header,
+.p-dialog.character-dialog .p-dialog-content {
+  background: var(--theme-surface-bg);
+  color: var(--theme-surface-text);
+}
+.p-dialog.character-dialog { border-color: var(--theme-border-strong); }
+.p-dialog.character-dialog .p-dialog-header-actions button { color: var(--theme-surface-text); }
+/* Keep expanded save sections beneath the clicked heading, without recentering. */
+.p-dialog.character-save-dialog { margin-block: clamp(16px, 4dvh, 40px); max-height: calc(100dvh - clamp(32px, 8dvh, 80px)); }
+.p-dialog.character-save-dialog .p-dialog-content { scrollbar-gutter: stable; }
 /* Bootstrap icons already loaded via angular.json - removed duplicate CDN import */
 
 :root {

@@ -7,12 +7,22 @@
     flex-direction: row;
     justify-content: center;
   }
-  
-  
+  /* Reserve the settings column even when its panels are collapsed. Otherwise
+     their intrinsic widths recenter the row and move the image and prompt. */
+  #generation-space > app-options {
+    flex: 0 1 600px;
+    width: 600px;
+    min-width: 0;
+  }
+
   @media screen and (max-width: 600px) {
     #generation-space {
       flex-direction: column;
       width: 100%;
       margin-top: 0%;
+    }
+    #generation-space > app-options {
+      flex: none;
+      width: 100%;
     }
   }
