@@ -5,6 +5,7 @@ import {
   HttpHandler,
   HttpRequest,
   HttpErrorResponse,
+  HttpContextToken,
 } from '@angular/common/http';
 import { Observable, throwError, Subject } from 'rxjs';
 import { catchError } from 'rxjs/operators';
@@ -13,9 +14,14 @@ import { catchError } from 'rxjs/operators';
 // Components can subscribe to this to show login modal
 export const sessionInvalid$ = new Subject<void>();
 
+// Public endpoints can opt out of session headers and their CORS preflight.
+export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
+
 @Injectable()
 export class AuthInterceptor implements HttpInterceptor {
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    if (req.context.get(SKIP_AUTH)) return next.handle(req);
+
     // Get token from localStorage
     let token: string | null = null;
     try {

@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
+import { SKIP_AUTH } from './auth/auth.interceptor';
 
 export interface CreditPackageResponseItem {
   id: string;
@@ -445,7 +446,11 @@ export class StableDiffusionService {
 
   getGenerationModels(): Observable<GenerationModelCatalogResponse> {
     const url = `${this.apiBaseUrl}/models`;
-    return this.http.get<GenerationModelCatalogResponse>(url);
+    // The catalog is public. A session header needlessly adds a preflight request
+    // that can consume the entire model-loading timeout before the GET begins.
+    return this.http.get<GenerationModelCatalogResponse>(url, {
+      context: new HttpContext().set(SKIP_AUTH, true),
+    });
   }
 
   getCurrentUser(): Observable<CurrentUserResponse> {
