@@ -77,6 +77,15 @@ export class OptionsComponent implements OnInit {
   @ViewChild(ImageHistoryPanelComponent) historyPanel?: ImageHistoryPanelComponent;
   private settingsHydrated = false;
   modelSettings: GenerationModelSettings[] = [];
+  modelsLoading = true;
+  modelsLoadError = false;
+  private modelRequestInFlight = false;
+
+  get canGenerate(): boolean {
+    return this.enableGenerationButton && !this.hasPendingJob
+      && !this.modelsLoading && !this.modelsLoadError
+      && !!this.getModelSetting(this.generationRequest.model);
+  }
   models_types: { [model: string]: string; } = this.createModelTypeMap(this.modelSettings);
   private defaultModelId: string = 'novaMobianXL_v20';
 
@@ -376,7 +385,12 @@ export class OptionsComponent implements OnInit {
     });
   }
 
-  private async loadGenerationModels(): Promise<void> {
+  async loadGenerationModels(): Promise<void> {
+    if (this.modelRequestInFlight || this.componentDestroyed) return;
+    this.modelRequestInFlight = true;
+    this.modelsLoading = true;
+    this.modelsLoadError = false;
+    this.cdr.markForCheck();
     try {
       const response = await firstValueFrom(
         this.stableDiffusionService.getGenerationModels().pipe(
@@ -387,21 +401,28 @@ export class OptionsComponent implements OnInit {
               return attempt + 1;
             }, 0),
             delayWhen(attempt => timer(attempt * 1500))
-          ))
+          )),
+          takeUntilDestroyed(this.destroyRef)
         )
       );
+      if (this.componentDestroyed) return;
       this.setModelSettings(response.models, response.default_model);
-      this.ensureValidModelSelected(false);
+      this.ensureValidModelSelected(true);
       this.updateCreditCost();
+      this.sharedService.setGenerationRequest(this.generationRequest);
     } catch (error) {
+      if (this.componentDestroyed) return;
       console.error('Failed to load generation models.', error);
-      this.enableGenerationButton = false;
+      this.modelsLoadError = true;
       this.messageService.add({
         severity: 'error',
         summary: 'Model settings unavailable',
-        detail: 'Generation models could not be loaded from the server. Please try again later.',
+        detail: 'Open Options and retry loading Model Select.',
       });
-      this.cdr.markForCheck();
+    } finally {
+      this.modelRequestInFlight = false;
+      this.modelsLoading = false;
+      if (!this.componentDestroyed) this.cdr.markForCheck();
     }
   }
 
@@ -430,20 +451,9 @@ export class OptionsComponent implements OnInit {
     });
 
     await this.loadSettings();
-    await this.loadGenerationModels();
+    if (this.componentDestroyed) return;
 
-    this.dynamicPromptLibraryState.ensureLoaded().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => this.applyDynamicPromptState(this.generationRequest.prompt),
-      error: () => {},
-    });
-
-    // If model names change between deployments, users may have an invalid saved model.
-    // Coerce to a valid model so generation requests never send an empty/unknown model.
-    this.ensureValidModelSelected(true);
-
-    this.sharedService.setGenerationRequest(this.generationRequest);
-    this.updateSharedPrompt();
-
+    // History and uploads must update the reference controls even while models load.
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
         if (!this.applyingCharacter) this.dismissCharacter();
@@ -468,7 +478,23 @@ export class OptionsComponent implements OnInit {
         // If the user re-enters txt2img, validate auth/credit constraints.
         this.enforceHiresConstraints();
       }
+      this.cdr.markForCheck();
     });
+
+    await this.loadGenerationModels();
+    if (this.componentDestroyed) return;
+
+    this.dynamicPromptLibraryState.ensureLoaded().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => this.applyDynamicPromptState(this.generationRequest.prompt),
+      error: () => {},
+    });
+
+    // If model names change between deployments, users may have an invalid saved model.
+    // Coerce to a valid model so generation requests never send an empty/unknown model.
+    this.ensureValidModelSelected(true);
+
+    this.sharedService.setGenerationRequest(this.generationRequest);
+    this.updateSharedPrompt();
 
     // Removed localStorage restore; session should be provided by backend if needed
 
@@ -1344,6 +1370,8 @@ export class OptionsComponent implements OnInit {
 
   // Send job to django api and retrieve job id.
   async submitJob(mode: 'generate' | 'upscale' | 'hires' = 'generate') {
+    if (!this.canGenerate) return;
+
     const effectiveMode: 'generate' | 'upscale' | 'hires' = (
       mode === 'generate'
       && this.hiresEligible

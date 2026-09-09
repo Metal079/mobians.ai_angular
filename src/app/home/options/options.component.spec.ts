@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { NO_ERRORS_SCHEMA, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { NEVER, Subject, of } from 'rxjs';
+import { BehaviorSubject, NEVER, Subject, of } from 'rxjs';
 import { SwPush } from '@angular/service-worker';
 import { MessageService } from 'primeng/api';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -133,7 +133,8 @@ class SharedServiceStub {
   user = { user_id: 'owner-a', token: 'token-a' };
   getUserDataValue() { return this.user; }
   getPrompt() { return of(''); }
-  getReferenceImage() { return of(null); }
+  referenceImage = new BehaviorSubject<any>(null);
+  getReferenceImage() { return this.referenceImage.asObservable(); }
   setGenerationRequest() {}
   setPrompt() {}
   setReferenceImage() {}
@@ -189,6 +190,7 @@ describe('OptionsComponent', () => {
     fixture = TestBed.createComponent(OptionsComponent);
     component = fixture.componentInstance;
     (component as any).setModelSettings(testModelSettings, 'novaMobianXL_v20');
+    component.modelsLoading = false;
     TestBed.inject(DynamicPromptLibraryStateService).library.set(dynamicPromptLibraryResponse);
   });
 
@@ -683,7 +685,7 @@ describe('OptionsComponent asynchronous initial state', () => {
         { provide: AuthService, useValue: { isLoggedIn: () => false, credits$: credits } },
       ],
     }).overrideComponent(OptionsComponent, {
-      set: { template: '<span class="cost">{{creditCost}}</span><span class="credits">{{userCredits}}</span><button [disabled]="!enableGenerationButton">Generate</button>' },
+      set: { template: '<span class="cost">{{creditCost}}</span><span class="credits">{{userCredits}}</span><button [disabled]="!canGenerate">Generate</button><span class="reference">{{referenceImage?.UUID}}</span>' },
     }).compileComponents();
     fixture = TestBed.createComponent(OptionsComponent);
     fixture.autoDetectChanges();
@@ -695,6 +697,89 @@ describe('OptionsComponent asynchronous initial state', () => {
     fixture.destroy();
     document.body.classList.remove('theme-navy', 'theme-606', 'theme-eggman', 'dark-input-fields');
   });
+
+  it('updates and clears the reference while models are still loading, without enabling generation', async () => {
+    const component = fixture.componentInstance;
+    const shared = TestBed.inject(SharedService) as unknown as SharedServiceStub;
+    const acquire = spyOn(TestBed.inject(GenerationLockService), 'tryAcquire');
+    shared.referenceImage.next({ UUID: 'history-selection', aspectRatio: 'square', base64: 'image-data' });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.reference').textContent).toBe('history-selection');
+    expect(component.generationRequest.job_type).toBe('img2img');
+    expect(component.modelsLoading).toBeTrue();
+    expect(fixture.nativeElement.querySelector('button').disabled).toBeTrue();
+    for (const mode of ['generate', 'upscale', 'hires'] as const) await component.submitJob(mode);
+    expect(acquire).not.toHaveBeenCalled();
+
+    shared.referenceImage.next(null);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.reference').textContent).toBe('');
+    expect(component.generationRequest.job_type).toBe('txt2img');
+    expect(component.generationRequest.image).toBeUndefined();
+  });
+
+  it('keeps the selected image through a timeout and retries successfully without refreshing', fakeAsync(() => {
+    spyOn(console, 'error');
+    fixture.destroy();
+    fixture = TestBed.createComponent(OptionsComponent);
+    fixture.autoDetectChanges();
+    tick();
+    const component = fixture.componentInstance;
+    const shared = TestBed.inject(SharedService) as unknown as SharedServiceStub;
+    shared.referenceImage.next({ UUID: 'history-selection', aspectRatio: 'square', base64: 'image-data' });
+    tick(28499);
+    expect(component.referenceImage?.UUID).toBe('history-selection');
+    expect(component.modelsLoading).toBeTrue();
+    expect(component.canGenerate).toBeFalse();
+    tick(1);
+    expect(component.modelsLoading).toBeFalse();
+    expect(component.modelsLoadError).toBeTrue();
+    expect(component.canGenerate).toBeFalse();
+    // Cross-tab and job-completion updates must not bypass the catalog requirement.
+    component.enableGenerationButton = true;
+    expect(component.canGenerate).toBeFalse();
+
+    component.loadGenerationModels();
+    component.loadGenerationModels();
+    expect(TestBed.inject(StableDiffusionService).getGenerationModels).toHaveBeenCalledTimes(3);
+    expect(component.modelsLoading).toBeTrue();
+    expect(component.modelsLoadError).toBeFalse();
+    expect(component.canGenerate).toBeFalse();
+    catalog.next({ default_model: 'novaMobianXL_v20', models: testModelSettings });
+    tick();
+    expect(component.modelsLoading).toBeFalse();
+    expect(component.modelsLoadError).toBeFalse();
+    expect(component.canGenerate).toBeTrue();
+    expect(component.referenceImage?.UUID).toBe('history-selection');
+    expect(component.generationRequest.image).toBe('image-data');
+    expect(component.creditCost).toBe(15);
+    expect(localStorage.getItem('model')).toBe('novaMobianXL_v20');
+  }));
+
+  it('does not enable generation for a pending job when the catalog arrives', async () => {
+    const component = fixture.componentInstance;
+    component.hasPendingJob = true;
+    catalog.next({ default_model: 'novaMobianXL_v20', models: testModelSettings });
+    await Promise.resolve();
+    await fixture.whenStable();
+    expect(component.modelsLoading).toBeFalse();
+    expect(component.canGenerate).toBeFalse();
+  });
+
+  it('cancels catalog retries when the view is destroyed', fakeAsync(() => {
+    spyOn(console, 'error');
+    fixture.destroy();
+    fixture = TestBed.createComponent(OptionsComponent);
+    fixture.autoDetectChanges();
+    tick();
+    expect(catalog.observed).toBeTrue();
+    const messages = spyOn(TestBed.inject(MessageService), 'add');
+    fixture.destroy();
+    tick(30000);
+    expect(catalog.observed).toBeFalse();
+    expect(messages).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  }));
 
   it('renders model prices and credit refreshes when responses arrive after the first render', async () => {
     expect(fixture.nativeElement.querySelector('.cost').textContent).toBe('0');

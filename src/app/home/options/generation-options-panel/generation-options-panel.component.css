@@ -29,6 +29,17 @@
   margin-bottom: 0;
 }
 
+.model-load-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.65rem;
+  font-size: 0.875rem;
+  color: var(--theme-surface-text);
+}
+
 .model-select-option {
   display: flex;
   align-items: center;

@@ -9,6 +9,9 @@
       panelStyleClass="model-select-panel"
       ariaLabel="Model Select"
       [options]="modelSettings"
+      [loading]="modelsLoading"
+      [disabled]="modelsLoading || modelsLoadError || !modelSettings.length"
+      [placeholder]="modelsLoading ? 'Loading models…' : (modelsLoadError ? 'Models unavailable' : 'Select a model')"
       optionValue="model_id"
       [(ngModel)]="generationRequest.model"
       (onChange)="onModelSelectionChange($event.value)">
@@ -25,6 +28,14 @@
         </div>
       </ng-template>
     </p-select>
+    @if (modelsLoading) {
+      <div class="model-load-status" role="status">Loading available models…</div>
+    } @else if (modelsLoadError) {
+      <div class="model-load-status" role="alert">
+        <span>Models could not be loaded. Please try again.</span>
+        <button type="button" class="btn btn-primary btn-sm" (click)="retryModels.emit()">Retry</button>
+      </div>
+    }
 
     <label for="aspectRatioSelect">Image aspect-ratio</label>
     <select class="form-select" id="aspectRatioSelect" aria-label="Image aspect-ratio"

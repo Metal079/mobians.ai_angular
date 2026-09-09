@@ -24,6 +24,33 @@ describe('Regional precision controls', () => {
     component.workspaceExpanded = true;
     fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
   });
+  it('shows a disabled loading selector and an actionable retry after failure', async () => {
+    fixture.autoDetectChanges();
+    fixture.componentRef.setInput('modelSettings', []);
+    fixture.componentRef.setInput('modelsLoading', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="status"]').textContent).toContain('Loading available models');
+    expect(fixture.nativeElement.querySelector('.model-select.p-disabled')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.model-load-status button')).toBeNull();
+
+    fixture.componentRef.setInput('modelsLoading', false);
+    fixture.componentRef.setInput('modelsLoadError', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Models could not be loaded');
+    const retry = spyOn(component.retryModels, 'emit');
+    fixture.nativeElement.querySelector('.model-load-status button').click();
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    fixture.componentRef.setInput('modelsLoadError', false);
+    fixture.componentRef.setInput('modelSettings', [{ model_id: 'test', display_name: 'Test', supports_regional_prompting: true }]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.model-load-status')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.model-select.p-disabled')).toBeNull();
+  });
+
   function numberInput(key: string): HTMLInputElement { return fixture.nativeElement.querySelector('#region-value-' + key); }
   function commit(key: string, value: string): void {
     const input = numberInput(key); input.value = value;

@@ -27,6 +27,9 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) aspectRatio!: AspectRatio;
   @Input() modelSettings: GenerationModelSettings[] = [];
+  @Input() modelsLoading = false;
+  @Input() modelsLoadError = false;
+  @Output() retryModels = new EventEmitter<void>();
 
   @Input() panelTheme: PanelTheme = 'sonic';
   @Output() panelThemeChange = new EventEmitter<PanelTheme>();
