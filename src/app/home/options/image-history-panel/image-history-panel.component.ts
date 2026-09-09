@@ -5,7 +5,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
 import { ZipWriter } from '@zip.js/zip.js';
-import { MessageService } from 'primeng/api';
+import { MenuItem, MessageService } from 'primeng/api';
+import { MenuModule } from 'primeng/menu';
 import { AuthService } from 'src/app/auth/auth.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { ImageSyncService, SyncStatus } from 'src/app/image-sync.service';
@@ -22,12 +23,12 @@ import { TabsModule } from 'primeng/tabs';
     templateUrl: './image-history-panel.component.html',
     styleUrls: ['./image-history-panel.component.css'],
     standalone: true,
-    imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule]
+    imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule, MenuModule]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private readonly characters = inject(CharactersService);
-  async saveCharacter(image: MobiansImage, event: Event): Promise<void> {
-    event.stopPropagation();
+  async saveCharacter(image: MobiansImage, event?: Event): Promise<void> {
+    event?.stopPropagation();
     const blob = await this.getDownloadBlob(image);
     if (!blob) {
       this.messageService.add({ severity: 'warn', summary: 'Image unavailable', detail: 'Open this image from history and try again.' });
@@ -83,7 +84,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   imagesPerPageOptions: number[] = [4, 9, 16];
   gridColumns = 2;
-  private openInfoImages: Set<string> = new Set();
+  infoImage: MobiansImage | null = null;
+  copiedPromptKey: string | null = null;
+  private promptCopyResetTimer?: ReturnType<typeof setTimeout>;
+  private promptCopyRequest = 0;
+  private readonly imageActionMenus = new WeakMap<MobiansImage, MenuItem[]>();
   private imagesPerPageUserSet = false;
   private readonly mobileBreakpointPx = 768;
   private readonly imagesPerPageKey = 'mobians:history-images-per-page';
@@ -186,6 +191,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    if (this.promptCopyResetTimer) clearTimeout(this.promptCopyResetTimer);
     window.removeEventListener('storage', this.onStorage);
     window.removeEventListener('resize', this.onViewportResize);
     if (this.cloudSyncInterval) {
@@ -702,29 +708,47 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     await this.applyImagesPerPage(size, true);
   }
 
-  toggleImageInfo(image: MobiansImage, event?: Event) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
+  getImageActions(image: MobiansImage): MenuItem[] {
+    let items = this.imageActionMenus.get(image);
+    if (!items) {
+      items = [
+        { label: 'Save character', icon: 'bi bi-bookmark-heart', command: () => { void this.saveCharacter(image); } },
+        { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
+        { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
+        { separator: true },
+        { label: 'Delete image', icon: 'bi bi-trash', command: () => { void this.deleteImage(image); } },
+      ];
+      this.imageActionMenus.set(image, items);
     }
-    const key = this.getImageInfoKey(image);
-    if (!key) return;
-    if (this.openInfoImages.has(key)) {
-      this.openInfoImages.delete(key);
-      return;
-    }
-    this.openInfoImages.add(key);
+    return items;
   }
 
-  isImageInfoOpen(image: MobiansImage): boolean {
-    const key = this.getImageInfoKey(image);
-    return key ? this.openInfoImages.has(key) : false;
+  async copyInfoPrompt(text: string | undefined, key: string): Promise<void> {
+    const image = this.infoImage;
+    if (!text || !image) return;
+    const request = ++this.promptCopyRequest;
+    if (this.promptCopyResetTimer) clearTimeout(this.promptCopyResetTimer);
+    this.copiedPromptKey = null;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (this.destroyRef.destroyed || this.infoImage !== image || request !== this.promptCopyRequest) return;
+      this.runInAngularZone(() => this.copiedPromptKey = key);
+      this.promptCopyResetTimer = setTimeout(() => {
+        this.runInAngularZone(() => this.copiedPromptKey = null);
+        this.promptCopyResetTimer = undefined;
+      }, 2000);
+    } catch {
+      if (this.destroyRef.destroyed || this.infoImage !== image || request !== this.promptCopyRequest) return;
+      this.messageService.add({
+        severity: 'warn', summary: 'Could not copy prompt',
+        detail: 'Select the prompt text and copy it manually.',
+      });
+    }
   }
 
-  private closeImageInfo(image: MobiansImage) {
-    const key = this.getImageInfoKey(image);
-    if (key) {
-      this.openInfoImages.delete(key);
+  private closeImageInfo(image: MobiansImage): void {
+    if (this.infoImage && this.getImageInfoKey(this.infoImage) === this.getImageInfoKey(image)) {
+      this.infoImage = null;
     }
   }
 

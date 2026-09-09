@@ -825,3 +825,29 @@ body.theme-navy .starter-editor-card textarea {
     flex: 1 1 8rem;
   }
 }
+
+/* History menus are attached to body so dense grids cannot clip them. */
+.history-image-menu {
+  --p-menu-background: var(--theme-surface-bg);
+  --p-menu-border-color: var(--theme-border-strong);
+  --p-menu-color: var(--theme-surface-text);
+  --p-menu-item-color: var(--theme-surface-text);
+  --p-menu-item-icon-color: var(--theme-surface-text);
+  --p-menu-item-focus-color: var(--theme-surface-text);
+  --p-menu-item-icon-focus-color: var(--theme-surface-text);
+  --p-menu-item-focus-background: var(--theme-surface-alt-bg);
+  --p-menu-item-padding: 0.75rem 1rem;
+  --p-menu-separator-border-color: var(--theme-border);
+}
+
+.p-dialog.history-info-dialog,
+.history-info-dialog .p-dialog-header,
+.history-info-dialog .p-dialog-content {
+  background: var(--theme-surface-bg);
+  color: var(--theme-surface-text);
+  border-color: var(--theme-border-strong);
+}
+
+.history-info-dialog .p-dialog-header-actions button {
+  color: var(--theme-surface-text);
+}

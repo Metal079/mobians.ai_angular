@@ -111,9 +111,6 @@
   background: rgba(0, 0, 0, 0.75);
 }
 
-.save-character-action { width: auto; max-width: calc(100% - 50px); padding: 0 9px; gap: 5px; border-radius: 10px; font-size: 12px; line-height: 1.15; }
-.image-actions { left: 6px; justify-content: flex-end; }
-.image-action-btn:not(.save-character-action) { flex-shrink: 0; }
 .image-action-btn:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 
 .reference-image {

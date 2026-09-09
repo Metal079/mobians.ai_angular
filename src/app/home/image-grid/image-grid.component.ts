@@ -1,5 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild, inject } from '@angular/core';
-import { CharactersService } from 'src/app/characters/characters.service';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild } from '@angular/core';
 import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -22,11 +21,6 @@ import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.co
     imports: [CommonModule, RingGameComponent, RingLeaderboardComponent]
 })
 export class ImageGridComponent implements OnDestroy {
-  private readonly characters = inject(CharactersService);
-  saveCharacter(image: MobiansImage, event: Event): void {
-    event.stopPropagation();
-    this.characters.requestSave(image, image.characterId);
-  }
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   imagesIDs: string[] = [];

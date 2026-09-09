@@ -44,56 +44,8 @@
                     <img [attr.src]="image.url || null" alt="Generated Image" loading="eager" decoding="sync"
                       (load)="onImageElementLoad(image, $event)" (error)="onImageElementError(image, $event)"
                       (click)="handleImageClick(image)">
-                    <div class="top-left-icon">
-                      <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                      (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
-                    </div>
                     @if (!pickerMode) {
-                      <button type="button" class="save-character-history" (click)="saveCharacter(image, $event)" aria-label="Save to My Characters" title="Save to My Characters"><i class="bi bi-person-plus" aria-hidden="true"></i></button>
-                    }
-                    <div class="bottom-left-icon">
-                      <i class="bi bi-download"
-                        (click)="$event.stopPropagation(); downloadImage(image, $event)"
-                      aria-label="Download Image"></i>
-                    </div>
-                    <div class="top-right-icon">
-                      <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)"
-                      aria-label="Delete Image"></i>
-                    </div>
-                    <div class="bottom-right-icon">
-                      <i class="bi bi-info-circle" [class.active]="isImageInfoOpen(image)"
-                      (click)="toggleImageInfo(image, $event)" aria-label="Image info"></i>
-                    </div>
-                    @if (isImageInfoOpen(image)) {
-                      <div class="image-info-overlay"
-                        (click)="$event.stopPropagation(); toggleImageInfo(image, $event)">
-                        <div class="info-line">
-                          <span class="info-label">Date</span>
-                          <span class="info-value">{{ image.timestamp | date:'short' }}</span>
-                        </div>
-                        <div class="info-line">
-                          <span class="info-label">Model</span>
-                          <span class="info-value">{{ image.model || 'Unknown' }}</span>
-                        </div>
-                        <div class="info-line">
-                          <span class="info-label">Seed</span>
-                          <span class="info-value">{{ image.seed ?? '—' }}</span>
-                        </div>
-                        <div class="info-line">
-                          <span class="info-label">LoRAs</span>
-                          <span class="info-value">{{ formatLoras(image) }}</span>
-                        </div>
-                        <div class="info-line">
-                          <span class="info-label">Prompt</span>
-                          <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
-                        </div>
-                        @if (image.promptTemplate) {
-                          <div class="info-line">
-                            <span class="info-label">Template</span>
-                            <span class="info-value">{{ image.promptTemplate }}</span>
-                          </div>
-                        }
-                      </div>
+                      <ng-container *ngTemplateOutlet="historyImageActions; context: { $implicit: image }"></ng-container>
                     }
                   </div>
                 </div>
@@ -246,64 +198,8 @@
                             <i class="bi" [ngClass]="isImageSelected(image) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
                           </div>
                         }
-                        @if (!bulkSelectMode) {
-                          <div class="top-left-icon">
-                            <i class="fa" [ngClass]="image.favorite ? 'bi bi-star-fill' : 'bi bi-star'"
-                            (click)="$event.stopPropagation(); toggleFavorite(image)" aria-label="Toggle Favorite"></i>
-                          </div>
-                        }
-                        @if (!bulkSelectMode) {
-                          @if (!pickerMode) {
-                            <button type="button" class="save-character-history" (click)="saveCharacter(image, $event)" aria-label="Save to My Characters" title="Save to My Characters"><i class="bi bi-person-plus" aria-hidden="true"></i></button>
-                          }
-                          <div class="bottom-left-icon">
-                            <i class="bi bi-download"
-                              (click)="$event.stopPropagation(); downloadImage(image, $event)"
-                            aria-label="Download Image"></i>
-                          </div>
-                        }
-                        @if (!bulkSelectMode) {
-                          <div class="top-right-icon">
-                            <i class="bi bi-trash" (click)="$event.stopPropagation(); deleteImage(image)"
-                            aria-label="Delete Image"></i>
-                          </div>
-                        }
-                        @if (!bulkSelectMode) {
-                          <div class="bottom-right-icon">
-                            <i class="bi bi-info-circle" [class.active]="isImageInfoOpen(image)"
-                            (click)="toggleImageInfo(image, $event)" aria-label="Image info"></i>
-                          </div>
-                        }
-                        @if (!bulkSelectMode && isImageInfoOpen(image)) {
-                          <div class="image-info-overlay"
-                            (click)="$event.stopPropagation(); toggleImageInfo(image, $event)">
-                            <div class="info-line">
-                              <span class="info-label">Date</span>
-                              <span class="info-value">{{ image.timestamp | date:'short' }}</span>
-                            </div>
-                            <div class="info-line">
-                              <span class="info-label">Model</span>
-                              <span class="info-value">{{ image.model || 'Unknown' }}</span>
-                            </div>
-                            <div class="info-line">
-                              <span class="info-label">Seed</span>
-                              <span class="info-value">{{ image.seed ?? '—' }}</span>
-                            </div>
-                            <div class="info-line">
-                              <span class="info-label">LoRAs</span>
-                              <span class="info-value">{{ formatLoras(image) }}</span>
-                            </div>
-                            <div class="info-line">
-                              <span class="info-label">Prompt</span>
-                              <span class="info-value">{{ image.promptSummary || image.prompt || 'No prompt' }}</span>
-                            </div>
-                            @if (image.promptTemplate) {
-                              <div class="info-line">
-                                <span class="info-label">Template</span>
-                                <span class="info-value">{{ image.promptTemplate }}</span>
-                              </div>
-                            }
-                          </div>
+                        @if (!bulkSelectMode && !pickerMode) {
+                          <ng-container *ngTemplateOutlet="historyImageActions; context: { $implicit: image }"></ng-container>
                         }
                       </div>
                     </div>
@@ -362,3 +258,98 @@
           }
         </ng-template>
       </p-dialog>
+
+<!-- Shared controls keep All Images and Favorites consistent. -->
+<ng-template #historyImageActions let-image>
+  <div class="history-image-actions">
+    <button type="button" class="history-icon-btn" [class.is-favorite]="image.favorite"
+      [attr.aria-label]="image.favorite ? 'Remove from favorites' : 'Add to favorites'"
+      [attr.aria-pressed]="!!image.favorite"
+      (click)="$event.stopPropagation(); toggleFavorite(image)">
+      <i class="bi" [ngClass]="image.favorite ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="history-icon-btn" aria-label="Image actions" title="Image actions"
+      aria-haspopup="menu" [attr.aria-expanded]="!!imageMenu.visible" [attr.aria-controls]="imageMenu.id"
+      (click)="$event.stopPropagation(); imageMenu.toggle($event)">
+      <i class="bi bi-three-dots" aria-hidden="true"></i>
+    </button>
+  </div>
+  <p-menu #imageMenu [model]="getImageActions(image)" [popup]="true" appendTo="body"
+    styleClass="history-image-menu" ariaLabel="Image actions"></p-menu>
+</ng-template>
+
+<p-dialog header="Image info" styleClass="history-info-dialog" [visible]="!!infoImage"
+  (visibleChange)="infoImage = $event ? infoImage : null" [modal]="true" [draggable]="false"
+  [style]="{ width: 'min(480px, 94vw)' }">
+  @if (infoImage; as image) {
+    <div class="image-info-details">
+      <div class="info-line">
+        <span class="info-label">Date</span>
+        <span class="info-value">{{ image.timestamp | date:'short' }}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Model</span>
+        <span class="info-value">{{ image.model || 'Unknown' }}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">Seed</span>
+        <span class="info-value">{{ image.seed ?? '—' }}</span>
+      </div>
+      <div class="info-line">
+        <span class="info-label">LoRAs</span>
+        <span class="info-value">{{ formatLoras(image) }}</span>
+      </div>
+      <ng-container *ngTemplateOutlet="copyablePrompt; context: {
+        label: image.regional_prompting?.enabled ? 'Main prompt' : 'Prompt',
+        text: image.prompt || image.promptSummary, copyKey: image.UUID + ':prompt', emptyText: 'No prompt'
+      }"></ng-container>
+      @if (image.negativePrompt) {
+        <ng-container *ngTemplateOutlet="copyablePrompt; context: {
+          label: 'Negative prompt', text: image.negativePrompt, copyKey: image.UUID + ':negative'
+        }"></ng-container>
+      }
+      @if (image.regional_prompting?.enabled) {
+        @for (region of image.regional_prompting?.regions; track $index) {
+          <div class="info-region">
+            <ng-container *ngTemplateOutlet="copyablePrompt; context: {
+              label: 'Region ' + ($index + 1) + ' prompt', text: region.prompt,
+              copyKey: image.UUID + ':region-' + $index, emptyText: 'No regional prompt'
+            }"></ng-container>
+            @if (region.inherit_base_prompt) {
+              <small class="info-region-note">Includes the main prompt</small>
+            }
+            @if (region.negative_prompt) {
+              <ng-container *ngTemplateOutlet="copyablePrompt; context: {
+                label: 'Region ' + ($index + 1) + ' negative prompt', text: region.negative_prompt,
+                copyKey: image.UUID + ':region-negative-' + $index
+              }"></ng-container>
+            }
+          </div>
+        }
+      }
+      @if (image.promptTemplate) {
+        <div class="info-line">
+          <span class="info-label">Template</span>
+          <span class="info-value">{{ image.promptTemplate }}</span>
+        </div>
+      }
+    </div>
+  }
+</p-dialog>
+
+<ng-template #copyablePrompt let-label="label" let-text="text" let-copyKey="copyKey" let-emptyText="emptyText">
+  <div class="info-line">
+    <div class="info-prompt-heading">
+      <span class="info-label">{{ label }}</span>
+      @if (text) {
+        <button type="button" class="prompt-copy-btn" (click)="copyInfoPrompt(text, copyKey)"
+          [attr.aria-label]="'Copy ' + label.toLowerCase()"
+          [title]="copiedPromptKey === copyKey ? 'Copied' : 'Copy ' + label.toLowerCase()">
+          <i class="bi" [ngClass]="copiedPromptKey === copyKey ? 'bi-check2' : 'bi-copy'" aria-hidden="true"></i>
+          <span aria-live="polite">{{ copiedPromptKey === copyKey ? 'Copied' : 'Copy' }}</span>
+        </button>
+      }
+    </div>
+    <span class="info-value">{{ text || emptyText }}</span>
+  </div>
+</ng-template>
