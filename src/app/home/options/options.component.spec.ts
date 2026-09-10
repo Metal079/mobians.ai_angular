@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { NO_ERRORS_SCHEMA, provideZonelessChangeDetection } from '@angular/core';
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { BehaviorSubject, NEVER, Subject, of } from 'rxjs';
+import { ComponentFixture, fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
+import { BehaviorSubject, NEVER, Observable, Subject, of, throwError } from 'rxjs';
 import { SwPush } from '@angular/service-worker';
 import { MessageService } from 'primeng/api';
 import { DialogService } from 'primeng/dynamicdialog';
@@ -233,6 +233,138 @@ describe('OptionsComponent', () => {
       });
     }
   }
+
+  it('latches early cancel until the submit response arrives and ignores rapid repeated clicks', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const submitted = new Subject<any>();
+    const cancelled = new Subject<any>();
+    sd.submitJob = jasmine.createSpy().and.returnValue(submitted);
+    sd.cancelJob = jasmine.createSpy().and.returnValue(cancelled);
+    const poll = spyOn(sd, 'getJobStatus');
+    const release = spyOn(TestBed.inject(GenerationLockService), 'release');
+
+    component.submitJob();
+    for (let i = 0; i < 10; i++) {
+      component.cancelPendingJob();
+      component.submitJob();
+    }
+    expect(sd.submitJob).toHaveBeenCalledTimes(1);
+    expect(component.cancelInProgress).toBeTrue();
+    expect(component.canGenerate).toBeFalse();
+    expect(release).not.toHaveBeenCalled();
+    expect(sd.cancelJob).not.toHaveBeenCalled();
+
+    submitted.next({ job_id: 'late-job' });
+    submitted.complete();
+    component.cancelPendingJob();
+    expect(sd.cancelJob).toHaveBeenCalledOnceWith('late-job');
+    tick(5000);
+    expect(poll).not.toHaveBeenCalled();
+    cancelled.next({ credits_refunded: 0 });
+    cancelled.complete();
+    expect(component.canGenerate).toBeTrue();
+    expect(component.hasPendingJob).toBeFalse();
+    expect(localStorage.getItem('mobians:pending-job')).toBeNull();
+    tick(5000);
+    expect(poll).not.toHaveBeenCalled();
+  }));
+
+  it('cancels during asynchronous image preparation without submitting a job', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.submitJob = jasmine.createSpy();
+    const migration = TestBed.inject(BlobMigrationService) as any;
+    let resolveImage!: (value: string) => void;
+    migration.blobToBase64 = () => new Promise<string>(resolve => resolveImage = resolve);
+    component.referenceImage = { blob: new Blob(['image']) } as any;
+    component.submitJob();
+    component.cancelPendingJob();
+    component.submitJob();
+    resolveImage('image-data');
+    flushMicrotasks();
+    expect(sd.submitJob).not.toHaveBeenCalled();
+    expect(component.canGenerate).toBeTrue();
+  }));
+
+  it('replaces the old poller and aborts status requests as soon as cancel is clicked', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const aborted = jasmine.createSpy();
+    const poll = spyOn(sd, 'getJobStatus').and.callFake(() => new Observable(() => aborted));
+    const cancelled = new Subject<any>();
+    sd.cancelJob = jasmine.createSpy().and.returnValue(cancelled);
+    component.getJob('old'); tick(0);
+    component.getJob('current'); tick(0);
+    expect(aborted).toHaveBeenCalledTimes(1);
+    expect(component.jobID).toBe('current');
+    tick(5000);
+    expect(poll).toHaveBeenCalledTimes(2); // Slow requests never accumulate queued ticks.
+    component.cancelPendingJob();
+    expect(aborted).toHaveBeenCalledTimes(2);
+    tick(5000);
+    expect(poll).toHaveBeenCalledTimes(2);
+    cancelled.next({}); cancelled.complete();
+    expect(component.canGenerate).toBeTrue();
+  }));
+
+  it('keeps the existing job active when the server refuses cancellation', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.cancelJob = jasmine.createSpy().and.returnValue(throwError(() => ({ status: 409 })));
+    sd.submitJob = jasmine.createSpy();
+    const poll = spyOn(sd, 'getJobStatus').and.returnValue(NEVER);
+    component.getJob('running'); tick(0);
+    component.cancelPendingJob(); tick(0);
+    component.submitJob();
+    expect(component.canGenerate).toBeFalse();
+    expect(component.hasPendingJob).toBeTrue();
+    expect(component.cancelInProgress).toBeFalse();
+    expect(sd.submitJob).not.toHaveBeenCalled();
+    expect(poll).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  }));
+
+  for (const fallback of [false, true]) {
+    it('aborts an active ' + (fallback ? 'fallback' : 'individual') + ' download on cancel', fakeAsync(() => {
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      const aborted = jasmine.createSpy();
+      sd[fallback ? 'getJob' : 'getJobImage'] = jasmine.createSpy().and.returnValue(new Observable(() => aborted));
+      sd.cancelJob = jasmine.createSpy().and.returnValue(of({}));
+      component.jobID = 'download';
+      const publish = spyOn(component.imagesChange, 'emit');
+      (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('download');
+      component.cancelPendingJob();
+      flushMicrotasks(); tick(60000);
+      expect(aborted).toHaveBeenCalledTimes(1);
+      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(1);
+      expect(publish).not.toHaveBeenCalled();
+      expect(component.canGenerate).toBeTrue();
+    }));
+
+    it('stops ' + (fallback ? 'fallback' : 'individual') + ' download retries after cancel and a new generation', fakeAsync(() => {
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd[fallback ? 'getJob' : 'getJobImage'] = jasmine.createSpy().and.returnValue(throwError(() => ({ status: 503 })));
+      sd.cancelJob = jasmine.createSpy().and.returnValue(of({}));
+      sd.submitJob = jasmine.createSpy().and.returnValue(NEVER);
+      component.jobID = 'download';
+      (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('download');
+      flushMicrotasks();
+      component.cancelPendingJob();
+      component.submitJob();
+      flushMicrotasks(); tick(60000);
+      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(1);
+      expect(component.hasPendingJob).toBeTrue();
+    }));
+  }
+
+  it('stops polling when another tab removes the pending job', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const aborted = jasmine.createSpy();
+    spyOn(sd, 'getJobStatus').and.returnValue(new Observable(() => aborted));
+    component.getJob('other-tab'); tick(0);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'mobians:pending-job', newValue: null }));
+    expect(aborted).toHaveBeenCalledTimes(1);
+    expect(component.canGenerate).toBeTrue();
+    tick(5000);
+    expect(sd.getJobStatus).toHaveBeenCalledTimes(1);
+  }));
 
   it('submits the selected look with unchanged fixture credit estimates and snapshots its account', async () => {
     const characters = TestBed.inject(CharactersService);

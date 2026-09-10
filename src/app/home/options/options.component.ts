@@ -6,9 +6,9 @@ import { RouterOutlet } from '@angular/router';
 import { GenerationModelSettings, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { firstValueFrom, of, Subscription, timer } from 'rxjs';
+import { firstValueFrom, of, Subject, Subscription, timer } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { takeWhile, finalize, concatMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
+import { takeWhile, takeUntil, finalize, exhaustMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { MessageService } from 'primeng/api';
 import { v4 as uuidv4 } from 'uuid';
@@ -82,7 +82,7 @@ export class OptionsComponent implements OnInit {
   private modelRequestInFlight = false;
 
   get canGenerate(): boolean {
-    return this.enableGenerationButton && !this.hasPendingJob
+    return this.enableGenerationButton && !this.hasPendingJob && !this.submissionInProgress && !this.cancelInProgress
       && !this.modelsLoading && !this.modelsLoadError
       && !!this.getModelSetting(this.generationRequest.model);
   }
@@ -288,6 +288,9 @@ export class OptionsComponent implements OnInit {
   hasPendingJob: boolean = false;
   // Track active polling subscription and cancel state
   private jobPollSub?: Subscription;
+  private submissionInProgress = false;
+  private jobSession = 0;
+  private readonly stopJobRequests = new Subject<void>();
   private componentDestroyed = false;
   // Make cancelInProgress public so it can be referenced in the template
   cancelInProgress: boolean = false;
@@ -367,23 +370,31 @@ export class OptionsComponent implements OnInit {
       }
     );
 
-    // Cross-tab updates to queue position / ETA
-    window.addEventListener('storage', (e) => {
-      if (e.key === this.queueEtaKey && e.newValue) {
-        try {
-          const data = JSON.parse(e.newValue);
-          if (data.queue_position != null) this.queuePositionChange.emit(data.queue_position);
-          if (data.eta != null) this.etaChange.emit(data.eta);
-        } catch {}
-      }
-      if (e.key === this.pendingJobKey) {
-        // If another tab started or finished a job, update button state
-        const pending = this.getPendingJob();
-        this.enableGenerationButton = !pending;
-        this.loadingChange.emit(!!pending);
-      }
-    });
+    window.addEventListener('storage', this.onJobStorageChange);
   }
+
+  private readonly onJobStorageChange = (e: StorageEvent): void => {
+    if (this.componentDestroyed || this.submissionInProgress || this.cancelInProgress) return;
+    if (e.key === this.queueEtaKey && e.newValue && !this.jobPollSub) {
+      try {
+        const data = JSON.parse(e.newValue);
+        if (data.job_id !== this.getPendingJob()?.job_id) return;
+        if (data.queue_position != null) this.queuePositionChange.emit(data.queue_position);
+        if (data.eta != null) this.etaChange.emit(data.eta);
+      } catch {}
+    }
+    if (e.key === this.pendingJobKey) {
+      const pending = this.getPendingJob();
+      if (!pending) {
+        this.resetCancelledJob();
+      } else {
+        this.enableGenerationButton = false;
+        this.hasPendingJob = true;
+        this.loadingChange.emit(true);
+        if (this.jobID !== pending.job_id) this.getJob(pending.job_id);
+      }
+    }
+  };
 
   async loadGenerationModels(): Promise<void> {
     if (this.modelRequestInFlight || this.componentDestroyed) return;
@@ -626,8 +637,8 @@ export class OptionsComponent implements OnInit {
     // still-running backend job as failed. A new image view resumes it from
     // the persisted pending-job record.
     this.componentDestroyed = true;
-    this.jobPollSub?.unsubscribe();
-    this.jobPollSub = undefined;
+    window.removeEventListener('storage', this.onJobStorageChange);
+    this.stopJobMonitoring();
 
     if (this.subscription) {
       this.subscription.unsubscribe();
@@ -1411,8 +1422,11 @@ export class OptionsComponent implements OnInit {
       return;
     }
 
-    // Disable generation button
+    // Reserve this submission before any asynchronous image preparation.
+    this.submissionInProgress = true;
     this.enableGenerationButton = false;
+    this.hasPendingJob = true;
+    this.loadingChange.emit(true);
 
     // Hide canvas if it exists
     this.showInpaintingCanvas = false;
@@ -1441,7 +1455,15 @@ export class OptionsComponent implements OnInit {
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
       // Convert blob to base64 if blob exists
       if (this.referenceImage.blob) {
-        this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob);
+        try {
+          this.generationRequest.image = await this.blobMigrationService.blobToBase64(this.referenceImage.blob);
+        } catch (error) {
+          this.submissionInProgress = false;
+          this.resetCancelledJob();
+          if (!this.componentDestroyed) this.showError(error);
+          if (defaultSeed) this.generationRequest.seed = undefined;
+          return;
+        }
       } else {
         // No blob available - clear the reference image state to prevent sending img2img without image
         console.warn('Reference image has no blob data, falling back to txt2img');
@@ -1449,6 +1471,14 @@ export class OptionsComponent implements OnInit {
         this.generationRequest.job_type = "txt2img";
         this.generationRequest.image = undefined;
       }
+    }
+
+    // A cancellation during preparation needs no server request.
+    if (this.cancelInProgress || this.componentDestroyed) {
+      this.submissionInProgress = false;
+      this.resetCancelledJob();
+      if (defaultSeed) this.generationRequest.seed = undefined;
+      return;
     }
 
     // Clear color_inpaint if there's no mask - prevents backend crash when
@@ -1493,6 +1523,7 @@ export class OptionsComponent implements OnInit {
     this.stableDiffusionService.submitJob(requestToSend)
       .subscribe(
         response => {
+          this.submissionInProgress = false;
           // Update credits if priority queue was used
           if (response.credits_remaining !== undefined) {
             this.authService.updateCredits(response.credits_remaining);
@@ -1527,9 +1558,16 @@ export class OptionsComponent implements OnInit {
             dynamic_prompting: requestToSend.dynamic_prompting,
           });
 
-          this.getJob(response.job_id);
+          this.jobID = response.job_id;
+          if (this.cancelInProgress) {
+            // Keep the submit request alive to learn the server ID, then cancel it.
+            this.cancelKnownJob(response.job_id);
+          } else {
+            this.getJob(response.job_id);
+          }
         },
         error => {
+          this.submissionInProgress = false;
           console.error(error);  // handle error
           this.showError(error);  // show the error modal
           this.imagesChange.emit(this.images);
@@ -1553,66 +1591,78 @@ export class OptionsComponent implements OnInit {
     }
   }
 
-  // Action to cancel a pending/running job
-  cancelPendingJob() {
-    const id = this.jobID || this.getPendingJob()?.job_id;
-    if (!id) {
-      // Self-heal any stale pending UI state when no cancellable job exists.
-      this.aprilFools.discardRingGameProgress();
-      this.hasPendingJob = false;
-      this.cancelInProgress = false;
-      this.enableGenerationButton = true;
-      this.loadingChange.emit(false);
-      this.queuePositionChange.emit(0);
-      this.queueStatusMessageChange.emit(undefined);
-      this.etaChange.emit(undefined);
-      this.removePendingJob();
-      this.lockService.release();
-      return;
-    }
+  // Invalidate callbacks before unsubscribing: finalize must not finish an old job.
+  private stopJobMonitoring(): void {
+    this.jobSession++;
+    this.stopJobRequests.next();
+    this.jobPollSub?.unsubscribe();
+    this.jobPollSub = undefined;
+  }
+
+  private isCurrentJobSession(session: number): boolean {
+    return session === this.jobSession && !this.cancelInProgress && !this.componentDestroyed;
+  }
+
+  private resetCancelledJob(): void {
+    this.stopJobMonitoring();
+    this.aprilFools.discardRingGameProgress();
+    this.hasPendingJob = false;
+    this.jobID = '';
+    this.cancelInProgress = false;
+    this.enableGenerationButton = true;
+    this.loadingChange.emit(false);
+    this.queuePositionChange.emit(0);
+    this.queueStatusMessageChange.emit(undefined);
+    this.etaChange.emit(undefined);
+    this.removePendingJob();
+    this.lockService.release();
+  }
+
+  // Cancel is latched until submission returns an ID and the server confirms.
+  cancelPendingJob(): void {
+    if (this.cancelInProgress) return;
     this.cancelInProgress = true;
     this.enableGenerationButton = false;
+    this.stopJobMonitoring();
+    if (this.submissionInProgress) return;
+
+    const id = this.jobID || this.getPendingJob()?.job_id;
+    if (!id) {
+      this.resetCancelledJob();
+      return;
+    }
+    this.cancelKnownJob(id);
+  }
+
+  private cancelKnownJob(id: string): void {
     this.stableDiffusionService.cancelJob(id).subscribe({
       next: (response: any) => {
-        this.aprilFools.discardRingGameProgress();
-        // Stop polling if active
-        this.jobPollSub?.unsubscribe();
-        this.jobPollSub = undefined;
-
-        this.hasPendingJob = false;
-        this.jobID = "";
-        this.removePendingJob?.();
-        this.enableGenerationButton = true;
-        this.loadingChange.emit(false);
-        this.queuePositionChange.emit(0);
-        this.queueStatusMessageChange.emit(undefined);
-        this.etaChange.emit(undefined);
-        // Release generation lock on cancel
-        this.lockService.release();
-        
-        // If credits were refunded, update the user's credit balance
+        this.resetCancelledJob();
         if (response?.credits_refunded && response.credits_refunded > 0) {
           this.userCredits += response.credits_refunded;
           this.authService.updateCredits(this.userCredits);
-          const cancelToast = this.aprilFools.isAprilFools()
-            ? this.aprilFools.getCancelledToast(response.credits_refunded)
-            : { summary: 'Cancelled', detail: `Generation cancelled. ${response.credits_refunded} credits refunded.` };
-          this.messageService.add?.({ severity: 'success', summary: cancelToast.summary, detail: cancelToast.detail });
-        } else {
-          const cancelToast = this.aprilFools.isAprilFools()
-            ? this.aprilFools.getCancelledToast()
-            : { summary: 'Cancelled', detail: 'Generation cancelled.' };
-          this.messageService.add?.({ severity: 'success', summary: cancelToast.summary, detail: cancelToast.detail });
         }
-        // Reset cancel flag after handling
-        this.cancelInProgress = false;
+        const refunded = response?.credits_refunded || 0;
+        const cancelToast = this.aprilFools.isAprilFools()
+          ? this.aprilFools.getCancelledToast(refunded || undefined)
+          : { summary: 'Cancelled', detail: refunded
+            ? `Generation cancelled. ${refunded} credits refunded.`
+            : 'Generation cancelled.' };
+        this.messageService.add?.({ severity: 'success', summary: cancelToast.summary, detail: cancelToast.detail });
       },
       error: (err) => {
-        this.enableGenerationButton = true;
+        if (err?.status === 404) {
+          this.resetCancelledJob();
+          return;
+        }
+        // The server may already be processing the job. Keep it active and
+        // resume one monitor instead of allowing an additional submission.
         this.cancelInProgress = false;
-        this.queueStatusMessageChange.emit(undefined);
-        this.messageService.add?.({ severity: 'error', summary: 'Cancel failed', detail: 'Unable to cancel job.' });
-        console.error(err);
+        this.enableGenerationButton = false;
+        this.hasPendingJob = true;
+        this.messageService.add?.({ severity: 'error', summary: 'Cancel failed', detail:
+          err?.status === 409 ? 'This job has already started and cannot be cancelled.' : 'Unable to cancel job. You can try again.' });
+        this.getJob(id);
       }
     });
   }
@@ -1621,13 +1671,14 @@ export class OptionsComponent implements OnInit {
   getJob(job_id: string) {
     // The submit request can finish after the user has navigated away. The
     // pending job is already persisted, so the next image view will resume it.
-    if (this.componentDestroyed) return;
+    if (this.componentDestroyed || this.cancelInProgress) return;
+    this.stopJobMonitoring();
+    const session = this.jobSession;
 
     // Set current job id for cancel button
     this.jobID = job_id;
 
     let jobComplete = false;
-    let lastResponse: any;
 
     // Clear any previous reconnect banner for a new poll session
     this.queueStatusMessageChange.emit(undefined);
@@ -1646,7 +1697,7 @@ export class OptionsComponent implements OnInit {
     subscription = timer(0, pollingIntervalMs)
       .pipe(
         // For each tick of the interval, call the lightweight status endpoint
-        concatMap((): any => {
+        exhaustMap((): any => {
           if (!navigator.onLine) {
             // Emit a dummy "pending" shape to keep types consistent
             return of({ status: 'pending' } as any);
@@ -1694,15 +1745,13 @@ export class OptionsComponent implements OnInit {
             })
           );
         }),
-        // Store the response for use in finalize
-        tap((response: any) => lastResponse = response),
         // Only continue the stream while the job is incomplete
         takeWhile((response: any) => !(jobComplete = (response && response.status === 'completed')), true),
         // Once the stream completes, do any cleanup if necessary
         finalize(async () => {
           // Navigating to another section only tears down this view. Keep the
           // pending record and lock so returning to Images can resume polling.
-          if (this.componentDestroyed) {
+          if (!this.isCurrentJobSession(session)) {
             return;
           }
 
@@ -1745,6 +1794,8 @@ export class OptionsComponent implements OnInit {
             this.removePendingJob();
             this.lockService.release();
             subscription.unsubscribe();
+          } else if (response.status === 'cancelled') {
+            this.resetCancelledJob();
           } else if (response.status === 'failed' || response.status === 'error') {
             this.handleFailedJob(response);
             this.hasPendingJob = false; // ensure UI switches back to Generate
@@ -1792,7 +1843,8 @@ export class OptionsComponent implements OnInit {
    * Falls back to the full /get_job/ endpoint if individual downloads fail.
    */
   private async downloadJobImages(job_id: string) {
-    if (this.componentDestroyed) return;
+    const session = this.jobSession;
+    if (!this.isCurrentJobSession(session)) return;
 
     const imageCount = 4;
     const maxRetries = 10;
@@ -1802,20 +1854,22 @@ export class OptionsComponent implements OnInit {
 
     // Download images sequentially (better for slow connections — no bandwidth competition)
     for (let i = 0; i < imageCount; i++) {
+      if (!this.isCurrentJobSession(session)) return;
       this.queueStatusMessageChange.emit(`Downloading image ${i + 1} of ${imageCount}...`);
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
-        if (this.cancelInProgress || this.componentDestroyed) return;
+        if (!this.isCurrentJobSession(session)) return;
         try {
           blobs[i] = await firstValueFrom(
             this.stableDiffusionService.getJobImage(job_id, i).pipe(
-              timeout(120000) // 2 minute timeout per image
+              timeout(120000), // 2 minute timeout per image
+              takeUntil(this.stopJobRequests)
             )
           );
-          if (this.componentDestroyed) return;
+          if (!this.isCurrentJobSession(session)) return;
           break; // success — move to next image
         } catch (err: any) {
-          if (this.componentDestroyed) return;
+          if (!this.isCurrentJobSession(session)) return;
           const status = err?.status;
           const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
           if (!retryable || attempt >= maxRetries - 1) {
@@ -1827,12 +1881,12 @@ export class OptionsComponent implements OnInit {
           this.queueStatusMessageChange.emit(
             `Downloading image ${i + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`
           );
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await firstValueFrom(timer(delay).pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
         }
       }
     }
 
-    if (this.componentDestroyed) return;
+    if (!this.isCurrentJobSession(session)) return;
     this.queueStatusMessageChange.emit(undefined);
 
     const successfulBlobs = blobs.filter((b): b is Blob => b !== null);
@@ -1907,7 +1961,8 @@ export class OptionsComponent implements OnInit {
    * Fallback: download all images via the original /get_job/ endpoint (single large response).
    */
   private async downloadJobImagesFallback(job_id: string) {
-    if (this.componentDestroyed) return;
+    const session = this.jobSession;
+    if (!this.isCurrentJobSession(session)) return;
 
     const maxRetries = 5;
     const getJobInfo = { job_id };
@@ -1915,14 +1970,15 @@ export class OptionsComponent implements OnInit {
     this.queueStatusMessageChange.emit('Downloading images (fallback)...');
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      if (this.cancelInProgress || this.componentDestroyed) return;
+      if (!this.isCurrentJobSession(session)) return;
       try {
         const response = await firstValueFrom(
           this.stableDiffusionService.getJob(getJobInfo).pipe(
-            timeout(180000) // 3 minute timeout for full payload
+            timeout(180000), // 3 minute timeout for full payload
+            takeUntil(this.stopJobRequests)
           )
         );
-        if (this.componentDestroyed) return;
+        if (!this.isCurrentJobSession(session)) return;
 
         this.queueStatusMessageChange.emit(undefined);
 
@@ -1975,7 +2031,7 @@ export class OptionsComponent implements OnInit {
         await this.historyPanel?.ingestGeneratedImages(generatedImages);
         return; // success
       } catch (err: any) {
-        if (this.componentDestroyed) return;
+        if (!this.isCurrentJobSession(session)) return;
         const status = err?.status;
         const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
         if (!retryable || attempt >= maxRetries - 1) {
@@ -1994,7 +2050,7 @@ export class OptionsComponent implements OnInit {
         }
         const delay = Math.min(5000 * Math.pow(2, attempt), 30000);
         this.queueStatusMessageChange.emit(`Downloading images... (retry ${attempt + 1} of ${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await firstValueFrom(timer(delay).pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
       }
     }
   }
@@ -2257,7 +2313,7 @@ export class OptionsComponent implements OnInit {
 
   private saveQueueEta(queue_position?: number, eta?: number) {
     try {
-      localStorage.setItem(this.queueEtaKey, JSON.stringify({ queue_position, eta, ts: Date.now() }));
+      localStorage.setItem(this.queueEtaKey, JSON.stringify({ job_id: this.jobID, queue_position, eta, ts: Date.now() }));
     } catch {}
   }
 
