@@ -1,22 +1,24 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { environment } from 'src/environments/environment';
 import { VideoGenerationService } from './video-generation.service';
+import { AuthInterceptor } from './auth/auth.interceptor';
 
 describe('VideoGenerationService', () => {
   let service: VideoGenerationService;
   let http: HttpTestingController;
 
   beforeEach(() => {
+    localStorage.setItem('authToken', 'video-test-token');
     TestBed.configureTestingModule({
-      providers: [VideoGenerationService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [VideoGenerationService, provideHttpClient(withInterceptorsFromDi()), provideHttpClientTesting(), { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }],
     });
     service = TestBed.inject(VideoGenerationService);
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => { http.verify(); localStorage.removeItem('authToken'); });
 
   it('submits server-priced video inputs as multipart form data', () => {
     const first = new File(['first'], 'first.png', { type: 'image/png' });
@@ -37,6 +39,7 @@ describe('VideoGenerationService', () => {
     }).subscribe();
 
     const request = http.expectOne(`${environment.apiBaseUrl}/video/jobs`);
+    expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
     expect(request.request.method).toBe('POST');
     const body = request.request.body as FormData;
     expect(body.get('first_frame')).toBe(first);
@@ -66,6 +69,7 @@ describe('VideoGenerationService', () => {
     }).subscribe();
 
     const request = http.expectOne(`${environment.apiBaseUrl}/video/jobs`);
+    expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
     const body = request.request.body as FormData;
     expect(body.get('audio_prompt')).toBeNull();
     expect(body.get('disable_sound')).toBe('true');
@@ -83,6 +87,7 @@ describe('VideoGenerationService', () => {
       ], prompt: '<Picture 1> follows <Video 1>', disableSound: false, outputFormat: 'video', durationSeconds: 5, aspectRatio: 'square',
     }).subscribe();
     const request = http.expectOne(`${environment.apiBaseUrl}/video/jobs`);
+    expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
     const body = request.request.body as FormData;
     expect(body.get('generation_mode')).toBe('ref2v');
     expect(body.get('expected_credit_cost')).toBe('230');
@@ -102,6 +107,7 @@ describe('VideoGenerationService', () => {
       { id:'v',kind:'video',file:new File(['video'],'ref.mp4'),previewUrl:'',source:'upload',useAudio:true,width:1920,height:1080,duration:5.167 },
     ]).subscribe();
     const request = http.expectOne(`${environment.apiBaseUrl}/video/quote`);
+    expect(request.request.headers.has('Authorization')).toBeFalse();
     expect(request.request.method).toBe('POST');
     const body = request.request.body as FormData;
     expect(body.get('duration_seconds')).toBe('10');
@@ -117,4 +123,11 @@ describe('VideoGenerationService', () => {
       `${environment.apiBaseUrl}/video/jobs/job%2Fid/content?access_token=a%2Bb%2Fc`
     );
   });
+  it('loads public video configuration without session headers', () => {
+    service.getConfig().subscribe();
+    const request = http.expectOne(environment.apiBaseUrl + '/video/config');
+    expect(request.request.headers.has('Authorization')).toBeFalse();
+    request.flush({});
+  });
+
 });

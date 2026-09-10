@@ -85,6 +85,7 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
         this.packages = response.packages || [];
         this.loading = false;
         this.selectRecommendedPackage();
+        this.cdr.markForCheck();
       },
       error: (err) => {
         console.error('Failed to load packages:', err);
@@ -95,6 +96,7 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
           life: 5000
         });
         this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }

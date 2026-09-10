@@ -1,5 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { SKIP_AUTH } from './auth/auth.interceptor';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import {
@@ -39,7 +40,7 @@ export class VideoGenerationService {
   constructor(private readonly http: HttpClient) {}
 
   getConfig(): Observable<VideoConfig> {
-    return this.http.get<VideoConfig>(`${this.baseUrl}/config`);
+    return this.http.get<VideoConfig>(`${this.baseUrl}/config`, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   getQuote(durationSeconds: number, references: VideoReference[]): Observable<VideoPriceQuote> {
@@ -48,7 +49,7 @@ export class VideoGenerationService {
     form.append('duration_seconds', String(durationSeconds));
     form.append('reference_image_count', String(references.filter(item => item.kind === 'image').length));
     form.append('reference_video_seconds', JSON.stringify(references.filter(item => item.kind === 'video').map(item => item.duration)));
-    return this.http.post<VideoPriceQuote>(`${this.baseUrl}/quote`, form);
+    return this.http.post<VideoPriceQuote>(`${this.baseUrl}/quote`, form, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   listJobs(): Observable<VideoJobsResponse> {

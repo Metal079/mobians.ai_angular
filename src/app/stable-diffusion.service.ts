@@ -1,6 +1,6 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { defer, map, Observable, shareReplay, tap } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SKIP_AUTH } from './auth/auth.interceptor';
 
@@ -385,6 +385,36 @@ export interface AuthExchangeResponse {
 })
 export class StableDiffusionService {
   private apiBaseUrl =  environment.apiBaseUrl;
+  private readonly loraReadCache = new Map<string, { expiresAt: number; response$: Observable<any> }>();
+
+  // Share only public LoRA data. Every subscriber gets its own copy because UI
+  // components decorate rows with selection and account preference state.
+  private cachedLoraRead<T>(url: string, ttlMs: number): Observable<T> {
+    return defer(() => {
+      let entry = this.loraReadCache.get(url);
+      if (!entry || entry.expiresAt <= Date.now()) {
+        const next: { expiresAt: number; response$: Observable<T> } = {
+          expiresAt: Date.now() + ttlMs,
+          response$: this.http.get<T>(url, { context: new HttpContext().set(SKIP_AUTH, true) }).pipe(
+            tap({
+              next: () => { next.expiresAt = Date.now() + ttlMs; },
+              error: () => {
+                if (this.loraReadCache.get(url) === next) this.loraReadCache.delete(url);
+              },
+            }),
+            shareReplay({ bufferSize: 1, refCount: false }),
+          ),
+        };
+        this.loraReadCache.set(url, next);
+        entry = next;
+      }
+      return entry.response$.pipe(map(value => structuredClone(value) as T));
+    });
+  }
+
+  private invalidateLoraReads(): void {
+    this.loraReadCache.clear();
+  }
 
   constructor(private http: HttpClient) {}
 
@@ -436,12 +466,12 @@ export class StableDiffusionService {
 
   getCreditCosts(): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/costs`;
-    return this.http.get<CurrentUserResponse>(url);
+    return this.http.get<CurrentUserResponse>(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   getModelCreditCost(model: string): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/cost/${encodeURIComponent(model)}`;
-    return this.http.get(url);
+    return this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   getGenerationModels(): Observable<GenerationModelCatalogResponse> {
@@ -461,7 +491,7 @@ export class StableDiffusionService {
   // PayPal payment endpoints
   getCreditPackages(): Observable<CreditPackagesResponse> {
     const url = `${this.apiBaseUrl}/credit-packages`;
-    return this.http.get<CreditPackagesResponse>(url);
+    return this.http.get<CreditPackagesResponse>(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   createPayPalOrder(packageId: string): Observable<PayPalOrderResponse> {
@@ -480,7 +510,9 @@ export class StableDiffusionService {
     if (fields === 'full') {
       url += `&_=${Date.now()}`;
     }
-    return this.http.get(url);
+    return fields === 'full'
+      ? this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) })
+      : this.cachedLoraRead(url, 60_000);
   }
 
   getLoraPreferences(): Observable<any> {
@@ -648,20 +680,20 @@ export class StableDiffusionService {
 
   getAllSuggestionStatuses(): Observable<LoraSuggestionStatuses> {
     const url = `${this.apiBaseUrl}/get_all_suggestion_statuses/`;
-    return this.http.get<LoraSuggestionStatuses>(url);
+    return this.http.get<LoraSuggestionStatuses>(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   // Admin endpoints
   updateLora(loraId: number, data: { is_active?: boolean; is_nsfw?: boolean; name?: string; trigger_words?: string[] }): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}`;
-    return this.http.patch(url, data);
+    return this.http.patch(url, data).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   uploadLoraImage(loraId: number, file: File): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/lora/${loraId}/image`;
     const formData = new FormData();
     formData.append('file', file, file.name);
-    return this.http.post(url, formData);
+    return this.http.post(url, formData).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   uploadManualLora(data: ManualLoraUploadRequest): Observable<any> {
@@ -676,17 +708,17 @@ export class StableDiffusionService {
     if (data.triggerWords?.trim()) formData.append('trigger_words', data.triggerWords.trim());
     if (data.creator?.trim()) formData.append('creator', data.creator.trim());
     if (data.description?.trim()) formData.append('description', data.description.trim());
-    return this.http.post(url, formData);
+    return this.http.post(url, formData).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   approveSuggestion(suggestionId: number): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/suggestion/${suggestionId}/approve`;
-    return this.http.post(url, {});
+    return this.http.post(url, {}).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   rejectSuggestion(suggestionId: number): Observable<any> {
     const url = `${this.apiBaseUrl}/admin/suggestion/${suggestionId}/reject`;
-    return this.http.post(url, {});
+    return this.http.post(url, {}).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   resolveCivitAiLink(versionId: number): Observable<any> {
@@ -759,29 +791,29 @@ export class StableDiffusionService {
   //#region CivitAI API calls
   searchByQuery(query: string, showNsfw: boolean = false): Observable<any> {
     const url = `${this.apiBaseUrl}/search_civitAi_loras_by_query/${encodeURIComponent(query)}?show_nsfw=${showNsfw}`;
-    return this.http.get(url);
+    return this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   searchByID(id: string, showNsfw: boolean = false): Observable<any> {
     const url = `${this.apiBaseUrl}/search_civitAi_loras_by_id/${encodeURIComponent(id)}?show_nsfw=${showNsfw}`;
-    return this.http.get(url);
+    return this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   searchByUser(username: string, showNsfw: boolean = false): Observable<any> {
     const url = `${this.apiBaseUrl}/search_civitAi_loras_by_user/${encodeURIComponent(username)}?show_nsfw=${showNsfw}`;
-    return this.http.get(url);
+    return this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   addLoraSuggestion(data: any): Observable<any> {
     const url = `${this.apiBaseUrl}/add_lora_suggestion/`; 
     const headers = { 'content-type': 'application/json' };
     const body = JSON.stringify(data);
-    return this.http.post(url, body, {'headers':headers});
+    return this.http.post(url, body, {'headers':headers}).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   cancelLoraSuggestion(suggestionId: number): Observable<any> {
     const url = `${this.apiBaseUrl}/cancel_lora_suggestion/${encodeURIComponent(String(suggestionId))}/`;
-    return this.http.post(url, {});
+    return this.http.post(url, {}).pipe(tap(() => this.invalidateLoraReads()));
   }
 
   getJobStatus(jobId: string): Observable<JobStatusResponse> {
@@ -793,7 +825,7 @@ export class StableDiffusionService {
 
   getJobImage(jobId: string, imageIndex: number): Observable<Blob> {
     const url = `${this.apiBaseUrl}/get_job_image/${encodeURIComponent(jobId)}/${imageIndex}`;
-    return this.http.get(url, { responseType: 'blob' });
+    return this.http.get(url, { responseType: 'blob', context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
   cancelJob(jobId: string): Observable<any> {
