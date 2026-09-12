@@ -490,7 +490,7 @@ export class AddLorasComponent {
       return 'This LoRA is eligible to be re-requested now.';
     }
 
-    return `This LoRA can be re-requested on ${this.formatDate(availableAt)}.`;
+    return `This LoRA can be re-requested on ${this.formatDateTime(availableAt)}.`;
   }
 
   getRerequestAvailableAt(lora: any): Date | null {
@@ -538,11 +538,14 @@ export class AddLorasComponent {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
-  private formatDate(value: Date): string {
-    return value.toLocaleDateString(undefined, {
+  private formatDateTime(value: Date): string {
+    return value.toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short'
     });
   }
 
