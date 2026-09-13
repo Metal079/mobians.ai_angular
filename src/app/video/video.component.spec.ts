@@ -243,21 +243,23 @@ describe('VideoComponent', () => {
 
     component.config = {
       service: { feature_enabled: true, desired_state: 'available', effective_state: 'available', accepting_jobs: true, message: '', worker_status: 'online' },
-      prices: { '5': 80, '15': 400 },
+      prices: { '5': 70, '15': 350 },
       aspects: { square: { width: 640, height: 640, comfy_value: 'square' }, landscape: { width: 768, height: 512, comfy_value: 'landscape' }, portrait: { width: 512, height: 768, comfy_value: 'portrait' } },
       durations: [5, 15], active_job_limit: 3, retention_hours: 24, max_frame_bytes: 1024, accepted_frame_types: ['image/png'],
     };
     component.durationSeconds = 15;
 
     expect(component.durations).toEqual([5, 15]);
-    expect(component.selectedCost).toBe(400);
+    expect(component.selectedCost).toBe(350);
+    component.selectDuration(5);
+    expect(component.selectedCost).toBe(70);
   });
 
   function reference(id: string, kind: 'image' | 'video' = 'video', duration = 5.167): any {
     return { id, kind, duration, file: new File(['test'], id), source: 'upload', previewUrl: '', useAudio: false, width: 512, height: 768 };
   }
 
-  const quote = { pricing_version: 'ref2v-04mp-v1', credit_cost: 230, base_cost: 80, reference_cost: 150, effective_video_seconds: [5.167] };
+  const quote = { pricing_version: 'ref2v-04mp-v2', credit_cost: 200, base_cost: 70, reference_cost: 130, effective_video_seconds: [5.167] };
 
   it('blocks a stale quote while duration or references change and ignores older responses', () => {
     component.generationMode = 'ref2v';
@@ -270,8 +272,8 @@ describe('VideoComponent', () => {
     component.selectDuration(10);
     first.next(quote);
     expect(component.selectedPriceAvailable).toBeFalse();
-    second.next({ ...quote, credit_cost: 440, base_cost: 240, reference_cost: 200 });
-    expect(component.selectedCost).toBe(440);
+    second.next({ ...quote, credit_cost: 390, base_cost: 210, reference_cost: 180 });
+    expect(component.selectedCost).toBe(390);
     expect(component.quoteLoading).toBeFalse();
     component.references = [reference('different')];
     expect(component.selectedPriceAvailable).toBeFalse();
@@ -279,15 +281,15 @@ describe('VideoComponent', () => {
   });
 
   it('uses the FL2V base after a mode switch and rechecks retained references', () => {
-    component.config = { prices: { '5': 80 }, generation_modes: ['fl2v','ref2v'] } as any;
+    component.config = { prices: { '5': 70 }, generation_modes: ['fl2v','ref2v'] } as any;
     component.generationMode = 'ref2v';
     videoService.getQuote.and.returnValue(of(quote));
     component.onReferencesChanged([reference('a')]);
-    expect(component.selectedCost).toBe(230);
+    expect(component.selectedCost).toBe(200);
     component.changeMode('fl2v');
-    expect(component.selectedCost).toBe(80);
+    expect(component.selectedCost).toBe(70);
     component.changeMode('ref2v');
-    expect(component.selectedCost).toBe(230);
+    expect(component.selectedCost).toBe(200);
     expect(videoService.getQuote).toHaveBeenCalledTimes(2);
   });
 
@@ -300,22 +302,22 @@ describe('VideoComponent', () => {
     expect(component.selectedPriceAvailable).toBeFalse();
     expect(component.quoteError).toContain('try again');
     component.refreshQuote();
-    expect(component.selectedCost).toBe(230);
+    expect(component.selectedCost).toBe(200);
     expect(component.quoteError).toBe('');
   }));
 
   it('sends the displayed price and shows a checked price change without resubmitting', () => {
     authService.isLoggedIn.and.returnValue(true);
-    component.config = { prices: { '5': 80 }, generation_modes: ['fl2v','ref2v'], service: { accepting_jobs: true } } as any;
+    component.config = { prices: { '5': 70 }, generation_modes: ['fl2v','ref2v'], service: { accepting_jobs: true } } as any;
     component.generationMode = 'ref2v';
     component.currentCredits = 1000;
     component.prompt = 'Motion test';
     videoService.getQuote.and.returnValue(of(quote));
     component.onReferencesChanged([reference('a')]);
-    videoService.submitJob.and.returnValue(throwError(() => ({ status:409, error:{detail:{code:'video_price_changed',message:'Review 240 credits. No credits were charged.',quote:{...quote,credit_cost:240,reference_cost:160}}}})));
+    videoService.submitJob.and.returnValue(throwError(() => ({ status:409, error:{detail:{code:'video_price_changed',message:'Review 210 credits. No credits were charged.',quote:{...quote,credit_cost:210,reference_cost:140}}}})));
     component.submit();
-    expect(videoService.submitJob).toHaveBeenCalledOnceWith(jasmine.objectContaining({ expectedCreditCost:230,pricingVersion:'ref2v-04mp-v1' }));
-    expect(component.selectedCost).toBe(240);
+    expect(videoService.submitJob).toHaveBeenCalledOnceWith(jasmine.objectContaining({ expectedCreditCost:200,pricingVersion:'ref2v-04mp-v2' }));
+    expect(component.selectedCost).toBe(210);
     expect(component.submitting).toBeFalse();
     expect(component.errorMessage).toContain('No credits were charged');
     expect(authService.updateCredits).not.toHaveBeenCalled();

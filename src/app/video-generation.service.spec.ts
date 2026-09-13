@@ -80,7 +80,7 @@ describe('VideoGenerationService', () => {
   it('submits references in per-kind order and excludes retained first/last frames', () => {
     const image = new File(['image'], 'reference.png', { type: 'image/png' });
     const video = new File(['video'], 'motion.mp4', { type: 'video/mp4' });
-    service.submitJob({ generationMode: 'ref2v', firstFrame: image, lastFrame: image, expectedCreditCost:230, pricingVersion:'ref2v-04mp-v1',
+    service.submitJob({ generationMode: 'ref2v', firstFrame: image, lastFrame: image, expectedCreditCost:200, pricingVersion:'ref2v-04mp-v2',
       references: [
         { id: 'v', kind: 'video', file: video, previewUrl: '', source: 'upload', useAudio: true, width: 256, height: 256 },
         { id: 'i', kind: 'image', file: image, previewUrl: '', source: 'history', useAudio: false, width: 256, height: 256 },
@@ -90,8 +90,8 @@ describe('VideoGenerationService', () => {
     expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
     const body = request.request.body as FormData;
     expect(body.get('generation_mode')).toBe('ref2v');
-    expect(body.get('expected_credit_cost')).toBe('230');
-    expect(body.get('pricing_version')).toBe('ref2v-04mp-v1');
+    expect(body.get('expected_credit_cost')).toBe('200');
+    expect(body.get('pricing_version')).toBe('ref2v-04mp-v2');
     expect(body.get('first_frame')).toBeNull();
     expect(body.get('last_frame')).toBeNull();
     expect(body.getAll('reference_images')).toEqual([image]);
