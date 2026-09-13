@@ -110,6 +110,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   tagColors: string[] = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
   showTagAssignDialog = false;
   tagAssignImageUUIDs: string[] = [];
+  tagDialogMode: 'add' | 'remove' | 'edit' = 'add';
+  tagDialogCounts: Record<string, number> = {};
+  isUpdatingTags = false;
 
   syncStatus: SyncStatus = {
     syncEnabled: false,
@@ -715,6 +718,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         { label: 'Save character', icon: 'bi bi-bookmark-heart', command: () => { void this.saveCharacter(image); } },
         { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
         { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
+        { label: 'Edit tags', icon: 'bi bi-tags', command: () => { void this.openTagAssignDialog([image.UUID], 'edit'); } },
         { separator: true },
         { label: 'Delete image', icon: 'bi bi-trash', command: () => { void this.deleteImage(image); } },
       ];
@@ -1221,133 +1225,126 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.refreshVisibleImageCollections(uuid);
   }
 
-  openTagAssignDialog(imageUUIDs?: string[]) {
-    this.tagAssignImageUUIDs = imageUUIDs || Array.from(this.selectedImages);
+  async openTagAssignDialog(imageUUIDs?: string[], mode: 'add' | 'remove' | 'edit' = 'add') {
+    if (this.isUpdatingTags) return;
+    this.tagAssignImageUUIDs = [...new Set(imageUUIDs || this.selectedImages)];
     if (this.tagAssignImageUUIDs.length === 0) {
-      this.messageService.add({
-        severity: 'warn',
-        summary: 'No Images Selected',
-        detail: 'Please select images to assign tags.'
-      });
+      this.messageService.add({ severity: 'warn', summary: 'No Images Selected', detail: 'Please select images to edit tags.' });
       return;
     }
+    this.tagDialogMode = mode;
+    this.tagDialogCounts = {};
     this.showTagAssignDialog = true;
+    this.isUpdatingTags = true;
+    try {
+      await this.refreshTagDialogCounts();
+    } catch (error) {
+      this.showTagAssignDialog = false;
+      this.messageService.add({ severity: 'error', summary: 'Could not load tags', detail: 'Please try again.' });
+    } finally {
+      this.isUpdatingTags = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  get tagDialogTags(): ImageTag[] {
+    return this.tagDialogMode === 'remove'
+      ? this.availableTags.filter(tag => this.tagDialogCounts[tag.id] > 0)
+      : this.availableTags;
+  }
+
+  private async refreshTagDialogCounts(): Promise<void> {
+    const images = await this.getAllImagesFromDb();
+    const selected = new Set(this.tagAssignImageUUIDs);
+    const counts: Record<string, number> = {};
+    images.filter(image => selected.has(image.UUID)).forEach(image => {
+      new Set(image.tags || []).forEach(id => counts[id] = (counts[id] || 0) + 1);
+    });
+    this.tagDialogCounts = counts;
   }
 
   async assignTagToImages(tag: ImageTag) {
+    await this.changeTagFromDialog(tag, false);
+  }
+
+  async changeTagFromDialog(tag: ImageTag, remove: boolean) {
+    if (this.isUpdatingTags) return;
+    this.isUpdatingTags = true;
     try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction(this.storeName, 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const transactionDone = new Promise<void>((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
-      });
-
-      const updatedImages: { uuid: string; tags: string[]; image?: MobiansImage }[] = [];
-
-      for (const uuid of this.tagAssignImageUUIDs) {
-        const request = store.get(uuid);
-        await new Promise<void>((resolve) => {
-          request.onsuccess = () => {
-            const image = request.result as MobiansImage;
-            if (image) {
-              if (!image.tags) image.tags = [];
-              if (!image.tags.includes(tag.id)) {
-                image.tags.push(tag.id);
-                store.put(image);
-                updatedImages.push({ uuid: image.UUID, tags: [...image.tags], image });
-
-                const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
-                if (localImg) {
-                  if (!localImg.tags) localImg.tags = [];
-                  if (!localImg.tags.includes(tag.id)) {
-                    localImg.tags.push(tag.id);
-                  }
-                }
-              }
-            }
-            resolve();
-          };
-        });
-      }
-      await transactionDone;
-
-      if (this.authService.isLoggedIn() && updatedImages.length > 0) {
-        for (const { uuid, tags, image } of updatedImages) {
-          if (this.isImageSynced(uuid)) {
-            await this.imageSyncService.updateImageMetadata(uuid, { tags });
-          } else if (image) {
-            const blob = await this.getImageBlob(uuid);
-            if (blob) {
-              await this.imageSyncService.syncImage(image, blob);
-            }
-          }
-        }
-      }
-
-      await this.updateTagCounts();
-      await this.updateFavoriteImages();
-      this.notifyTagsUpdated('assign', tag.id);
-
-      this.showTagAssignDialog = false;
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Tags Assigned',
-        detail: `Tag "${tag.name}" assigned to ${this.tagAssignImageUUIDs.length} images.`
+      const result = remove
+        ? await this.removeTagFromImages(tag, this.tagAssignImageUUIDs)
+        : await this.updateTagOnImages(tag, this.tagAssignImageUUIDs, false);
+      await this.refreshTagDialogCounts();
+      this.messageService.add(result.cloudSyncFailed ? {
+        severity: 'warn', summary: 'Tags saved on this device',
+        detail: 'Cloud sync failed. Your other devices may still show the previous tags.'
+      } : {
+        severity: 'success', summary: remove ? 'Tag Removed' : 'Tag Added',
+        detail: `Tag "${tag.name}" ${remove ? 'removed from' : 'added to'} ${result.count} image(s).`
       });
     } catch (error) {
-      console.error('Failed to assign tag:', error);
+      console.error('Failed to update image tags:', error);
+      this.messageService.add({ severity: 'error', summary: 'Could not update tags', detail: 'Please try again.' });
+    } finally {
+      this.isUpdatingTags = false;
+      this.cdr.detectChanges();
     }
   }
 
   async removeTagFromImages(tag: ImageTag, imageUUIDs: string[]) {
-    try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction(this.storeName, 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const transactionDone = new Promise<void>((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
-      });
+    return this.updateTagOnImages(tag, imageUUIDs, true);
+  }
 
-      const updatedImages: { uuid: string; tags: string[] }[] = [];
-
-      for (const uuid of imageUUIDs) {
+  private async updateTagOnImages(tag: ImageTag, imageUUIDs: string[], remove: boolean) {
+    const db = await this.getDatabase();
+    const transaction = db.transaction(this.storeName, 'readwrite');
+    const store = transaction.objectStore(this.storeName);
+    const updatedImages: MobiansImage[] = [];
+    // Queue all reads before yielding so every write belongs to this transaction.
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+      for (const uuid of new Set(imageUUIDs)) {
         const request = store.get(uuid);
-        await new Promise<void>((resolve) => {
-          request.onsuccess = () => {
-            const image = request.result as MobiansImage;
-            if (image && image.tags) {
-              image.tags = image.tags.filter(t => t !== tag.id);
-              store.put(image);
-              updatedImages.push({ uuid: image.UUID, tags: [...image.tags] });
-
-              const localImg = this.imageHistoryMetadata.find(i => i.UUID === uuid);
-              if (localImg && localImg.tags) {
-                localImg.tags = localImg.tags.filter(t => t !== tag.id);
-              }
-            }
-            resolve();
-          };
-        });
+        request.onsuccess = () => {
+          const image = request.result as MobiansImage | undefined;
+          if (!image || (image.tags || []).includes(tag.id) !== remove) return;
+          image.tags = remove ? image.tags!.filter(id => id !== tag.id) : [...(image.tags || []), tag.id];
+          image.lastModified = new Date();
+          store.put(image);
+          updatedImages.push(image);
+        };
       }
-      await transactionDone;
+    });
 
-      if (this.authService.isLoggedIn() && updatedImages.length > 0) {
-        for (const { uuid, tags } of updatedImages) {
-          await this.imageSyncService.updateImageMetadata(uuid, { tags });
+    // Update visible copies only after IndexedDB commits successfully.
+    for (const image of updatedImages) {
+      for (const collection of [this.imageHistoryMetadata, this.currentPageImages, this.favoritePageImages,
+        this.favoriteImageHistoryMetadata, this.nextPageImages, this.prevPageImages]) {
+        collection.filter(item => item.UUID === image.UUID).forEach(item => item.tags = [...image.tags!]);
+      }
+    }
+
+    let cloudSyncFailed = false;
+    if (this.authService.isLoggedIn()) {
+      for (const image of updatedImages) {
+        try {
+          if (this.isImageSynced(image.UUID)) {
+            if (!await this.imageSyncService.updateImageMetadata(image.UUID, { tags: image.tags })) cloudSyncFailed = true;
+          } else if (!remove) {
+            const blob = await this.getImageBlob(image.UUID);
+            if (blob && !await this.imageSyncService.syncImage(image, blob)) cloudSyncFailed = true;
+          }
+        } catch {
+          cloudSyncFailed = true;
         }
       }
-
-      await this.updateTagCounts();
-      await this.updateFavoriteImages();
-      this.notifyTagsUpdated('unassign', tag.id);
-    } catch (error) {
-      console.error('Failed to remove tag:', error);
     }
+    await this.updateTagCounts();
+    await this.updateFavoriteImages();
+    this.notifyTagsUpdated(remove ? 'unassign' : 'assign', tag.id);
+    return { count: updatedImages.length, cloudSyncFailed };
   }
 
   async updateTagCounts() {

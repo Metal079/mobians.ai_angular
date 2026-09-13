@@ -49,4 +49,16 @@ describe('ImageSyncService', () => {
     expect(blobs.size).toBe(0);
     expect(http.post).not.toHaveBeenCalled();
   });
+
+  it('PATCHes an empty tag array when removing the last tag without deleting the image or tag', async () => {
+    spyOn(service, 'isImageSynced').and.returnValue(true);
+    http.patch.and.returnValue(of({ success: true }));
+
+    expect(await service.updateImageMetadata('image-1', { tags: [] })).toBeTrue();
+    expect(http.patch).toHaveBeenCalledWith(
+      jasmine.stringMatching(/\/history\/sync\/image\/image-1$/),
+      { tags: [] }, jasmine.any(Object)
+    );
+    expect(http.delete).not.toHaveBeenCalled();
+  });
 });

@@ -97,9 +97,12 @@
               @if (bulkSelectMode) {
                 <span class="badge bg-primary">{{ selectedImages.size }} selected</span>
                 @if (selectedImages.size > 0) {
-                  <div class="bulk-actions d-flex gap-1">
-                    <button class="btn btn-sm btn-outline-info" (click)="openTagAssignDialog()" title="Assign to tag">
-                      <i class="bi bi-folder-plus"></i>
+                  <div class="bulk-actions d-flex gap-1 flex-wrap">
+                    <button class="btn btn-sm btn-outline-secondary favorites-control-btn" (click)="openTagAssignDialog()">
+                      <i class="bi bi-tag" aria-hidden="true"></i> Add tag
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary favorites-control-btn" (click)="openTagAssignDialog(undefined, 'remove')">
+                      <i class="bi bi-tag" aria-hidden="true"></i> Remove tag
                     </button>
                     <button class="btn btn-sm btn-outline-success" (click)="bulkDownload()" title="Download as ZIP">
                       <i class="bi bi-download"></i>
@@ -238,24 +241,48 @@
         </div>
       </div>
 
-      <!-- Tag Assignment Dialog -->
+      <!-- Shared individual and bulk tag editor. Changes save immediately. -->
       <p-dialog [visible]="showTagAssignDialog" (visibleChange)="onTagAssignDialogVisibleChange($event)" [modal]="true"
-        [dismissableMask]="true" [closable]="true" [style]="{width: 'min(90vw, 400px)'}" header="Assign to Tag">
+        [dismissableMask]="!isUpdatingTags" [closable]="!isUpdatingTags" [closeOnEscape]="!isUpdatingTags"
+        [draggable]="false" [style]="{width: 'min(94vw, 460px)'}"
+        [header]="tagDialogMode === 'edit' ? 'Edit tags' : tagDialogMode === 'remove' ? 'Remove tags' : 'Add tags'">
         <ng-template pTemplate="content">
-          <p>Select a tag to add {{ tagAssignImageUUIDs.length }} image(s) to:</p>
-          <div class="d-flex flex-wrap gap-2 mt-3">
-            @for (tag of availableTags; track tag.id) {
-              <button class="btn btn-outline-primary" [style.border-color]="tag.color"
-                [style.color]="tag.color" (click)="assignTagToImages(tag)">
-                <i class="bi bi-folder"></i> {{ tag.name }}
-              </button>
+          <p class="mb-2">{{ tagAssignImageUUIDs.length }} image(s) selected. Changes save immediately.</p>
+          <p class="tag-editor-help">Removing a tag here keeps the tag available for other images.</p>
+          <div class="tag-editor-list" [attr.aria-busy]="isUpdatingTags">
+            @for (tag of tagDialogTags; track tag.id) {
+              <div class="tag-editor-row">
+                <div class="tag-editor-label">
+                  <span class="tag-editor-dot" [style.background-color]="tag.color" aria-hidden="true"></span>
+                  <div>
+                    <strong>{{ tag.name }}</strong>
+                    <small>{{ tagDialogCounts[tag.id] || 0 }} of {{ tagAssignImageUUIDs.length }} selected</small>
+                  </div>
+                </div>
+                <div class="tag-editor-actions">
+                  @if (tagDialogMode !== 'remove') {
+                    <button type="button" class="tag-editor-btn" [attr.aria-label]="'Add tag ' + tag.name"
+                      [disabled]="isUpdatingTags || tagDialogCounts[tag.id] === tagAssignImageUUIDs.length"
+                      (click)="assignTagToImages(tag)">Add</button>
+                  }
+                  @if (tagDialogMode !== 'add') {
+                    <button type="button" class="tag-editor-btn" [attr.aria-label]="'Remove tag ' + tag.name"
+                      [disabled]="isUpdatingTags || !tagDialogCounts[tag.id]"
+                      (click)="changeTagFromDialog(tag, true)">Remove</button>
+                  }
+                </div>
+              </div>
             }
           </div>
-          @if (availableTags.length === 0) {
-            <div class="text-muted mt-3">
-              No Tags yet. Create one in the Favorites tab!
+          @if (!isUpdatingTags && tagDialogTags.length === 0) {
+            <div class="tag-editor-help mt-3" role="status">
+              {{ tagDialogMode === 'remove' ? 'The selected images have no tags to remove.' : 'No tags yet. Create one using Manage Tags in Favorites.' }}
             </div>
           }
+        </ng-template>
+        <ng-template pTemplate="footer">
+          <button type="button" class="tag-editor-btn" [disabled]="isUpdatingTags"
+            (click)="showTagAssignDialog = false">Done</button>
         </ng-template>
       </p-dialog>
 

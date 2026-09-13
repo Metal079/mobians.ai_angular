@@ -416,6 +416,74 @@
   color: var(--theme-surface-text);
 }
 
+/* Image tag editor uses inherited dialog colors in every theme. */
+.tag-editor-help {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.tag-editor-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tag-editor-row,
+.tag-editor-label,
+.tag-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tag-editor-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--theme-border, currentColor);
+}
+
+.tag-editor-label {
+  min-width: 0;
+  flex: 1 1 130px;
+  overflow-wrap: anywhere;
+}
+
+.tag-editor-label small {
+  display: block;
+  opacity: 0.8;
+}
+
+.tag-editor-dot {
+  flex: 0 0 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+}
+
+.tag-editor-btn {
+  min-height: 44px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tag-editor-btn:hover:not(:disabled) {
+  background: var(--theme-hover-bg, rgba(128, 128, 128, 0.15));
+}
+
+.tag-editor-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.tag-editor-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* Sync Indicator on Image Thumbnails */
 .sync-indicator {
   position: absolute;

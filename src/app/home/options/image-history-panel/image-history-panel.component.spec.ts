@@ -123,6 +123,127 @@ describe('ImageHistoryPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('image tag editing', () => {
+    let db: IDBDatabase;
+    let databaseName: string;
+    const tag = { id: 'remove-me', name: 'Adventure', color: '#45B7D1' } as ImageTag;
+    const otherTag = { id: 'keep-me', name: 'Portrait', color: '#FF6B6B' } as ImageTag;
+    let messages: jasmine.Spy;
+
+    const readImage = (uuid: string) => new Promise<MobiansImage>((resolve, reject) => {
+      const request = db.transaction('ImageStore').objectStore('ImageStore').get(uuid);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    beforeEach(async () => {
+      databaseName = `tag-edit-test-${Math.random()}`;
+      db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(databaseName, 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('ImageStore', { keyPath: 'UUID' });
+          request.result.createObjectStore('TagStore', { keyPath: 'id' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const images = [
+        createImage({ UUID: 'first', favorite: true, tags: [tag.id, otherTag.id] }),
+        createImage({ UUID: 'second', favorite: true, tags: [tag.id] }),
+        createImage({ UUID: 'untouched', favorite: true, tags: [tag.id] })
+      ];
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(['ImageStore', 'TagStore'], 'readwrite');
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        images.forEach(image => transaction.objectStore('ImageStore').put(image));
+        [tag, otherTag].forEach(item => transaction.objectStore('TagStore').put(item));
+      });
+      component.availableTags = [{ ...tag }, { ...otherTag }];
+      component.imageHistoryMetadata = images.map(image => ({ ...image }));
+      component.currentPageImages = images.map(image => ({ ...image }));
+      spyOn(component as any, 'getDatabase').and.resolveTo(db);
+      spyOn(component, 'paginateFavoriteImages').and.callFake(async images => images);
+      spyOn(component as any, 'notifyTagsUpdated').and.stub();
+      messages = spyOn(TestBed.inject(MessageService), 'add');
+    });
+
+    afterEach(async () => {
+      db.close();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+
+    it('removes only the selected image association and refreshes filtered favorites and counts', async () => {
+      component.selectedTagFilter = tag.id;
+      await component.openTagAssignDialog(['first'], 'edit');
+      await component.changeTagFromDialog(tag, true);
+
+      expect((await readImage('first')).tags).toEqual([otherTag.id]);
+      expect((await readImage('first')).favorite).toBeTrue();
+      expect((await readImage('untouched')).tags).toEqual([tag.id]);
+      expect(component.currentPageImages[0].tags).toEqual([otherTag.id]);
+      expect(component.favoritePageImages.map(image => image.UUID)).not.toContain('first');
+      expect(component.availableTags.find(item => item.id === tag.id)?.imageCount).toBe(2);
+      expect(component.tagDialogCounts[tag.id] || 0).toBe(0);
+      const storedTag = await new Promise<any>(resolve => {
+        const request = db.transaction('TagStore').objectStore('TagStore').get(tag.id);
+        request.onsuccess = () => resolve(request.result);
+      });
+      expect(storedTag.name).toBe(tag.name);
+      expect(imageSyncService.deleteCloudTag).not.toHaveBeenCalled();
+    });
+
+    it('bulk removes the last tag, sends an empty array to cloud, and ignores repeated and missing selections', async () => {
+      authService.isLoggedIn.and.returnValue(true);
+      imageSyncService.isImageSynced.and.returnValue(true);
+      component.selectedImages = new Set(['first', 'second']);
+      await component.openTagAssignDialog(undefined, 'remove');
+      expect(component.tagDialogCounts[tag.id]).toBe(2);
+      await component.removeTagFromImages(tag, ['first', 'second', 'second', 'missing']);
+
+      expect((await readImage('second')).tags).toEqual([]);
+      expect((await readImage('untouched')).tags).toEqual([tag.id]);
+      expect(imageSyncService.updateImageMetadata).toHaveBeenCalledTimes(2);
+      expect(imageSyncService.updateImageMetadata).toHaveBeenCalledWith('first', { tags: [otherTag.id] });
+      expect(imageSyncService.updateImageMetadata).toHaveBeenCalledWith('second', { tags: [] });
+      expect(imageSyncService.syncImage).not.toHaveBeenCalled();
+    });
+
+    it('allows adding a removed tag back without duplicate assignments', async () => {
+      await component.openTagAssignDialog(['first'], 'edit');
+      await component.changeTagFromDialog(tag, true);
+      await component.assignTagToImages(tag);
+      await component.assignTagToImages(tag);
+      expect((await readImage('first')).tags).toEqual([otherTag.id, tag.id]);
+      expect(component.tagDialogCounts[tag.id]).toBe(1);
+    });
+
+    it('reports cloud failure while retaining the committed local removal', async () => {
+      authService.isLoggedIn.and.returnValue(true);
+      imageSyncService.isImageSynced.and.returnValue(true);
+      imageSyncService.updateImageMetadata.and.resolveTo(false);
+      await component.openTagAssignDialog(['second'], 'edit');
+      await component.changeTagFromDialog(tag, true);
+      expect((await readImage('second')).tags).toEqual([]);
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'warn' }));
+      expect(component.isUpdatingTags).toBeFalse();
+    });
+
+    it('reports storage failures without changing visible tags or calling the cloud', async () => {
+      await component.openTagAssignDialog(['first'], 'edit');
+      (component as any).getDatabase.and.rejectWith(new Error('Storage unavailable'));
+      await component.changeTagFromDialog(tag, true);
+      expect(component.currentPageImages[0].tags).toEqual([tag.id, otherTag.id]);
+      expect(imageSyncService.updateImageMetadata).not.toHaveBeenCalled();
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error' }));
+      expect(component.isUpdatingTags).toBeFalse();
+    });
+  });
+
   it('stores a compressed history copy without replacing the generated PNG shared with the viewer', async () => {
     const original = new Blob(['original'], { type: 'image/png' });
     const compressed = new Blob(['compressed'], { type: 'image/webp' });
