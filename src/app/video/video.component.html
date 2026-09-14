@@ -4,7 +4,7 @@
   <header class="video-header">
     <div>
       <h1>Create a video</h1>
-      <p>Animate an image, or use references to guide your characters, scenes, and motion.</p>
+      <p>Animate an image, use references, or continue a video.</p>
     </div>
     @if (config) {
       <div class="service-pill" [class.available]="config.service.accepting_jobs">
@@ -44,7 +44,7 @@
         <div class="section-heading">
           <div>
             <span class="step-label">Create</span>
-            <h2 id="video-composer-title">New video</h2>
+            <h2 id="video-composer-title" tabindex="-1">{{ extensionMode ? 'Extend a video' : 'New video' }}</h2>
           </div>
           <div class="slot-count" [class.full]="activeJobs >= activeLimit">
             {{ activeJobs }} / {{ activeLimit }} active
@@ -52,9 +52,12 @@
         </div>
 
         <div class="video-mode-options" role="group" aria-label="Video creation mode">
-          <button type="button" [class.selected]="generationMode === 'fl2v'" [attr.aria-pressed]="generationMode === 'fl2v'" (click)="changeMode('fl2v')"><i class="bi bi-image"></i><span><strong>Animate an image</strong><small>First frame + optional ending</small></span></button>
-          <button type="button" [class.selected]="generationMode === 'ref2v'" [attr.aria-pressed]="generationMode === 'ref2v'" [disabled]="!referenceModeAvailable" (click)="changeMode('ref2v')"><i class="bi bi-images"></i><span><strong>Use references</strong><small>Characters, settings, and motion</small></span></button>
+          <button type="button" [class.selected]="!extensionMode && generationMode === 'fl2v'" [attr.aria-pressed]="!extensionMode && generationMode === 'fl2v'" (click)="changeMode('fl2v')"><i class="bi bi-image"></i><span><strong>Animate an image</strong><small>First frame + optional ending</small></span></button>
+          <button type="button" [class.selected]="!extensionMode && generationMode === 'ref2v'" [attr.aria-pressed]="!extensionMode && generationMode === 'ref2v'" [disabled]="!referenceModeAvailable" (click)="changeMode('ref2v')"><i class="bi bi-images"></i><span><strong>Use references</strong><small>Characters, settings, and motion</small></span></button>
+          <button type="button" [class.selected]="extensionMode" [attr.aria-pressed]="extensionMode" (click)="openExtension()"><i class="bi bi-film"></i><span><strong>Extend a video</strong><small>Continue the story</small></span></button>
         </div>
+        <app-video-extension-composer [hidden]="!extensionMode" [active]="extensionMode" [jobs]="jobs" [loadingJobs]="loadingJobs" [videoUrls]="videoUrls" [thumbnailUrls]="thumbnailUrls" [durations]="durations" [policy]="config?.extension || null" [currentCredits]="currentCredits" [activeJobs]="activeJobs" [activeLimit]="activeLimit" (submitted)="onExtensionSubmitted($event)" (creditsRequested)="openCreditPurchase()"></app-video-extension-composer>
+        <div [hidden]="extensionMode">
         <app-video-reference-inputs [hidden]="generationMode !== 'ref2v'" [config]="config" (referencesChange)="onReferencesChanged($event)" (busyChange)="referencesBusy = $event" (historyRequested)="openHistory('reference')" (promptReference)="insertReference($event)" (referenceRemoved)="removedReference($event)"></app-video-reference-inputs>
         @if (generationMode === 'fl2v') {
         <div class="frames-row">
@@ -237,6 +240,7 @@
         @if (selectedPriceAvailable && currentCredits < selectedCost) {
           <button type="button" class="credit-link" (click)="openCreditPurchase()">You have {{ currentCredits }} credits. Add credits to generate.</button>
         }
+        </div>
       </section>
 
       <section class="gallery-card" aria-labelledby="my-videos-title">
@@ -268,10 +272,16 @@
                   } @else if (thumbnailUrls.get(job.id)) {
                     <img [src]="thumbnailUrls.get(job.id)" alt="Video input preview">
                   } @else {
-                    <div class="media-placeholder"><span class="spinner"></span></div>
+                    <div class="media-placeholder" aria-hidden="true">
+                      @if (job.status === 'pending' || job.status === 'processing' || job.status === 'completed') {
+                        <span class="spinner"></span>
+                      } @else {
+                        <i class="bi bi-film"></i>
+                      }
+                    </div>
                   }
                   <span class="job-status">{{ statusLabel(job) }}</span>
-                  <span class="duration-badge">{{ job.duration_seconds }}s</span>
+                  <span class="duration-badge">{{ jobDuration(job) }}</span>
                 </div>
                 @if (job.status === 'pending' || job.status === 'processing') {
                   <div class="progress-track" [attr.aria-label]="statusLabel(job)">
@@ -296,10 +306,11 @@
                     </button>
                   </div>
                   <div class="job-meta">
-                    <span>{{ job.generation_mode === 'ref2v' ? 'References' : 'Animate image' }}</span>
+                    <span>{{ job.generation_mode === 'extend' ? 'Extended video' : job.generation_mode === 'ref2v' ? 'References' : 'Animate image' }}</span>
+                    @if (job.generation_mode === 'extend') { <span>+{{ job.duration_seconds }}s added</span> }
                     @if (job.generation_mode === 'ref2v') { <span>{{ job.reference_image_count || 0 }} {{ job.reference_image_count === 1 ? 'image' : 'images' }} &middot; {{ job.reference_video_count || 0 }} {{ job.reference_video_count === 1 ? 'video' : 'videos' }}</span> }
                     <span>{{ aspectLabel(job.aspect_ratio) }}</span>
-                    <span>{{ job.output_format === 'gif' ? 'GIF' : (job.disable_sound ? 'Silent video' : 'Video with sound') }}</span>
+                    <span>{{ job.output_format === 'gif' ? 'GIF' : (job.output_has_audio ?? !job.disable_sound) ? 'Video with sound' : 'Silent video' }}</span>
                     <span>{{ job.credit_cost }} credits</span>
                     @if (job.expires_at && job.status === 'completed') { <span>{{ expiresLabel(job) }}</span> }
                   </div>
@@ -314,6 +325,9 @@
                       <button type="button" class="cancel-button" (click)="cancel(job)"><i class="bi bi-x-circle"></i> Cancel & refund</button>
                     }
                     @if (job.status === 'completed') {
+                      @if (canExtendJob(job)) {
+                        <button type="button" class="extend-job-button" (click)="openExtension(job)"><i class="bi bi-film"></i> Extend</button>
+                      }
                       <button type="button" class="download-button" (click)="download(job)"><i class="bi bi-download"></i> Download</button>
                     }
                   </div>

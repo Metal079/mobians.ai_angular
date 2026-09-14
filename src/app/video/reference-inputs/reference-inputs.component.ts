@@ -12,6 +12,11 @@ import { VideoConfig, VideoReference } from 'src/_shared/video-generation.interf
 })
 export class ReferenceInputsComponent implements OnDestroy {
   @Input() config: VideoConfig | null = null;
+  @Input() imagesOnly = false;
+  @Input() disabled = false;
+  @Input() heading = 'Reference images';
+  @Input() description = 'Guide characters, outfits, and settings. These images are not fixed first or last frames.';
+  @Input() maxImages: number | null = null;
   @Output() referencesChange = new EventEmitter<VideoReference[]>();
   @Output() historyRequested = new EventEmitter<void>();
   @Output() promptReference = new EventEmitter<{ kind: 'image' | 'video'; index: number }>();
@@ -25,14 +30,14 @@ export class ReferenceInputsComponent implements OnDestroy {
   constructor(private readonly zone: NgZone) {}
   get images(): VideoReference[] { return this.references.filter(item => item.kind === 'image'); }
   get videos(): VideoReference[] { return this.references.filter(item => item.kind === 'video'); }
-  get imageLimit(): number { return this.config?.max_reference_images ?? 9; }
+  get imageLimit(): number { return this.maxImages ?? this.config?.max_reference_images ?? 9; }
   get videoLimit(): number { return this.config?.max_reference_videos ?? 3; }
 
   ngOnDestroy(): void {
     this.destroyed = true;
     this.references.forEach(item => URL.revokeObjectURL(item.previewUrl));
   }
-  upload(input: HTMLInputElement): void { input.value = ''; input.click(); }
+  upload(input: HTMLInputElement): void { if (this.disabled || this.busy) return; input.value = ''; input.click(); }
   async selected(event: Event, kind: 'image' | 'video'): Promise<void> {
     const files = Array.from((event.target as HTMLInputElement).files ?? []);
     await this.addFiles(files, kind);
@@ -42,7 +47,7 @@ export class ReferenceInputsComponent implements OnDestroy {
     await this.addFiles(Array.from(event.dataTransfer?.files ?? []), kind);
   }
   async addFiles(files: File[], kind: 'image' | 'video', source: 'upload' | 'history' = 'upload'): Promise<void> {
-    if (this.busy || this.destroyed) return;
+    if (this.busy || this.destroyed || this.disabled || (this.imagesOnly && kind !== 'image')) return;
     this.busy = true;
     this.busyChange.emit(true);
     this.error = '';
@@ -88,6 +93,7 @@ export class ReferenceInputsComponent implements OnDestroy {
     }
   }
   remove(reference: VideoReference): void {
+    if (this.disabled || this.busy) return;
     const siblings = reference.kind === 'image' ? this.images : this.videos;
     this.referenceRemoved.emit({ kind: reference.kind, index: siblings.indexOf(reference) + 1 });
     this.references = this.references.filter(item => item.id !== reference.id);

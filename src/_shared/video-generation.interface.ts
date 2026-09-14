@@ -5,6 +5,7 @@ export type VideoJobStatus = 'pending' | 'processing' | 'completed' | 'failed' |
 export type VideoDesiredState = 'available' | 'draining' | 'maintenance';
 
 export interface VideoServiceState {
+  extensions_available?: boolean;
   feature_enabled: boolean;
   desired_state: VideoDesiredState;
   effective_state: string;
@@ -35,6 +36,7 @@ export interface VideoPriceQuote {
 }
 
 export interface VideoConfig {
+  extension?: VideoExtensionConfig;
   pricing_version?: string;
   generation_modes?: VideoGenerationMode[];
   max_reference_images?: number;
@@ -55,7 +57,13 @@ export interface VideoConfig {
 }
 
 export interface VideoJob {
-  generation_mode?: VideoGenerationMode;
+  generation_mode?: VideoGenerationMode | 'extend';
+  output_frame_count?: number | null;
+  output_duration_seconds?: number | null;
+  output_has_audio?: boolean | null;
+  source_job_id?: string | null;
+  source_duration_seconds?: number | null;
+  added_duration_seconds?: number | null;
   reference_image_count?: number;
   reference_video_count?: number;
   id: string;
@@ -70,7 +78,7 @@ export interface VideoJob {
   disable_sound?: boolean;
   output_format?: VideoOutputFormat;
   duration_seconds: number;
-  aspect_ratio: VideoAspect;
+  aspect_ratio: VideoAspect | 'source';
   width: number;
   height: number;
   seed: number;
@@ -88,9 +96,51 @@ export interface VideoJobsResponse {
 }
 
 export interface VideoSubmitResponse {
+  idempotent_replay?: boolean;
   job: VideoJob;
   credits_used: number;
   credits_remaining: number;
+}
+
+export interface VideoExtensionConfig {
+  context_seconds?: number;
+  max_reference_images?: number;
+  max_frame_bytes?: number;
+  enabled: boolean;
+  pricing_version: string;
+  prices: Record<string, number>;
+  durations: number[];
+  added_seconds: Record<string, number>;
+  min_source_seconds: number;
+  max_source_seconds: number;
+  max_source_bytes: number;
+  accepted_source_types: string[];
+}
+
+export interface VideoExtensionQuote {
+  base_cost: number;
+  reference_cost: number;
+  reference_image_count: number;
+  pricing_version: string;
+  duration_seconds: number;
+  credit_cost: number;
+  added_frame_count: number;
+  added_duration_seconds: number;
+  context_frame_count: number;
+}
+
+export interface VideoExtensionSubmission {
+  outputFormat?: VideoOutputFormat;
+  referenceImages?: File[];
+  requestId: string;
+  sourceJobId?: string;
+  sourceVideo?: File;
+  prompt: string;
+  audioPrompt?: string;
+  continueAudio: boolean;
+  durationSeconds: number;
+  expectedCreditCost: number;
+  pricingVersion: string;
 }
 
 export interface VideoAdminState {

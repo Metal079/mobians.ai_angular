@@ -52,6 +52,46 @@ describe('VideoComponent', () => {
     expect(component.prompt).toBe('Reference prompt');
   });
 
+  it('preserves the image draft through extension mode and blocks ordinary submission there', () => {
+    component.prompt = 'Keep this image prompt.';
+    component.audioPrompt = 'Wind';
+    component.openExtension();
+    expect(component.extensionMode).toBeTrue();
+    expect(component.selectedCost).toBe(0);
+    expect(component.canSubmit).toBeFalse();
+    component.submit();
+    expect(videoService.submitJob).not.toHaveBeenCalled();
+    expect(accountCta.requestCreditPurchase).not.toHaveBeenCalled();
+    component.changeMode('fl2v');
+    expect(component.extensionMode).toBeFalse();
+    expect(component.prompt).toBe('Keep this image prompt.');
+    expect(component.audioPrompt).toBe('Wind');
+  });
+
+  it('cancels reference quotes while extending and requotes on return', () => {
+    component.config = { generation_modes: ['fl2v', 'ref2v'] } as any;
+    component.changeMode('ref2v');
+    const pending = new Subject<any>();
+    videoService.getQuote.and.returnValue(pending);
+    component.onReferencesChanged([{ id: 'ref', kind: 'image' } as any]);
+    expect(component.quoteLoading).toBeTrue();
+    component.openExtension();
+    pending.next({ credit_cost: 90 });
+    component.refreshQuote();
+    expect(component.referenceQuote).toBeNull();
+    expect(videoService.getQuote).toHaveBeenCalledTimes(1);
+    component.changeMode('ref2v');
+    expect(videoService.getQuote).toHaveBeenCalledTimes(2);
+    component.ngOnDestroy();
+  });
+
+  it('does not open extension mode for an unavailable video', () => {
+    component.openExtension({ status: 'completed', media_ready: false } as VideoJob);
+    expect(component.extensionMode).toBeFalse();
+    component.openExtension({ status: 'completed', media_ready: true, output_format: 'gif', duration_seconds: 1 } as VideoJob);
+    expect(component.extensionMode).toBeFalse();
+  });
+
   it('keeps prompt references attached to their images when an earlier image is removed', () => {
     component.generationMode = 'ref2v';
     component.prompt = '<Picture 1> meets <Picture 3> near <Video 1>';

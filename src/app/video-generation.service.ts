@@ -13,6 +13,8 @@ import {
   VideoJob,
   VideoJobsResponse,
   VideoSubmitResponse,
+  VideoExtensionQuote,
+  VideoExtensionSubmission,
 } from 'src/_shared/video-generation.interface';
 
 export interface VideoSubmission {
@@ -41,6 +43,38 @@ export class VideoGenerationService {
 
   getConfig(): Observable<VideoConfig> {
     return this.http.get<VideoConfig>(`${this.baseUrl}/config`, { context: new HttpContext().set(SKIP_AUTH, true) });
+  }
+
+  getExtensionQuote(durationSeconds: number, referenceImageCount = 0): Observable<VideoExtensionQuote> {
+    const form = new FormData();
+    form.append('duration_seconds', String(durationSeconds));
+    form.append('reference_image_count', String(referenceImageCount));
+    return this.http.post<VideoExtensionQuote>(`${this.baseUrl}/extensions/quote`, form, { context: new HttpContext().set(SKIP_AUTH, true) });
+  }
+
+  previewExtensionGif(source: { file?: File; jobId?: string }): Observable<Blob> {
+    const form = new FormData();
+    if (source.file) form.append('source_video', source.file, source.file.name);
+    if (source.jobId) form.append('source_job_id', source.jobId);
+    return this.http.post(`${this.baseUrl}/extensions/gif-preview`, form, { responseType: 'blob' });
+  }
+
+  submitExtension(submission: VideoExtensionSubmission): Observable<VideoSubmitResponse> {
+    const form = new FormData();
+    form.append('request_id', submission.requestId);
+    if (submission.sourceJobId) form.append('source_job_id', submission.sourceJobId);
+    if (submission.sourceVideo) form.append('source_video', submission.sourceVideo, submission.sourceVideo.name);
+    submission.referenceImages?.forEach(file => form.append('reference_images', file, file.name));
+    form.append('prompt', submission.prompt);
+    const outputFormat = submission.outputFormat ?? 'video';
+    const soundEnabled = submission.continueAudio && outputFormat !== 'gif';
+    form.append('output_format', outputFormat);
+    form.append('disable_sound', String(!soundEnabled));
+    if (soundEnabled && submission.audioPrompt) form.append('audio_prompt', submission.audioPrompt);
+    form.append('duration_seconds', String(submission.durationSeconds));
+    form.append('expected_credit_cost', String(submission.expectedCreditCost));
+    form.append('pricing_version', submission.pricingVersion);
+    return this.http.post<VideoSubmitResponse>(`${this.baseUrl}/extensions`, form);
   }
 
   getQuote(durationSeconds: number, references: VideoReference[]): Observable<VideoPriceQuote> {

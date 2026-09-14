@@ -1,0 +1,140 @@
+<section aria-labelledby="extension-source-title">
+  <div class="extension-intro">
+    <div>
+      <h3 id="extension-source-title">Keep the story going</h3>
+      <p>Start with a video, then describe what happens after its ending.</p>
+    </div>
+  </div>
+
+  <div class="source-tabs" role="group" aria-label="Video source">
+    <button type="button" [disabled]="submitting" [class.selected]="sourceTab === 'upload'" [attr.aria-pressed]="sourceTab === 'upload'" (click)="setSourceTab('upload')"><i class="bi bi-upload" aria-hidden="true"></i> Upload video</button>
+    <button type="button" [disabled]="submitting" [class.selected]="sourceTab === 'library'" [attr.aria-pressed]="sourceTab === 'library'" (click)="setSourceTab('library')"><i class="bi bi-collection-play" aria-hidden="true"></i> My videos <span>{{ availableJobs.length }}</span></button>
+  </div>
+  <input #videoInput type="file" hidden accept="video/mp4,video/quicktime,video/webm,image/gif,.mp4,.mov,.webm,.gif" (change)="onFileSelected($event)">
+
+  @if (errorMessage) {
+    <p class="source-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ errorMessage }}</p>
+  }
+
+  @for (selected of source ? [source] : []; track selected.key) {
+    <div class="source-card">
+      <div class="source-caption">
+        <div><span class="overline">Original video</span><strong [title]="selected.title">{{ selected.title }}</strong></div>
+        <button type="button" class="text-button" [disabled]="submitting" (click)="clearSource()">Change video</button>
+      </div>
+      @if (sourceUrl) {
+        <video #sourceVideo [src]="sourceUrl" [poster]="sourcePoster" controls playsinline preload="metadata" muted
+          aria-label="Original video preview" (loadstart)="onPreviewStart(selected.key)" (loadedmetadata)="onPreviewLoaded($event, selected.key)" (error)="onPreviewError(selected.key)"></video>
+        <div class="source-details">
+          <span>{{ sourceReady ? formatDuration(selected.duration) + ' · ' + selected.width + ' × ' + selected.height : previewFailed ? 'Preview unavailable' : 'Reading video…' }}</span>
+          <button type="button" class="text-button" [disabled]="!sourceReady" (click)="watchEnding(sourceVideo)"><i class="bi bi-play-circle" aria-hidden="true"></i> Watch ending</button>
+        </div>
+      } @else {
+        <div class="preview-loading" role="status"><i class="bi bi-film" aria-hidden="true"></i> {{ previewFailed ? 'Preview unavailable' : selected.isGif ? 'Preparing GIF preview…' : 'Loading video preview…' }}</div>
+      }
+    </div>
+  } @empty {
+    @if (sourceTab === 'upload') {
+      <div class="upload-zone" [class.dragging]="dragging" (dragover)="$event.preventDefault(); dragging = true" (dragleave)="dragging = false" (drop)="onDrop($event)">
+        <span class="upload-icon"><i class="bi bi-film" aria-hidden="true"></i><i class="bi bi-plus-circle-fill" aria-hidden="true"></i></span>
+        <strong>Give your video a next chapter</strong>
+        <p>Drop a video here or choose one from your device.</p>
+        <button type="button" class="upload-button" [disabled]="readingFile" (click)="upload(videoInput)"><i class="bi bi-upload" aria-hidden="true"></i> {{ readingFile ? 'Opening video…' : 'Choose video' }}</button>
+        <small>MP4, MOV, WebM, or animated GIF · 1.6–60 seconds · up to 50 MB</small>
+      </div>
+    } @else {
+      <div class="source-library" aria-label="Videos available to extend">
+        @for (job of availableJobs; track job.id) {
+          <button type="button" class="library-video" (click)="selectJob(job)" [attr.aria-label]="'Use video: ' + job.prompt">
+            <span class="library-thumbnail">
+              @if (thumbnailUrls.get(job.id)) { <img [src]="thumbnailUrls.get(job.id)" alt=""> }
+              @else { <i class="bi bi-film" aria-hidden="true"></i> }
+            </span>
+            <span class="library-caption"><strong>{{ job.prompt }}</strong><small>{{ job.duration_seconds }}s · {{ job.width }} × {{ job.height }}</small></span>
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+          </button>
+        } @empty {
+          <div class="library-empty" role="status">
+            <i class="bi bi-collection-play" aria-hidden="true"></i>
+            <strong>{{ loadingJobs ? 'Loading your videos…' : 'No videos available to extend' }}</strong>
+            <p>Completed videos and animated GIFs up to 60 seconds appear here while they are available in your queue.</p>
+            <button type="button" class="text-button" (click)="setSourceTab('upload')">Upload a saved video</button>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <aside class="context-notice"><i class="bi bi-info-circle" aria-hidden="true"></i><p>Only the <strong>last ~ 1.5 seconds</strong> guide the continuation. Add reference images for characters, objects, or settings that aren't visible in that ending.</p></aside>
+  <app-video-reference-inputs class="extension-references" [imagesOnly]="true" [disabled]="submitting" [maxImages]="policy?.max_reference_images ?? 8" heading="Reference images (optional)" description="Help bring back a character or detail from earlier. The first image is included; extra images may increase the price shown below." (referencesChange)="onReferencesChanged($event)" (busyChange)="referencesBusy = $event" (promptReference)="insertReference($event)" (referenceRemoved)="removedReference($event)"></app-video-reference-inputs>
+
+  <label class="extension-field" for="extensionPrompt">
+    <span>What happens next? <small>Required</small></span>
+    <p>Describe the new action. The video will continue from the original ending.</p>
+    <textarea id="extensionPrompt" rows="4" [(ngModel)]="prompt" [disabled]="submitting" [maxlength]="promptMaxLength" placeholder="She finishes waving, turns toward the path, and walks into the distance as the camera follows."></textarea>
+    <em>{{ prompt.length }} / {{ promptMaxLength }}</em>
+  </label>
+
+  @if (referencePromptNeedsReview) { <p class="source-error" role="alert">A reference used in your prompt was removed. Update the marked text before extending.</p> }
+
+  @if (source?.job?.prompt) {
+    <details class="original-prompt"><summary>View original prompt</summary><p>{{ source!.job!.prompt }}</p></details>
+  }
+
+  <fieldset class="extension-length">
+    <legend>Length to add</legend>
+    <p>Choose the approximate length of the new footage.</p>
+    <div class="length-options">
+      @for (seconds of lengthOptions; track seconds) {
+        <button type="button" [disabled]="submitting" [class.selected]="addedSeconds === seconds" [attr.aria-pressed]="addedSeconds === seconds" (click)="selectLength(seconds)">+{{ seconds }}s</button>
+      }
+    </div>
+  </fieldset>
+
+  <label class="extension-field audio-field" for="extensionAudioPrompt">
+      <span>Audio direction <small>Optional</small></span>
+      <p>{{ continueAudio ? 'Describe sounds, ambience, music, or dialogue, not visual movement.' : 'Audio will not be included in this generation.' }}</p>
+      <textarea id="extensionAudioPrompt" rows="2" [(ngModel)]="audioPrompt" [disabled]="submitting || !continueAudio" [maxlength]="audioPromptMaxLength" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
+      <em>{{ audioPrompt.length }} / {{ audioPromptMaxLength }}</em>
+  </label>
+  <fieldset class="extension-output">
+    <legend>Output options</legend>
+    <div class="delivery-options">
+      <label class="audio-option delivery-option" [class.selected]="!continueAudio">
+        <input type="checkbox" [ngModel]="!continueAudio" (ngModelChange)="continueAudio = !$event" [disabled]="submitting || outputAsGif">
+        <span class="delivery-icon"><i class="bi" [class.bi-volume-up-fill]="continueAudio" [class.bi-volume-mute-fill]="!continueAudio" aria-hidden="true"></i></span>
+        <span><strong>Disable sound</strong><small>Create the result without an audio track.</small></span>
+      </label>
+      <label class="audio-option gif-option delivery-option" [class.selected]="outputAsGif">
+        <input type="checkbox" [(ngModel)]="outputAsGif" (ngModelChange)="onGifOptionChanged()" [disabled]="submitting">
+        <span class="delivery-icon"><i class="bi bi-filetype-gif" aria-hidden="true"></i></span>
+        <span><strong>Send as GIF</strong><small>Deliver a looping GIF instead of an MP4 video.</small></span>
+      </label>
+    </div>
+    @if (outputAsGif) {
+      <p class="gif-note"><i class="bi bi-info-circle" aria-hidden="true"></i> GIFs cannot contain audio, so sound is disabled automatically.</p>
+    }
+  </fieldset>
+
+  <div class="extension-result" aria-live="polite" aria-atomic="true">
+    <div class="result-heading"><strong>Your extended video</strong><span>{{ combinedSeconds === null ? 'Choose a video to see its total length' : 'About ' + formatDuration(combinedSeconds) + ' total' }}</span></div>
+    <div class="extension-timeline" aria-hidden="true">
+      <span class="original-segment" [style.flex-grow]="originalShare"><i class="bi bi-film"></i> Original {{ sourceReady ? formatDuration(source!.duration) : '' }}</span>
+      <span class="new-segment" [style.flex-grow]="100 - originalShare"><i class="bi bi-stars"></i> +{{ addedSeconds }}s new</span>
+    </div>
+    <p><i class="bi bi-link-45deg" aria-hidden="true"></i> One combined {{ outputAsGif ? 'looping GIF' : 'MP4 video' }} · Same aspect ratio</p>
+  </div>
+
+  @if (quote && quote.reference_cost > 0) { <p class="reference-price" aria-live="polite">{{ quote.base_cost }} base + {{ quote.reference_cost }} for {{ quote.reference_image_count }} reference images</p> }
+  <div class="extension-submit">
+    <div aria-live="polite"><strong>{{ quoteLoading ? 'Checking price…' : selectedCost ? selectedCost + ' credits' : 'Price unavailable' }}</strong><p id="extension-availability">{{ available ? (outputAsGif ? 'Original footage retained · GIF without audio' : continueAudio ? 'Original footage retained · Audio included' : 'Original footage retained · No audio') : 'Video extensions are temporarily unavailable.' }}</p></div>
+    <button type="button" class="extend-button" [disabled]="!canSubmit" aria-describedby="extension-availability" (click)="submit()">
+      @if (submitting) { Queuing extension… }
+      @else if (activeJobs >= activeLimit) { Queue is full }
+      @else if (currentCredits < selectedCost) { Get credits to extend }
+      @else { <i class="bi bi-stars" aria-hidden="true"></i> Extend video }
+    </button>
+  </div>
+  @if (quoteError) { <p class="source-error" role="alert">{{ quoteError }} <button type="button" class="text-button" (click)="refreshQuote()">Retry price</button></p> }
+  @if (submissionError) { <p class="source-error" role="alert">{{ submissionError }}</p> }
+</section>

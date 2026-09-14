@@ -20,6 +20,86 @@ describe('VideoGenerationService', () => {
 
   afterEach(() => { http.verify(); localStorage.removeItem('authToken'); });
 
+  it('requests a public extension quote without uploading the source', () => {
+    service.getExtensionQuote(5, 3).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions/quote`);
+    expect(request.request.headers.has('Authorization')).toBeFalse();
+    const body=request.request.body as FormData;
+    expect(body.get('duration_seconds')).toBe('5');
+    expect(body.get('reference_image_count')).toBe('3');
+    expect(body.get('source_video')).toBeNull();
+    request.flush({});
+  });
+
+  it('submits an owned source ID with its reviewed quote and retry key', () => {
+    service.submitExtension({requestId:'request-key',sourceJobId:'original-id',prompt:'She waves.',
+      audioPrompt:'Wind',continueAudio:false,durationSeconds:5,expectedCreditCost:110,pricingVersion:'extend-04mp-v1'}).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions`);
+    expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
+    const body=request.request.body as FormData;
+    expect(body.get('request_id')).toBe('request-key');
+    expect(body.get('source_job_id')).toBe('original-id');
+    expect(body.get('source_video')).toBeNull();
+    expect(body.get('disable_sound')).toBe('true');
+    expect(body.get('output_format')).toBe('video');
+    expect(body.get('audio_prompt')).toBeNull();
+    expect(body.get('expected_credit_cost')).toBe('110');
+    expect(body.get('pricing_version')).toBe('extend-04mp-v1');
+    request.flush({});
+  });
+
+  it('submits an uploaded source and audio direction without legacy image inputs', async () => {
+    const file=new File(['video'],'source.mp4',{type:'video/mp4'});
+    service.submitExtension({requestId:'request-key',sourceVideo:file,prompt:'She waves.',audioPrompt:'Wind',
+      continueAudio:true,durationSeconds:5,expectedCreditCost:110,pricingVersion:'extend-04mp-v1'}).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions`);
+    const body=request.request.body as FormData;
+    const uploaded=body.get('source_video') as File;
+    expect(uploaded.name).toBe('source.mp4');
+    expect(uploaded.type).toBe('video/mp4');
+    expect(await uploaded.text()).toBe('video');
+    expect(body.get('source_job_id')).toBeNull();
+    expect(body.get('first_frame')).toBeNull();
+    expect(body.get('audio_prompt')).toBe('Wind');
+    request.flush({});
+  });
+
+  it('sends optional extension images in their selected order', () => {
+    const images = ['god.png','woman.png'].map(name=>new File(['image'],name,{type:'image/png'}));
+    service.submitExtension({requestId:'refs',sourceJobId:'source',prompt:'The character returns.',
+      continueAudio:true,durationSeconds:5,referenceImages:images,expectedCreditCost:130,pricingVersion:'extend-04mp-v2'}).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions`);
+    const form=request.request.body as FormData;
+    expect(form.getAll('reference_images').map(file=>(file as File).name)).toEqual(['god.png','woman.png']);
+    expect(form.get('first_frame')).toBeNull();
+    expect(form.get('last_frame')).toBeNull();
+    request.flush({});
+  });
+
+  it('requests an authenticated GIF preview using either a file or an owned job ID', () => {
+    const file=new File(['GIF89a'],'source.gif',{type:'image/gif'});
+    for (const source of [{file},{jobId:'saved-gif'}]) {
+      service.previewExtensionGif(source).subscribe();
+      const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions/gif-preview`);
+      expect(request.request.headers.get('Authorization')).toBe('Bearer video-test-token');
+      expect(request.request.responseType).toBe('blob');
+      const form=request.request.body as FormData;
+      expect(form.has('source_video')).toBe('file' in source);
+      expect(form.get('source_job_id')).toBe('jobId' in source ? 'saved-gif' : null);
+      request.flush(new Blob(['preview'],{type:'video/mp4'}));
+    }
+  });
+
+  it('submits extension GIF output with authoritative sound disabling', () => {
+    service.submitExtension({requestId:'gif-output',sourceJobId:'original',prompt:'Continue.',
+      outputFormat:'gif',continueAudio:true,audioPrompt:'Must be omitted',durationSeconds:5,
+      expectedCreditCost:110,pricingVersion:'extend-04mp-v2'}).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions`);
+    const body=request.request.body as FormData;
+    expect(body.get('output_format')).toBe('gif');expect(body.get('disable_sound')).toBe('true');
+    expect(body.has('audio_prompt')).toBeFalse();request.flush({});
+  });
+
   it('submits server-priced video inputs as multipart form data', () => {
     const first = new File(['first'], 'first.png', { type: 'image/png' });
     const last = new File(['last'], 'last.webp', { type: 'image/webp' });

@@ -9,9 +9,10 @@ import { GenerationModeSwitchComponent } from '../generation-mode-switch/generat
 import { ImageHistoryPanelComponent } from '../home/options/image-history-panel/image-history-panel.component';
 import { VideoGenerationService } from '../video-generation.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { VideoAspect, VideoConfig, VideoJob, VideoGenerationMode, VideoReference, VideoPriceQuote } from 'src/_shared/video-generation.interface';
+import { VideoAspect, VideoConfig, VideoJob, VideoGenerationMode, VideoReference, VideoPriceQuote, VideoSubmitResponse } from 'src/_shared/video-generation.interface';
 
 import { ReferenceInputsComponent } from './reference-inputs/reference-inputs.component';
+import { canExtendVideo, ExtensionComposerComponent } from './extension-composer/extension-composer.component';
 
 interface SelectedFrame {
   file: File;
@@ -51,7 +52,7 @@ interface CameraMotionOption {
 @Component({
   selector: 'app-video',
   standalone: true,
-  imports: [CommonModule, FormsModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent],
+  imports: [CommonModule, FormsModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent, ExtensionComposerComponent],
   templateUrl: './video.component.html',
   styleUrls: ['./video.component.css'],
 })
@@ -62,6 +63,9 @@ export class VideoComponent implements OnInit, OnDestroy {
   firstFrame: SelectedFrame | null = null;
   lastFrame: SelectedFrame | null = null;
   generationMode: VideoGenerationMode = 'fl2v';
+  extensionMode = false;
+  readonly canExtendJob = canExtendVideo;
+  @ViewChild(ExtensionComposerComponent) extensionComposer?: ExtensionComposerComponent;
   references: VideoReference[] = [];
   referencesBusy = false;
   referenceQuote: VideoPriceQuote | null = null;
@@ -150,7 +154,10 @@ export class VideoComponent implements OnInit, OnDestroy {
       this.loadJobs();
     }
     this.pollSubscription = interval(5000).subscribe(() => {
-      if (this.authService.isLoggedIn()) this.loadJobs(true);
+      if (this.authService.isLoggedIn()) {
+        this.loadJobs(true);
+        this.loadConfig(true);
+      }
     });
     this.foregroundSubscription = merge(
       fromEvent(window, 'focus'),
@@ -197,6 +204,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get selectedCost(): number {
+    if (this.extensionMode) return 0;
     if (this.generationMode === 'ref2v' && this.references.length) {
       return this.quoteSelection === this.pricingSelection ? this.referenceQuote?.credit_cost ?? 0 : 0;
     }
@@ -224,7 +232,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.quoteSelection = '';
     this.quoteLoading = false;
     this.quoteError = '';
-    if (this.generationMode !== 'ref2v' || !this.references.length || this.componentDestroyed) return;
+    if (this.extensionMode || this.generationMode !== 'ref2v' || !this.references.length || this.componentDestroyed) return;
     const selection = this.pricingSelection;
     this.quoteLoading = true;
     this.quoteSubscription = this.videoService.getQuote(this.durationSeconds, this.references)
@@ -273,12 +281,39 @@ export class VideoComponent implements OnInit, OnDestroy {
   get referenceModeAvailable(): boolean { return !!this.config?.generation_modes?.includes('ref2v'); }
 
   changeMode(mode: VideoGenerationMode): void {
-    if (mode === this.generationMode || (mode === 'ref2v' && !this.referenceModeAvailable)) return;
-    this.modeDrafts[this.generationMode] = { prompt: this.prompt, audioPrompt: this.audioPrompt, cameraMotion: this.cameraMotion, seed: this.seed };
-    this.generationMode = mode;
-    Object.assign(this, this.modeDrafts[mode]);
+    if ((!this.extensionMode && mode === this.generationMode) || (mode === 'ref2v' && !this.referenceModeAvailable)) return;
+    this.extensionMode = false;
+    if (mode !== this.generationMode) {
+      this.modeDrafts[this.generationMode] = { prompt: this.prompt, audioPrompt: this.audioPrompt, cameraMotion: this.cameraMotion, seed: this.seed };
+      this.generationMode = mode;
+      Object.assign(this, this.modeDrafts[mode]);
+    }
     this.errorMessage = '';
     this.refreshQuote();
+  }
+
+  openExtension(job?: VideoJob): void {
+    if (job && !canExtendVideo(job)) return;
+    this.extensionMode = true;
+    this.errorMessage = '';
+    this.refreshQuote();
+    if (job) {
+      this.extensionComposer?.selectJob(job);
+      const heading = document.getElementById('video-composer-title');
+      heading?.scrollIntoView({ block: 'start' });
+      heading?.focus({ preventScroll: true });
+    }
+  }
+
+  onExtensionSubmitted(response: VideoSubmitResponse): void {
+    this.authService.updateCredits(response.credits_remaining);
+    this.jobs = [response.job, ...this.jobs.filter(job => job.id !== response.job.id)];
+    this.hydrateJobAssets();
+  }
+
+  jobDuration(job: VideoJob): string {
+    return job.generation_mode === 'extend' && job.output_duration_seconds
+      ? `${Number(job.output_duration_seconds.toFixed(1))}s` : `${job.duration_seconds}s`;
   }
 
   insertReference(reference: { kind: 'image' | 'video'; index: number }): void {
@@ -326,7 +361,8 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get canSubmit(): boolean {
-    return (this.generationMode === 'fl2v' ? !!this.firstFrame : this.referenceModeAvailable && this.references.length > 0 && !this.referencesBusy && !this.referencePromptNeedsReview)
+    return !this.extensionMode
+      && (this.generationMode === 'fl2v' ? !!this.firstFrame : this.referenceModeAvailable && this.references.length > 0 && !this.referencesBusy && !this.referencePromptNeedsReview)
       && !!this.composedPrompt
       && this.composedPrompt.length <= this.composedPromptMaxLength
       && this.audioPrompt.length <= this.audioPromptMaxLength
@@ -336,8 +372,8 @@ export class VideoComponent implements OnInit, OnDestroy {
       && !this.submitting;
   }
 
-  loadConfig(): void {
-    this.configLoading = true;
+  loadConfig(silent = false): void {
+    if (!silent) this.configLoading = true;
     this.videoService.getConfig().subscribe({
       next: (config) => {
         this.runInView(() => {
@@ -346,13 +382,13 @@ export class VideoComponent implements OnInit, OnDestroy {
             this.durationSeconds = config.durations[0];
           }
           this.configLoading = false;
-          this.refreshQuote();
+          if (!silent) this.refreshQuote();
         });
       },
       error: () => {
         this.runInView(() => {
           this.configLoading = false;
-          this.errorMessage = 'Video service configuration could not be loaded.';
+          if (!silent) this.errorMessage = 'Video service configuration could not be loaded.';
         });
       },
     });
@@ -476,11 +512,14 @@ export class VideoComponent implements OnInit, OnDestroy {
     };
   }
 
-  aspectLabel(aspect: VideoAspect): string {
+  aspectLabel(aspect: VideoAspect | 'source'): string {
+    if (aspect === 'source') return 'Original framing';
     return aspect.charAt(0).toUpperCase() + aspect.slice(1);
   }
 
   submit(): void {
+    // Extension generation and pricing will be connected after benchmarking.
+    if (this.extensionMode) return;
     this.errorMessage = '';
     if (!this.isLoggedIn) {
       this.openLogin();
@@ -614,7 +653,7 @@ export class VideoComponent implements OnInit, OnDestroy {
 
   statusLabel(job: VideoJob): string {
     if (job.status === 'pending') return job.queue_position ? `Queued #${job.queue_position}` : 'Queued';
-    if (job.status === 'processing') return `Generating ${job.progress}%`;
+    if (job.status === 'processing') return job.generation_mode === 'extend' && job.progress >= 97 ? 'Joining video…' : `Generating ${job.progress}%`;
     if (job.status === 'completed') return 'Ready';
     if (job.status === 'cancelled') return 'Cancelled';
     if (job.status === 'failed') return job.refunded ? 'Failed · refunded' : 'Failed';
