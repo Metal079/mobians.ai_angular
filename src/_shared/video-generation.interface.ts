@@ -45,6 +45,7 @@ export interface VideoConfig {
   max_reference_total_bytes?: number;
   reference_video_min_seconds?: number;
   reference_video_max_seconds?: number;
+  reference_video_duration_tolerance_seconds?: number;
   accepted_reference_video_types?: string[];
   service: VideoServiceState;
   prices: Record<string, number>;

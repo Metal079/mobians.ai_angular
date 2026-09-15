@@ -19,7 +19,7 @@
   @if (!imagesOnly) {
   <button type="button" class="video-toggle" [attr.aria-expanded]="showVideos" (click)="showVideos = !showVideos"><span><i class="bi bi-film"></i> Video references <small>Optional &middot; {{ videos.length }} / {{ videoLimit }}</small></span><i class="bi" [class.bi-chevron-down]="!showVideos" [class.bi-chevron-up]="showVideos"></i></button>
   @if (showVideos) {
-    <p class="video-help">Guide motion or a scene with a short clip. MP4, MOV, or WebM &middot; 0.25&ndash;15 seconds &middot; up to 50 MB each.</p>
+    <p class="video-help">Guide motion or a scene with a short clip. MP4, MOV, or WebM &middot; {{ minVideoSeconds }}&ndash;{{ maxVideoSeconds }} seconds &middot; up to 50 MB each.</p>
     <div class="reference-grid">
       @for (item of videos; track item.id; let i = $index) {
         <article class="reference-card">

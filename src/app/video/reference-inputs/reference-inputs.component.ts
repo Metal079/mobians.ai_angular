@@ -31,6 +31,9 @@ export class ReferenceInputsComponent implements OnDestroy {
   get images(): VideoReference[] { return this.references.filter(item => item.kind === 'image'); }
   get videos(): VideoReference[] { return this.references.filter(item => item.kind === 'video'); }
   get imageLimit(): number { return this.maxImages ?? this.config?.max_reference_images ?? 9; }
+  get minVideoSeconds(): number { return this.config?.reference_video_min_seconds ?? 0.25; }
+  get maxVideoSeconds(): number { return this.config?.reference_video_max_seconds ?? 20; }
+  get videoDurationTolerance(): number { return this.config?.reference_video_duration_tolerance_seconds ?? 0; }
   get videoLimit(): number { return this.config?.max_reference_videos ?? 3; }
 
   ngOnDestroy(): void {
@@ -78,7 +81,7 @@ export class ReferenceInputsComponent implements OnDestroy {
         try {
           const dimensions = await this.metadata(previewUrl, kind);
           if (dimensions.width < 64 || dimensions.height < 64 || dimensions.width * dimensions.height > (kind === 'image' ? 40000000 : 8294400)) throw new Error('The reference dimensions are unsupported. Use an image under 40 MP or a video up to 4K, at least 64 pixels per side.');
-          if (kind === 'video' && (!Number.isFinite(dimensions.duration) || dimensions.duration! < (this.config?.reference_video_min_seconds ?? 0.25) || dimensions.duration! > (this.config?.reference_video_max_seconds ?? 15))) throw new Error('Reference videos must be between 0.25 and 15 seconds long.');
+          if (kind === 'video' && (!Number.isFinite(dimensions.duration) || dimensions.duration! < this.minVideoSeconds || dimensions.duration! > this.maxVideoSeconds + this.videoDurationTolerance)) throw new Error(`Reference videos must be between ${this.minVideoSeconds} and ${this.maxVideoSeconds} seconds long.`);
           if (this.destroyed) { URL.revokeObjectURL(previewUrl); break; }
           this.zone.run(() => {
             this.references = [...this.references, { id: crypto.randomUUID(), kind, file: owned, previewUrl, source, useAudio: false, ...dimensions }];
