@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CharactersService } from '../characters/characters.service';
 import { FormsModule } from '@angular/forms';
-import { Subscription, finalize, fromEvent, interval, merge, timeout } from 'rxjs';
+import { Subscription, finalize, fromEvent, interval, merge, switchMap, timeout, timer } from 'rxjs';
 import { AccountCtaService } from '../auth/account-cta.service';
 import { AuthService } from '../auth/auth.service';
 import { GenerationModeSwitchComponent } from '../generation-mode-switch/generation-mode-switch.component';
@@ -195,6 +195,21 @@ export class VideoComponent implements OnInit, OnDestroy {
     return this.config?.durations ?? [];
   }
 
+  get durationIndex(): number {
+    return Math.max(0, this.durations.indexOf(this.durationSeconds));
+  }
+
+  get durationProgress(): number {
+    return this.durations.length > 1 ? this.durationIndex / (this.durations.length - 1) * 100 : 0;
+  }
+
+  onDurationInput(event: Event): void {
+    const duration = this.durations[Number((event.target as HTMLInputElement).value)];
+    if (duration === undefined || duration === this.durationSeconds) return;
+    this.durationSeconds = duration;
+    this.refreshQuote(250);
+  }
+
   get activeJobs(): number {
     return this.jobs.filter((job) => job.status === 'pending' || job.status === 'processing').length;
   }
@@ -226,7 +241,7 @@ export class VideoComponent implements OnInit, OnDestroy {
     this.refreshQuote();
   }
 
-  refreshQuote(): void {
+  refreshQuote(debounceMs = 0): void {
     this.quoteSubscription?.unsubscribe();
     this.referenceQuote = null;
     this.quoteSelection = '';
@@ -235,7 +250,8 @@ export class VideoComponent implements OnInit, OnDestroy {
     if (this.extensionMode || this.generationMode !== 'ref2v' || !this.references.length || this.componentDestroyed) return;
     const selection = this.pricingSelection;
     this.quoteLoading = true;
-    this.quoteSubscription = this.videoService.getQuote(this.durationSeconds, this.references)
+    const quoteRequest = () => this.videoService.getQuote(this.durationSeconds, this.references);
+    this.quoteSubscription = (debounceMs ? timer(debounceMs).pipe(switchMap(quoteRequest)) : quoteRequest())
       .pipe(timeout({ first: 15000 })).subscribe({
         next: quote => {
           if (selection !== this.pricingSelection || this.componentDestroyed) return;
@@ -951,6 +967,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   private runInView(update: () => void): void {
     this.zone.run(() => {
       update();
+      this.cdr.markForCheck();
       this.cdr.detectChanges();
     });
   }

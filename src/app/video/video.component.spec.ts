@@ -7,6 +7,7 @@ import { AuthService } from '../auth/auth.service';
 import { VideoGenerationService } from '../video-generation.service';
 import { VideoComponent } from './video.component';
 import { VideoJob } from 'src/_shared/video-generation.interface';
+import { provideRouter } from '@angular/router';
 
 describe('VideoComponent', () => {
   let component: VideoComponent;
@@ -30,7 +31,7 @@ describe('VideoComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [{ provide: CharactersService, useValue: { takeVideoHandoff: () => null } }] });
     videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob', 'getQuote']);
-    changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges']);
+    changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges', 'markForCheck']);
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
     accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
     zone = { run: (update: () => void) => update() } as NgZone;
@@ -299,6 +300,39 @@ describe('VideoComponent', () => {
     return { id, kind, duration, file: new File(['test'], id), source: 'upload', previewUrl: '', useAudio: false, width: 512, height: 768 };
   }
 
+  it('maps slider positions to the durations supplied by the server', () => {
+    component.config = { durations: [5, 15, 20], prices: { '5': 70, '15': 350, '20': 500 } } as any;
+    component.onDurationInput({ target: { value: '2' } } as unknown as Event);
+    expect(component.durationSeconds).toBe(20);
+    expect(component.durationIndex).toBe(2);
+    expect(component.durationProgress).toBe(100);
+    expect(component.selectedCost).toBe(500);
+    component.onDurationInput({ target: { value: '0' } } as unknown as Event);
+    expect(component.durationSeconds).toBe(5);
+    expect(component.durationProgress).toBe(0);
+    component.onDurationInput({ target: { value: '9' } } as unknown as Event);
+    expect(component.durationSeconds).toBe(5);
+  });
+
+  it('invalidates the old reference price immediately and quotes only after slider movement pauses', fakeAsync(() => {
+    component.config = { durations: [5, 15, 20] } as any;
+    component.generationMode = 'ref2v';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.onReferencesChanged([reference('image', 'image')]);
+    expect(component.selectedPriceAvailable).toBeTrue();
+    videoService.getQuote.calls.reset();
+    component.onDurationInput({ target: { value: '1' } } as unknown as Event);
+    expect(component.selectedPriceAvailable).toBeFalse();
+    expect(component.quoteLoading).toBeTrue();
+    tick(200);
+    component.onDurationInput({ target: { value: '2' } } as unknown as Event);
+    tick(249);
+    expect(videoService.getQuote).not.toHaveBeenCalled();
+    tick(1);
+    expect(videoService.getQuote).toHaveBeenCalledOnceWith(20, component.references);
+    component.ngOnDestroy();
+  }));
+
   const quote = { pricing_version: 'ref2v-04mp-v2', credit_cost: 200, base_cost: 70, reference_cost: 130, effective_video_seconds: [5.167] };
 
   it('blocks a stale quote while duration or references change and ignores older responses', () => {
@@ -497,5 +531,47 @@ describe('VideoComponent', () => {
       { error: { detail: [{ unexpected: true }] } },
       'Fallback'
     )).toBe('Fallback');
+  });
+});
+
+describe('VideoComponent length slider rendering', () => {
+  it('renders the returned price after a debounced slider request without another user action', async () => {
+    const response = new Subject<any>();
+    const service = jasmine.createSpyObj('VideoGenerationService', ['getQuote']);
+    service.getQuote.and.returnValue(response);
+    await TestBed.configureTestingModule({
+      imports: [VideoComponent],
+      providers: [provideRouter([]),
+        { provide: CharactersService, useValue: { takeVideoHandoff: () => null } },
+        { provide: VideoGenerationService, useValue: service },
+        { provide: AuthService, useValue: { isLoggedIn: () => true } },
+        { provide: AccountCtaService, useValue: {} },
+      ],
+    }).compileComponents();
+    spyOn(VideoComponent.prototype, 'ngOnInit').and.stub();
+    const fixture = TestBed.createComponent(VideoComponent);
+    const component = fixture.componentInstance;
+    component.configLoading = false;
+    component.config = {
+      durations: Array.from({ length: 16 }, (_, index) => index + 5), prices: { '5': 70, '20': 520 },
+      generation_modes: ['fl2v', 'ref2v'],
+      service: { accepting_jobs: true, effective_state: 'available' },
+    } as any;
+    component.generationMode = 'ref2v';
+    component.references = [{ id: 'image', kind: 'image', file: new File(['image'], 'image.png'),
+      previewUrl: '', source: 'history', width: 512, height: 768, useAudio: false }];
+    fixture.detectChanges();
+    const slider = fixture.nativeElement.querySelector('#videoLength') as HTMLInputElement;
+    slider.value = '15';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(service.getQuote).toHaveBeenCalledOnceWith(20, component.references);
+    response.next({ credit_cost: 520, base_cost: 520, reference_cost: 0, pricing_version: 'test', effective_video_seconds: [] });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.duration-value').textContent).toContain('20');
+    expect(slider.getAttribute('aria-valuetext')).toBe('20 seconds');
+    expect(fixture.nativeElement.querySelector('.price-summary').textContent).toContain('520 credits');
+    expect(fixture.nativeElement.querySelector('.price-summary').textContent).not.toContain('Checking price');
+    fixture.destroy();
   });
 });

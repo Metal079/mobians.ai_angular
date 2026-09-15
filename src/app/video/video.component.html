@@ -201,12 +201,15 @@
 
         <div class="settings-row">
           <fieldset class="control-group duration-group">
-            <legend>Length</legend>
-            <div class="duration-options">
-              @for (duration of durations; track duration) {
-                <button type="button" [class.selected]="durationSeconds === duration" (click)="selectDuration(duration)">
-                  {{ duration }}s
-                </button>
+            <legend id="videoLengthLabel">Length</legend>
+            <div class="duration-slider">
+              <output for="videoLength" class="duration-value">{{ durationSeconds }} <span>seconds</span></output>
+              <input id="videoLength" type="range" min="0" [max]="durations.length > 1 ? durations.length - 1 : 0" step="1"
+                [value]="durationIndex" [disabled]="durations.length < 2 || submitting" (input)="onDurationInput($event)"
+                aria-labelledby="videoLengthLabel" [attr.aria-valuetext]="durationSeconds + ' seconds'"
+                [style.--duration-progress]="durationProgress + '%'">
+              @if (durations.length) {
+                <div class="duration-bounds" aria-hidden="true"><span>{{ durations[0] }}s</span><span>{{ durations[durations.length - 1] }}s</span></div>
               }
             </div>
           </fieldset>
