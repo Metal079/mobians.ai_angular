@@ -58,7 +58,7 @@
         </div>
         <app-video-extension-composer [hidden]="!extensionMode" [active]="extensionMode" [jobs]="jobs" [loadingJobs]="loadingJobs" [videoUrls]="videoUrls" [thumbnailUrls]="thumbnailUrls" [durations]="durations" [policy]="config?.extension || null" [currentCredits]="currentCredits" [activeJobs]="activeJobs" [activeLimit]="activeLimit" (submitted)="onExtensionSubmitted($event)" (creditsRequested)="openCreditPurchase()"></app-video-extension-composer>
         <div [hidden]="extensionMode">
-        <app-video-reference-inputs [hidden]="generationMode !== 'ref2v'" [config]="config" (referencesChange)="onReferencesChanged($event)" (busyChange)="referencesBusy = $event" (historyRequested)="openHistory('reference')" (promptReference)="insertReference($event)" (referenceRemoved)="removedReference($event)"></app-video-reference-inputs>
+        <app-video-reference-inputs [hidden]="generationMode !== 'ref2v'" [config]="config" [originalAudioReferenceId]="keepingOriginalAudio ? originalAudioReferenceId : null" (referencesChange)="onReferencesChanged($event)" (busyChange)="referencesBusy = $event" (historyRequested)="openHistory('reference')" (promptReference)="insertReference($event)" (referenceRemoved)="removedReference($event)"></app-video-reference-inputs>
         @if (generationMode === 'fl2v') {
         <div class="frames-row">
           <article class="frame-card required" (dragover)="$event.preventDefault()" (drop)="onFrameDrop($event, 'first')">
@@ -112,7 +112,7 @@
         <label class="field-block" for="videoPrompt">
           <span>What happens in the video? <small>Required</small></span>
           <p class="field-help">{{ generationMode === 'ref2v' ? 'Describe how your references should appear and interact. Use the reference cards to insert image or video tags.' : "Describe the subject's movement, expression, and the action around them. You don't need to repeat what is already visible." }}</p>
-          <textarea id="videoPrompt" [(ngModel)]="prompt" rows="4" [attr.maxlength]="maxUserPromptLength" [placeholder]="promptPlaceholder"></textarea>
+          <textarea id="videoPrompt" [(ngModel)]="prompt" rows="4" cdkTextareaAutosize cdkAutosizeMinRows="4" cdkAutosizeMaxRows="12" [attr.maxlength]="maxUserPromptLength" [placeholder]="promptPlaceholder"></textarea>
           <em>{{ prompt.length }} / {{ maxUserPromptLength }}</em>
         </label>
 
@@ -157,10 +157,38 @@
           </a>
         </details>
 
+        @if (generationMode === 'ref2v' && !disableSound && !outputAsGif && ((config?.original_audio_available && referenceVideos.length) || keepingOriginalAudio)) {
+          <div class="original-audio-panel">
+            <label for="originalAudioSource"><strong>Audio</strong></label>
+            <select id="originalAudioSource" [(ngModel)]="originalAudioReferenceId" (ngModelChange)="selectOriginalAudio()" [disabled]="submitting">
+              <option [ngValue]="null">Generate audio</option>
+              @if (originalAudioReferenceId && originalAudioIndex < 0) {
+                <option [ngValue]="originalAudioReferenceId" disabled>Choose another audio source</option>
+              }
+              @for (video of referenceVideos; track video.id; let i = $index) {
+                <option [ngValue]="video.id" [disabled]="!config?.original_audio_available">Keep original audio — Video {{ i + 1 }}</option>
+              }
+            </select>
+            @if (keepingOriginalAudio) {
+              <p class="field-help">Keeps this video's words, voices, and sounds, and uses its audio during generation to guide speech and movement.</p>
+              <p class="field-help">Audio starts at the beginning. It is trimmed for a shorter result; a longer result ends in silence. Lip sync can still vary.</p>
+              @if (originalAudioIndex < 0) {
+                <p class="original-audio-error" role="alert">The selected audio source was removed. Choose another video or Generate audio.</p>
+              } @else {
+                <button type="button" class="credit-link" [disabled]="submitting" (click)="matchOriginalAudioLength()">Match source length</button>
+                @if (matchSourceLength) { <p class="field-help">Source length matched: {{ selectedDurationSeconds }} seconds. Move the length slider to choose another duration.</p> }
+              }
+              @if (!config?.original_audio_available) { <p class="original-audio-error" role="alert">Keeping original audio is temporarily unavailable.</p> }
+            } @else {
+              <p class="field-help">Creates new sound. Audio references guide the result but do not preserve the original recording.</p>
+            }
+          </div>
+        }
+
         <label class="field-block" for="audioPrompt">
           <span>Audio direction <small>Optional</small></span>
-          <p class="field-help">{{ disableSound ? 'Audio will not be included in this generation.' : 'Describe sounds, ambience, music, or dialogue, not visual movement.' }}</p>
-          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" [attr.maxlength]="audioPromptMaxLength" [disabled]="disableSound" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
+          <p class="field-help">{{ keepingOriginalAudio ? 'The original soundtrack supplies the finished audio.' : disableSound ? 'Audio will not be included in this generation.' : 'Describe sounds, ambience, music, or dialogue, not visual movement.' }}</p>
+          <textarea id="audioPrompt" [(ngModel)]="audioPrompt" rows="2" [attr.maxlength]="audioPromptMaxLength" [disabled]="disableSound || keepingOriginalAudio" placeholder="Soft wind and distant crowd ambience; no dialogue."></textarea>
           <em>{{ audioPrompt.length }} / {{ audioPromptMaxLength }}</em>
         </label>
 
@@ -168,7 +196,7 @@
           <legend>Output options</legend>
           <div class="delivery-options">
             <label class="delivery-option" [class.selected]="disableSound">
-              <input type="checkbox" [(ngModel)]="disableSound" [disabled]="outputAsGif">
+              <input type="checkbox" [(ngModel)]="disableSound" (ngModelChange)="onSoundOptionChanged()" [disabled]="outputAsGif">
               <span class="delivery-icon"><i class="bi" [ngClass]="disableSound ? 'bi-volume-mute-fill' : 'bi-volume-up-fill'"></i></span>
               <span><strong>Disable sound</strong><small>Create the result without an audio track.</small></span>
             </label>
@@ -203,10 +231,10 @@
           <fieldset class="control-group duration-group">
             <legend id="videoLengthLabel">Length</legend>
             <div class="duration-slider">
-              <output for="videoLength" class="duration-value">{{ durationSeconds }} <span>seconds</span></output>
+              <output for="videoLength" class="duration-value">{{ selectedDurationSeconds }} <span>seconds</span></output>
               <input id="videoLength" type="range" min="0" [max]="durations.length > 1 ? durations.length - 1 : 0" step="1"
                 [value]="durationIndex" [disabled]="durations.length < 2 || submitting" (input)="onDurationInput($event)"
-                aria-labelledby="videoLengthLabel" [attr.aria-valuetext]="durationSeconds + ' seconds'"
+                aria-labelledby="videoLengthLabel" [attr.aria-valuetext]="selectedDurationSeconds + ' seconds'"
                 [style.--duration-progress]="durationProgress + '%'">
               @if (durations.length) {
                 <div class="duration-bounds" aria-hidden="true"><span>{{ durations[0] }}s</span><span>{{ durations[durations.length - 1] }}s</span></div>
@@ -219,16 +247,27 @@
           </label>
         </div>
 
+        @if (generationMode === 'ref2v' && referencePromptNeedsReview) {
+          <div id="reference-prompt-warning" class="submit-warning" role="alert">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <div>
+              <strong>Update your prompt to enable Generate</strong>
+              <p>A reference was removed. Replace or delete <span class="reference-marker">[removed image]</span> or <span class="reference-marker">[removed video]</span> in your prompt.</p>
+              <button type="button" (click)="reviewReferencePrompt()">Review prompt <i class="bi bi-arrow-up" aria-hidden="true"></i></button>
+            </div>
+          </div>
+        }
         <div class="submit-panel">
           <div class="price-summary" aria-live="polite" aria-atomic="true">
             <strong>{{ quoteLoading ? 'Checking price...' : selectedPriceAvailable ? (selectedCost + ' credits') : 'Price unavailable' }}</strong>
-            <span>{{ durationSeconds }} seconds · {{ outputAsGif ? 'GIF' : 'MP4' }} · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
+            <span>{{ selectedDurationSeconds }} seconds · {{ outputAsGif ? 'GIF' : 'MP4' }} · {{ aspectDimensions(aspectRatio).width }}×{{ aspectDimensions(aspectRatio).height }}</span>
+            @if (keepingOriginalAudio && originalAudioIndex >= 0) { <small>Original audio from Video {{ originalAudioIndex + 1 }}</small> }
             @if (generationMode === 'ref2v' && selectedPriceAvailable && referenceQuote) {
               <small>{{ referenceQuote.base_cost }} base + {{ referenceQuote.reference_cost }} for references</small>
               <small>Reference audio included. Videos resized to 0.4 MP.</small>
             }
           </div>
-          <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" (click)="submit()">
+          <button type="button" class="primary-action generate-action" [disabled]="!canSubmit" [attr.aria-describedby]="generationMode === 'ref2v' && referencePromptNeedsReview ? 'reference-prompt-warning' : null" (click)="submit()">
             @if (submitting) { <span class="spinner"></span> Queuing… }
             @else if (activeJobs >= activeLimit) { Queue is full }
             @else if (quoteLoading) { Checking price... }
@@ -313,7 +352,7 @@
                     @if (job.generation_mode === 'extend') { <span>+{{ job.duration_seconds }}s added</span> }
                     @if (job.generation_mode === 'ref2v') { <span>{{ job.reference_image_count || 0 }} {{ job.reference_image_count === 1 ? 'image' : 'images' }} &middot; {{ job.reference_video_count || 0 }} {{ job.reference_video_count === 1 ? 'video' : 'videos' }}</span> }
                     <span>{{ aspectLabel(job.aspect_ratio) }}</span>
-                    <span>{{ job.output_format === 'gif' ? 'GIF' : (job.output_has_audio ?? !job.disable_sound) ? 'Video with sound' : 'Silent video' }}</span>
+                    <span>{{ job.original_audio_reference != null ? 'Original audio · Video ' + (job.original_audio_reference + 1) : job.output_format === 'gif' ? 'GIF' : (job.output_has_audio ?? !job.disable_sound) ? 'Video with sound' : 'Silent video' }}</span>
                     <span>{{ job.credit_cost }} credits</span>
                     @if (job.expires_at && job.status === 'completed') { <span>{{ expiresLabel(job) }}</span> }
                   </div>

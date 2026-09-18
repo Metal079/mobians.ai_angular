@@ -20,6 +20,17 @@ describe('VideoGenerationService', () => {
 
   afterEach(() => { http.verify(); localStorage.removeItem('authToken'); });
 
+  it('sends the original soundtrack selection including video index zero', () => {
+    service.submitJob({ generationMode:'ref2v',references:[{id:'clip',kind:'video',file:new File(['video'],'clip.mp4'),
+      source:'upload',useAudio:true,previewUrl:'',width:128,height:96,duration:5}],originalAudioReference:0,matchOriginalAudioLength:true,
+      prompt:'Keep the performance.',disableSound:false,outputFormat:'video',durationSeconds:5,aspectRatio:'square'}).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/jobs`);
+    expect((request.request.body as FormData).get('original_audio_reference')).toBe('0');
+    expect((request.request.body as FormData).get('reference_video_audio')).toBe('[true]');
+    expect((request.request.body as FormData).get('match_original_audio_length')).toBe('true');
+    request.flush({});
+  });
+
   it('requests a public extension quote without uploading the source', () => {
     service.getExtensionQuote(5, 3).subscribe();
     const request=http.expectOne(`${environment.apiBaseUrl}/video/extensions/quote`);
@@ -195,6 +206,14 @@ describe('VideoGenerationService', () => {
     expect(body.get('reference_video_seconds')).toBe('[5.167]');
     expect(body.has('reference_videos')).toBeFalse();
     expect(body.has('credit_cost')).toBeFalse();
+    request.flush({});
+  });
+
+  it('includes the selected audio reference when quoting its padded reference frames', () => {
+    service.getQuote(20,[{id:'clip',kind:'video',file:new File(['video'],'clip.mp4'),
+      source:'upload',useAudio:true,previewUrl:'',width:128,height:96,duration:5.81}],0).subscribe();
+    const request=http.expectOne(`${environment.apiBaseUrl}/video/quote`);
+    expect((request.request.body as FormData).get('original_audio_reference')).toBe('0');
     request.flush({});
   });
 

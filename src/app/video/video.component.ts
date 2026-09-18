@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CharactersService } from '../characters/characters.service';
 import { FormsModule } from '@angular/forms';
@@ -52,9 +53,9 @@ interface CameraMotionOption {
 @Component({
   selector: 'app-video',
   standalone: true,
-  imports: [CommonModule, FormsModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent, ExtensionComposerComponent],
+  imports: [CommonModule, FormsModule, CdkTextareaAutosize, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent, ExtensionComposerComponent],
   templateUrl: './video.component.html',
-  styleUrls: ['./video.component.css'],
+  styleUrls: ['./video.component.css', './video-original-audio.css'],
 })
 export class VideoComponent implements OnInit, OnDestroy {
   private readonly characters = inject(CharactersService);
@@ -81,6 +82,8 @@ export class VideoComponent implements OnInit, OnDestroy {
   prompt = '';
   audioPrompt = '';
   disableSound = false;
+  originalAudioReferenceId: string | null = null;
+  matchSourceLength = false;
   outputAsGif = false;
   cameraMotion: VideoCameraMotion = 'auto';
   showAdvancedCameraOptions = false;
@@ -205,7 +208,8 @@ export class VideoComponent implements OnInit, OnDestroy {
 
   onDurationInput(event: Event): void {
     const duration = this.durations[Number((event.target as HTMLInputElement).value)];
-    if (duration === undefined || duration === this.durationSeconds) return;
+    if (duration === undefined || (duration === this.durationSeconds && !this.matchSourceLength)) return;
+    this.matchSourceLength = false;
     this.durationSeconds = duration;
     this.refreshQuote(250);
   }
@@ -228,17 +232,78 @@ export class VideoComponent implements OnInit, OnDestroy {
 
   private get pricingSelection(): string {
     return JSON.stringify([this.generationMode, this.durationSeconds,
-      this.references.map(item => [item.id, item.kind, item.duration])]);
+      this.references.map(item => [item.id, item.kind, item.duration]),
+      this.keepingOriginalAudio ? this.originalAudioIndex : null]);
   }
 
   selectDuration(duration: number): void {
+    this.matchSourceLength = false;
     this.durationSeconds = duration;
     this.refreshQuote();
   }
 
   onReferencesChanged(references: VideoReference[]): void {
+    const previousVideoId = this.referenceVideos[0]?.id;
     this.references = references;
+    const source = this.referenceVideos[0];
+    // Use the first video when it changes; other reference edits keep manual settings.
+    if (source && source.id !== previousVideoId) {
+      const durations = [...this.durations].sort((a, b) => a - b);
+      if (Number.isFinite(source.duration) && source.duration! > 0 && durations.length) {
+        const roundedSeconds = Math.ceil(source.duration!);
+        this.durationSeconds = durations.find(seconds => seconds >= roundedSeconds) ?? durations[durations.length - 1];
+        this.matchSourceLength = false;
+      }
+      if (source.width > 0 && source.height > 0) {
+        this.aspectRatio = this.nearestAspect(source.width / source.height);
+      }
+    }
     this.refreshQuote();
+  }
+
+  get referenceVideos(): VideoReference[] { return this.references.filter(item => item.kind === 'video'); }
+  get originalAudioIndex(): number { return this.referenceVideos.findIndex(item => item.id === this.originalAudioReferenceId); }
+
+  get keepingOriginalAudio(): boolean {
+    return this.generationMode === 'ref2v' && !this.disableSound && !this.outputAsGif && this.originalAudioReferenceId !== null;
+  }
+
+  selectOriginalAudio(): void {
+    this.matchSourceLength = false;
+    if (this.originalAudioReferenceId) {
+      this.disableSound = false;
+      this.outputAsGif = false;
+      for (const video of this.referenceVideos) video.useAudio = video.id === this.originalAudioReferenceId;
+    }
+    this.refreshQuote();
+  }
+
+  matchOriginalAudioLength(): void {
+    const source = this.referenceVideos.find(item => item.id === this.originalAudioReferenceId);
+    if (!source?.duration) return;
+    const frames = this.sourceLengthFrames(source.duration);
+    const match = this.durations.find(seconds => this.sourceLengthFrames(seconds) >= frames);
+    if (match !== undefined) {
+      this.durationSeconds = match;
+      this.matchSourceLength = true;
+      this.refreshQuote();
+    }
+  }
+
+  private sourceLengthFrames(seconds: number): number {
+    // Match the server's 2-decimal container duration and H3 frame rounding.
+    const frames = Math.max(124, Math.round(Math.round(seconds * 100) / 100 * 24));
+    return Math.min(481, frames + (5 - frames % 17 + 17) % 17);
+  }
+
+  get selectedDurationSeconds(): number {
+    const source = this.referenceVideos.find(item => item.id === this.originalAudioReferenceId);
+    return this.keepingOriginalAudio && this.matchSourceLength && source?.duration
+      ? Number((this.sourceLengthFrames(source.duration) / 24).toFixed(3)) : this.durationSeconds;
+  }
+
+  onSoundOptionChanged(): void {
+    if (this.disableSound) { this.originalAudioReferenceId = null; this.matchSourceLength = false; this.refreshQuote(); }
   }
 
   refreshQuote(debounceMs = 0): void {
@@ -250,7 +315,9 @@ export class VideoComponent implements OnInit, OnDestroy {
     if (this.extensionMode || this.generationMode !== 'ref2v' || !this.references.length || this.componentDestroyed) return;
     const selection = this.pricingSelection;
     this.quoteLoading = true;
-    const quoteRequest = () => this.videoService.getQuote(this.durationSeconds, this.references);
+    const quoteRequest = () => this.keepingOriginalAudio && this.originalAudioIndex >= 0
+      ? this.videoService.getQuote(this.durationSeconds, this.references, this.originalAudioIndex)
+      : this.videoService.getQuote(this.durationSeconds, this.references);
     this.quoteSubscription = (debounceMs ? timer(debounceMs).pipe(switchMap(quoteRequest)) : quoteRequest())
       .pipe(timeout({ first: 15000 })).subscribe({
         next: quote => {
@@ -328,6 +395,9 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   jobDuration(job: VideoJob): string {
+    if (job.match_original_audio_length && job.output_duration_seconds) {
+      return `${Number(job.output_duration_seconds.toFixed(3))}s`;
+    }
     return job.generation_mode === 'extend' && job.output_duration_seconds
       ? `${Number(job.output_duration_seconds.toFixed(1))}s` : `${job.duration_seconds}s`;
   }
@@ -351,7 +421,15 @@ export class VideoComponent implements OnInit, OnDestroy {
     });
     this.modeDrafts.ref2v.prompt = updated;
     if (this.generationMode === 'ref2v') this.prompt = updated;
-    if (this.referencePromptNeedsReview) this.errorMessage = 'A reference used in your prompt was removed. Update the marked text before generating.';
+  }
+
+  reviewReferencePrompt(): void {
+    const input = document.getElementById('videoPrompt') as HTMLTextAreaElement | null;
+    if (!input) return;
+    input.scrollIntoView({ block: 'center' });
+    input.focus({ preventScroll: true });
+    const marker = input.value.match(/\[removed (?:image|video)\]/);
+    if (marker?.index !== undefined) input.setSelectionRange(marker.index, marker.index + marker[0].length);
   }
 
   get promptPlaceholder(): string {
@@ -381,7 +459,8 @@ export class VideoComponent implements OnInit, OnDestroy {
       && (this.generationMode === 'fl2v' ? !!this.firstFrame : this.referenceModeAvailable && this.references.length > 0 && !this.referencesBusy && !this.referencePromptNeedsReview)
       && !!this.composedPrompt
       && this.composedPrompt.length <= this.composedPromptMaxLength
-      && this.audioPrompt.length <= this.audioPromptMaxLength
+      && (this.keepingOriginalAudio || this.audioPrompt.length <= this.audioPromptMaxLength)
+      && (!this.keepingOriginalAudio || (!!this.config?.original_audio_available && this.originalAudioIndex >= 0))
       && this.selectedPriceAvailable
       && this.activeJobs < this.activeLimit
       && this.serviceAcceptingJobs
@@ -453,7 +532,7 @@ export class VideoComponent implements OnInit, OnDestroy {
       requiredCredits: this.selectedCost,
       currentCredits: this.currentCredits,
       requestedMode: 'video',
-      message: `A ${this.durationSeconds}-second video costs ${this.selectedCost} credits.`,
+      message: `A ${this.selectedDurationSeconds}-second video costs ${this.selectedCost} credits.`,
     });
   }
 
@@ -518,7 +597,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   onGifOptionChanged(): void {
-    if (this.outputAsGif) this.disableSound = true;
+    if (this.outputAsGif) { this.disableSound = true; this.originalAudioReferenceId = null; this.matchSourceLength = false; this.refreshQuote(); }
   }
 
   aspectDimensions(aspect: VideoAspect): { width: number; height: number } {
@@ -558,7 +637,9 @@ export class VideoComponent implements OnInit, OnDestroy {
       lastFrame: this.lastFrame?.file,
       lastFrameSource: this.lastFrame?.source,
       prompt: this.composedPrompt,
-      audioPrompt: this.audioPrompt.trim() || null,
+      audioPrompt: this.keepingOriginalAudio ? null : this.audioPrompt.trim() || null,
+      originalAudioReference: this.keepingOriginalAudio ? this.originalAudioIndex : undefined,
+      matchOriginalAudioLength: this.keepingOriginalAudio && this.matchSourceLength,
       disableSound: this.disableSound,
       outputFormat: this.outputAsGif ? 'gif' : 'video',
       durationSeconds: this.durationSeconds,
@@ -768,7 +849,10 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   private nearestAspect(ratio: number): VideoAspect {
-    const targets: Array<[VideoAspect, number]> = [['square', 1], ['landscape', 1.5], ['portrait', 2 / 3]];
+    const targets: Array<[VideoAspect, number]> = this.aspectOrder.map(aspect => {
+      const { width, height } = this.aspectDimensions(aspect);
+      return [aspect, width / height];
+    });
     return targets.reduce((best, candidate) =>
       Math.abs(Math.log(ratio / candidate[1])) < Math.abs(Math.log(ratio / best[1])) ? candidate : best
     )[0];

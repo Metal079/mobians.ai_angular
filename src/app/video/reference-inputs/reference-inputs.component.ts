@@ -14,6 +14,7 @@ export class ReferenceInputsComponent implements OnDestroy {
   @Input() config: VideoConfig | null = null;
   @Input() imagesOnly = false;
   @Input() disabled = false;
+  @Input() originalAudioReferenceId: string | null = null;
   @Input() heading = 'Reference images';
   @Input() description = 'Guide characters, outfits, and settings. These images are not fixed first or last frames.';
   @Input() maxImages: number | null = null;

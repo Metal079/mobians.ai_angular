@@ -36,6 +36,7 @@ export interface VideoPriceQuote {
 }
 
 export interface VideoConfig {
+  original_audio_available?: boolean;
   extension?: VideoExtensionConfig;
   pricing_version?: string;
   generation_modes?: VideoGenerationMode[];
@@ -58,6 +59,9 @@ export interface VideoConfig {
 }
 
 export interface VideoJob {
+  original_audio_reference?: number | null;
+  original_audio_guidance?: boolean;
+  match_original_audio_length?: boolean;
   generation_mode?: VideoGenerationMode | 'extend';
   output_frame_count?: number | null;
   output_duration_seconds?: number | null;

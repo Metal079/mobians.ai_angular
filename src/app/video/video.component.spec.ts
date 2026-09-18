@@ -300,6 +300,156 @@ describe('VideoComponent', () => {
     return { id, kind, duration, file: new File(['test'], id), source: 'upload', previewUrl: '', useAudio: false, width: 512, height: 768 };
   }
 
+  describe('input video defaults', () => {
+    beforeEach(() => {
+      component.generationMode = 'ref2v';
+      component.config = { durations: Array.from({ length: 16 }, (_, i) => i + 5) } as any;
+      videoService.getQuote.and.returnValue(of(quote));
+    });
+
+    it('rounds up the first video duration, matches its aspect, and quotes the new length', () => {
+      component.onReferencesChanged([reference('picture', 'image'), reference('source', 'video', 8.2)]);
+      expect(component.durationSeconds).toBe(9);
+      expect(component.aspectRatio).toBe('portrait');
+      expect(component.matchSourceLength).toBeFalse();
+      expect(videoService.getQuote).toHaveBeenCalledOnceWith(9, component.references);
+    });
+
+    for (const [sourceSeconds, expectedSeconds] of [[8, 8], [0.5, 5], [20.042, 20]]) {
+      it(`uses a supported duration of ${expectedSeconds}s for a ${sourceSeconds}s video`, () => {
+        component.onReferencesChanged([reference('source', 'video', sourceSeconds)]);
+        expect(component.durationSeconds).toBe(expectedSeconds);
+      });
+    }
+
+    it('rounds up to the next supported length when duration options have gaps', () => {
+      component.config!.durations = [20, 5, 10];
+      component.onReferencesChanged([reference('source', 'video', 6.2)]);
+      expect(component.durationSeconds).toBe(10);
+      expect(component.config!.durations).toEqual([20, 5, 10]);
+    });
+
+    for (const [width, height, aspect] of [[1920, 1080, 'landscape'], [1080, 1920, 'portrait'], [1080, 1080, 'square']] as const) {
+      it(`selects ${aspect} for a ${width} by ${height} video`, () => {
+        component.onReferencesChanged([{ ...reference('source'), width, height }]);
+        expect(component.aspectRatio).toBe(aspect);
+      });
+    }
+
+    it('uses the configured aspect dimensions when selecting the closest ratio', () => {
+      component.config!.aspects = {
+        square: { width: 640, height: 640, comfy_value: 'square' },
+        landscape: { width: 1024, height: 512, comfy_value: 'landscape' },
+        portrait: { width: 512, height: 1024, comfy_value: 'portrait' },
+      };
+      component.onReferencesChanged([{ ...reference('source'), width: 1300, height: 1000 }]);
+      expect(component.aspectRatio).toBe('square');
+    });
+
+    it('preserves manual settings through audio changes and additional references', () => {
+      const source = reference('source');
+      const extra = { ...reference('extra', 'video', 18), width: 1920, height: 1080 };
+      component.onReferencesChanged([source]);
+      component.selectDuration(12);
+      component.selectAspect('square');
+      source.useAudio = true;
+      component.onReferencesChanged([source, reference('picture', 'image'), extra]);
+      component.onReferencesChanged([source, extra]);
+      expect(component.durationSeconds).toBe(12);
+      expect(component.aspectRatio).toBe('square');
+      expect(videoService.getQuote.calls.mostRecent().args[0]).toBe(12);
+    });
+
+    it('updates defaults when the first video is replaced or removed', () => {
+      const first = reference('first');
+      const second = { ...reference('second', 'video', 12.4), width: 1920, height: 1080 };
+      component.onReferencesChanged([first, second]);
+      component.matchSourceLength = true;
+      component.onReferencesChanged([second]);
+      expect(component.durationSeconds).toBe(13);
+      expect(component.aspectRatio).toBe('landscape');
+      expect(component.matchSourceLength).toBeFalse();
+      component.onReferencesChanged([]);
+      component.onReferencesChanged([first]);
+      expect(component.durationSeconds).toBe(6);
+      expect(component.aspectRatio).toBe('portrait');
+    });
+
+    it('keeps the chosen output settings for image-only references', () => {
+      component.selectDuration(12);
+      component.selectAspect('landscape');
+      component.onReferencesChanged([reference('picture', 'image')]);
+      expect(component.durationSeconds).toBe(12);
+      expect(component.aspectRatio).toBe('landscape');
+    });
+
+    it('submits the defaulted duration and aspect with the checked price', () => {
+      authService.isLoggedIn.and.returnValue(true);
+      Object.assign(component.config!, { generation_modes: ['fl2v', 'ref2v'], service: { accepting_jobs: true } });
+      component.currentCredits = 1000;
+      component.prompt = 'Continue the movement';
+      component.onReferencesChanged([reference('source', 'video', 8.2)]);
+      videoService.submitJob.and.returnValue(NEVER);
+      component.submit();
+      expect(videoService.submitJob).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+        durationSeconds: 9, aspectRatio: 'portrait', expectedCreditCost: quote.credit_cost,
+        matchOriginalAudioLength: false,
+      }));
+    });
+  });
+
+  it('selects the audio video independently of image references and matches its length', () => {
+    component.generationMode = 'ref2v';
+    component.config = { durations: Array.from({length:16},(_,i)=>i+5) } as any;
+    component.references = [reference('picture','image'), reference('first'), reference('second','video',16.35)];
+    component.originalAudioReferenceId = 'second';
+    component.disableSound = true; component.outputAsGif = true;
+    videoService.getQuote.and.returnValue(of(quote));
+    component.selectOriginalAudio();
+    expect(component.originalAudioIndex).toBe(1);
+    expect(component.keepingOriginalAudio).toBeTrue();
+    expect(component.disableSound).toBeFalse(); expect(component.outputAsGif).toBeFalse();
+    expect(component.referenceVideos.map(item=>item.useAudio)).toEqual([false,true]);
+    component.matchOriginalAudioLength();
+    expect(component.durationSeconds).toBe(16);
+    expect(component.matchSourceLength).toBeTrue();
+  });
+
+  it('shows the matched frame duration and returns to manual length on slider input', () => {
+    component.generationMode = 'ref2v';
+    component.config = { durations: Array.from({length:16},(_,i)=>i+5) } as any;
+    component.references = [reference('short','video',5.81)];
+    component.originalAudioReferenceId = 'short';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.matchOriginalAudioLength();
+    expect(component.durationSeconds).toBe(6);
+    expect(component.selectedDurationSeconds).toBe(5.875);
+    component.onDurationInput({target:{value:'1'}} as unknown as Event);
+    expect(component.matchSourceLength).toBeFalse();
+    expect(component.selectedDurationSeconds).toBe(6);
+    component.references[0].duration = 20.042;
+    component.matchOriginalAudioLength();
+    expect(component.durationSeconds).toBe(20);
+    expect(component.selectedDurationSeconds).toBe(20.042);
+  });
+
+  it('retains a removed soundtrack choice so submission cannot silently switch to generated audio', () => {
+    component.generationMode = 'ref2v';
+    component.originalAudioReferenceId = 'removed';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.onReferencesChanged([reference('other')]);
+    expect(component.keepingOriginalAudio).toBeTrue();
+    expect(component.originalAudioIndex).toBe(-1);
+    expect(component.canSubmit).toBeFalse();
+  });
+
+  it('clears original audio when the user explicitly requests silent or GIF output', () => {
+    component.originalAudioReferenceId = 'video'; component.disableSound = true;
+    component.onSoundOptionChanged(); expect(component.originalAudioReferenceId).toBeNull();
+    component.originalAudioReferenceId = 'video'; component.outputAsGif = true;
+    component.onGifOptionChanged(); expect(component.originalAudioReferenceId).toBeNull();
+  });
+
   it('maps slider positions to the durations supplied by the server', () => {
     component.config = { durations: [5, 15, 20], prices: { '5': 70, '15': 350, '20': 500 } } as any;
     component.onDurationInput({ target: { value: '2' } } as unknown as Event);

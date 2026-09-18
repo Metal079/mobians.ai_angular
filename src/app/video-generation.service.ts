@@ -18,6 +18,8 @@ import {
 } from 'src/_shared/video-generation.interface';
 
 export interface VideoSubmission {
+  originalAudioReference?: number;
+  matchOriginalAudioLength?: boolean;
   expectedCreditCost?: number;
   pricingVersion?: string;
   generationMode?: VideoGenerationMode;
@@ -77,12 +79,13 @@ export class VideoGenerationService {
     return this.http.post<VideoSubmitResponse>(`${this.baseUrl}/extensions`, form);
   }
 
-  getQuote(durationSeconds: number, references: VideoReference[]): Observable<VideoPriceQuote> {
+  getQuote(durationSeconds: number, references: VideoReference[], originalAudioReference?: number): Observable<VideoPriceQuote> {
     const form = new FormData();
     form.append('generation_mode', 'ref2v');
     form.append('duration_seconds', String(durationSeconds));
     form.append('reference_image_count', String(references.filter(item => item.kind === 'image').length));
     form.append('reference_video_seconds', JSON.stringify(references.filter(item => item.kind === 'video').map(item => item.duration)));
+    if (originalAudioReference !== undefined) form.append('original_audio_reference', String(originalAudioReference));
     return this.http.post<VideoPriceQuote>(`${this.baseUrl}/quote`, form, { context: new HttpContext().set(SKIP_AUTH, true) });
   }
 
@@ -110,6 +113,8 @@ export class VideoGenerationService {
       videos.forEach(item => form.append('reference_videos', item.file));
       form.append('reference_image_sources', JSON.stringify(images.map(item => item.source)));
       form.append('reference_video_audio', JSON.stringify(videos.map(item => item.useAudio)));
+      if (submission.originalAudioReference !== undefined) form.append('original_audio_reference', String(submission.originalAudioReference));
+      if (submission.originalAudioReference !== undefined && submission.matchOriginalAudioLength) form.append('match_original_audio_length', 'true');
     }
     if (submission.expectedCreditCost !== undefined) form.append('expected_credit_cost', String(submission.expectedCreditCost));
     if (submission.pricingVersion) form.append('pricing_version', submission.pricingVersion);

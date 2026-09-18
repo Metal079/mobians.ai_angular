@@ -358,6 +358,15 @@
   padding: 0.75rem;
 }
 
+.field-block #videoPrompt {
+  /* Autosize measures content rows; let the grid account for padding and borders. */
+  box-sizing: content-box;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+
 .field-block textarea:focus,
 .seed-field input:focus {
   border-color: var(--theme-primary-outline);
@@ -673,6 +682,55 @@
   display: flex;
   gap: 0.4rem;
   margin-top: 0.55rem;
+}
+
+.submit-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid #d89a1b;
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 18%, var(--theme-surface-bg));
+  color: var(--theme-surface-text);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.submit-warning > i {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+}
+
+.submit-warning p {
+  margin: 0.35rem 0;
+}
+
+.reference-marker {
+  font-family: monospace;
+  font-weight: 700;
+}
+
+.submit-warning button {
+  min-height: 44px;
+  padding: 0.35rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.submit-warning button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.submit-warning + .submit-panel {
+  margin-top: 0.75rem;
 }
 
 .submit-panel {
