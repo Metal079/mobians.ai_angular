@@ -30,7 +30,7 @@ describe('VideoComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [{ provide: CharactersService, useValue: { takeVideoHandoff: () => null } }] });
-    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob', 'getQuote']);
+    videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob', 'getQuote', 'getConfig']);
     changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges', 'markForCheck']);
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
     accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin', 'requestCreditPurchase']);
@@ -299,6 +299,32 @@ describe('VideoComponent', () => {
   function reference(id: string, kind: 'image' | 'video' = 'video', duration = 5.167): any {
     return { id, kind, duration, file: new File(['test'], id), source: 'upload', previewUrl: '', useAudio: false, width: 512, height: 768 };
   }
+
+  it('offers short durations only for references and clamps when returning to image animation', () => {
+    component.config = {durations:[5,6,7],ref2v_durations:[3,4,5,6,7],generation_modes:['fl2v','ref2v']} as any;
+    videoService.getQuote.and.returnValue(of(quote));
+    component.changeMode('ref2v');
+    expect(component.durations).toEqual([3,4,5,6,7]);
+    component.selectDuration(3);
+    component.changeMode('fl2v');
+    expect(component.durationSeconds).toBe(5);
+    expect(component.durations).toEqual([5,6,7]);
+  });
+
+  it('matches a 3.13-second source to 3.75 seconds and keeps short duration on config refresh', () => {
+    const config={durations:[5,6,7],ref2v_durations:[3,4,5,6,7],generation_modes:['fl2v','ref2v']} as any;
+    component.config=config;component.generationMode='ref2v';
+    component.references=[reference('short','video',3.13)];
+    component.originalAudioReferenceId='short';
+    videoService.getQuote.and.returnValue(of(quote));
+    component.matchOriginalAudioLength();
+    expect(component.durationSeconds).toBe(4);
+    expect(component.selectedDurationSeconds).toBe(3.75);
+    videoService.getConfig.and.returnValue(of(config));
+    component.loadConfig(true);
+    expect(component.durationSeconds).toBe(4);
+    expect(component.selectedDurationSeconds).toBe(3.75);
+  });
 
   describe('input video defaults', () => {
     beforeEach(() => {

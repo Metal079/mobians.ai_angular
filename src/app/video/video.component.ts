@@ -195,7 +195,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   }
 
   get durations(): number[] {
-    return this.config?.durations ?? [];
+    return (!this.extensionMode && this.generationMode === 'ref2v' ? this.config?.ref2v_durations : undefined) ?? this.config?.durations ?? [];
   }
 
   get durationIndex(): number {
@@ -227,7 +227,8 @@ export class VideoComponent implements OnInit, OnDestroy {
     if (this.generationMode === 'ref2v' && this.references.length) {
       return this.quoteSelection === this.pricingSelection ? this.referenceQuote?.credit_cost ?? 0 : 0;
     }
-    return this.config?.prices?.[String(this.durationSeconds)] ?? 0;
+    const prices = this.generationMode === 'ref2v' ? this.config?.ref2v_prices ?? this.config?.prices : this.config?.prices;
+    return prices?.[String(this.durationSeconds)] ?? 0;
   }
 
   private get pricingSelection(): string {
@@ -292,7 +293,8 @@ export class VideoComponent implements OnInit, OnDestroy {
 
   private sourceLengthFrames(seconds: number): number {
     // Match the server's 2-decimal container duration and H3 frame rounding.
-    const frames = Math.max(124, Math.round(Math.round(seconds * 100) / 100 * 24));
+    const minimumFrames = this.durations.includes(3) ? 73 : 124;
+    const frames = Math.max(minimumFrames, Math.round(Math.round(seconds * 100) / 100 * 24));
     return Math.min(481, frames + (5 - frames % 17 + 17) % 17);
   }
 
@@ -370,6 +372,10 @@ export class VideoComponent implements OnInit, OnDestroy {
       this.modeDrafts[this.generationMode] = { prompt: this.prompt, audioPrompt: this.audioPrompt, cameraMotion: this.cameraMotion, seed: this.seed };
       this.generationMode = mode;
       Object.assign(this, this.modeDrafts[mode]);
+    }
+    if (this.durations.length && !this.durations.includes(this.durationSeconds)) {
+      this.durationSeconds = this.durations[0];
+      this.matchSourceLength = false;
     }
     this.errorMessage = '';
     this.refreshQuote();
@@ -473,8 +479,10 @@ export class VideoComponent implements OnInit, OnDestroy {
       next: (config) => {
         this.runInView(() => {
           this.config = config;
-          if (!config.durations.includes(this.durationSeconds) && config.durations.length > 0) {
-            this.durationSeconds = config.durations[0];
+          if (!this.durations.includes(this.durationSeconds) && this.durations.length > 0) {
+            this.durationSeconds = this.durations[0];
+            this.matchSourceLength = false;
+            if (silent) this.refreshQuote();
           }
           this.configLoading = false;
           if (!silent) this.refreshQuote();

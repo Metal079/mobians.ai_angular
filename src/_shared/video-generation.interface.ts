@@ -36,6 +36,8 @@ export interface VideoPriceQuote {
 }
 
 export interface VideoConfig {
+  ref2v_durations?: number[];
+  ref2v_prices?: Record<string, number>;
   original_audio_available?: boolean;
   extension?: VideoExtensionConfig;
   pricing_version?: string;

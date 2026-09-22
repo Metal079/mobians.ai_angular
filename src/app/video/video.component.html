@@ -176,7 +176,7 @@
                 <p class="original-audio-error" role="alert">The selected audio source was removed. Choose another video or Generate audio.</p>
               } @else {
                 <button type="button" class="credit-link" [disabled]="submitting" (click)="matchOriginalAudioLength()">Match source length</button>
-                @if (matchSourceLength) { <p class="field-help">Source length matched: {{ selectedDurationSeconds }} seconds. Move the length slider to choose another duration.</p> }
+                @if (matchSourceLength) { <p class="field-help">Closest supported length: {{ selectedDurationSeconds }} seconds. Move the length slider to choose another duration.</p> }
               }
               @if (!config?.original_audio_available) { <p class="original-audio-error" role="alert">Keeping original audio is temporarily unavailable.</p> }
             } @else {
