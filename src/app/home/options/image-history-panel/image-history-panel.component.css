@@ -181,9 +181,26 @@
   color: #ffd966;
 }
 
+.history-delete-btn {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 44px;
+  z-index: 2;
+}
+
+.history-delete-btn:hover i {
+  background: #b42332;
+}
+
 .history-icon-btn:focus-visible {
   outline: 2px solid white;
   outline-offset: 2px;
+}
+
+.history-grid.compact-grid .history-item img {
+  /* Keep the top and bottom controls apart on narrow thumbnails. */
+  min-height: 76px;
 }
 
 .history-grid.compact-grid .history-icon-btn {
@@ -194,6 +211,10 @@
 .history-grid.compact-grid .history-icon-btn i {
   width: 28px;
   height: 28px;
+}
+
+.history-grid.compact-grid .history-delete-btn {
+  width: 32px;
 }
 
 .image-info-details {

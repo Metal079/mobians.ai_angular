@@ -204,6 +204,28 @@ describe('OptionsComponent', () => {
   });
 
   for (const fallback of [false, true]) {
+    it('keeps ' + (fallback ? 'fallback' : 'individual') + ' download previews readable after leaving the image tab', async () => {
+      const shared = new SharedService();
+      (component as any).sharedService = shared;
+      const original = new Blob(['completed image'], { type: 'image/png' });
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.getJobImage = () => of(original);
+      sd.getJob = () => of({ status: 'completed', result: Array(4).fill('fixture') });
+      (TestBed.inject(BlobMigrationService) as any).base64ToBlob = () => original;
+
+      try {
+        await (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('fixture');
+        expect(shared.getImagesValue().length).toBe(4);
+        fixture.destroy();
+
+        for (const image of shared.getImagesValue()) {
+          expect((await (await fetch(image.url!)).blob()).size).toBe(original.size);
+        }
+      } finally {
+        shared.ngOnDestroy();
+      }
+    });
+
     for (const lossy of [false, true]) {
       it('preserves the returned image format after ' + (fallback ? 'fallback' : 'individual') + ' downloads with WebP ' + lossy, async () => {
         const original = new Blob(['image'], { type: lossy ? 'image/webp' : 'image/png' });

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
@@ -57,6 +57,39 @@ describe('ImageGridComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('refreshes individual previews and clears the grid when shared results change', () => {
+    const images = Array.from({ length: 4 }, (_, index) => ({
+      UUID: String(index), width: 512, height: 512, aspectRatio: 'square', url: `blob:preview-${index}`
+    }));
+    const results = new BehaviorSubject<MobiansImage[]>(images);
+    sharedServiceStub.getImages = () => results.asObservable();
+    component.ngOnInit();
+    const updated = [{ ...images[0], url: 'blob:replacement' }, ...images.slice(1)];
+
+    results.next(updated);
+    expect(component.images).toBe(updated);
+    results.next([]);
+    expect(component.images).toEqual([]);
+  });
+
+  it('stops observing shared images, references and masks after leaving the tab', () => {
+    const results = new BehaviorSubject<MobiansImage[]>([]);
+    const reference = new BehaviorSubject<MobiansImage | null>(null);
+    const mask = new BehaviorSubject<string | null>(null);
+    sharedServiceStub.getImages = () => results.asObservable();
+    sharedServiceStub.getReferenceImage = () => reference.asObservable();
+    (TestBed.inject(InpaintingMaskService) as any).canvasData$ = mask.asObservable();
+    component.ngOnInit();
+    expect(results.observed).toBeTrue();
+    expect(reference.observed).toBeTrue();
+    expect(mask.observed).toBeTrue();
+
+    fixture.destroy();
+    expect(results.observed).toBeFalse();
+    expect(reference.observed).toBeFalse();
+    expect(mask.observed).toBeFalse();
   });
 
   for (const scenario of [

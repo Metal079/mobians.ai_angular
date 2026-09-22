@@ -719,8 +719,6 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
         { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
         { label: 'Edit tags', icon: 'bi bi-tags', command: () => { void this.openTagAssignDialog([image.UUID], 'edit'); } },
-        { separator: true },
-        { label: 'Delete image', icon: 'bi bi-trash', command: () => { void this.deleteImage(image); } },
       ];
       this.imageActionMenus.set(image, items);
     }

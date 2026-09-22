@@ -35,6 +35,7 @@ export class ImageGridComponent implements OnDestroy {
   private erasing = false;
   private imageSubscription!: Subscription;
   private referenceImageSubscription!: Subscription;
+  private maskSubscription!: Subscription;
   private previousImages: MobiansImage[] = [];
 
   @Input() inpaintingEnabled: boolean = true;
@@ -88,9 +89,6 @@ export class ImageGridComponent implements OnDestroy {
         // Hide old ref image
         this.showReferenceImage = false;
 
-        // Set the images
-        this.images = images;
-
         // Clear the canvas
         this.inpaintingMaskService.clearCanvasData();
 
@@ -101,12 +99,14 @@ export class ImageGridComponent implements OnDestroy {
         this.imageExpandedChange.emit(false);
       }
 
+      // Also display single-image updates and cleared results.
+      this.images = images;
       // Update previous images for future comparison
       this.previousImages = images;
     });
 
     //  Check when the inpainting mask changes
-    this.inpaintingMaskService.canvasData$.subscribe(dataUrl => {
+    this.maskSubscription = this.inpaintingMaskService.canvasData$.subscribe(dataUrl => {
       if (dataUrl) {
         // Load the image from the Data URL
         const img = new Image();
@@ -518,6 +518,9 @@ export class ImageGridComponent implements OnDestroy {
 
   ngOnDestroy() {
     this.imageExpansionId++;
+    this.imageSubscription?.unsubscribe();
+    this.referenceImageSubscription?.unsubscribe();
+    this.maskSubscription?.unsubscribe();
     this.stopQueueMessageRotation();
     // Revoke any object URLs created for local files to avoid memory leaks
     this.objectUrls.forEach((u) => {

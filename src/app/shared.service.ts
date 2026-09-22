@@ -1,14 +1,15 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 
 @Injectable({ providedIn: 'root' })
-export class SharedService {
+export class SharedService implements OnDestroy {
 
   private _prompt: BehaviorSubject<string> = new BehaviorSubject<string>("");
   private _generationRequest: BehaviorSubject<GenerationRequest | null> = new BehaviorSubject<GenerationRequest | null>(null);
   private _images: BehaviorSubject<MobiansImage[]> = new BehaviorSubject<MobiansImage[]>([]);
+  private imageObjectUrls = new Map<string, Blob>();
   private _referenceImage: BehaviorSubject<MobiansImage | null> = new BehaviorSubject<MobiansImage | null>(null);
   private referenceImageObjectUrl: string | null = null;
   private _userData: BehaviorSubject<any> = new BehaviorSubject<any>(null);
@@ -72,7 +73,25 @@ export class SharedService {
 
   // Images
   setImages(value: MobiansImage[]) {
-    this._images.next(value);
+    const nextObjectUrls = new Map<string, Blob>();
+    const images = value.map(image => {
+      if (!image.blob) return image;
+
+      // The generating view and history own temporary URLs that are revoked
+      // on navigation. Shared previews must live as long as the shared images.
+      const url = image.url && this.imageObjectUrls.get(image.url) === image.blob
+        ? image.url
+        : URL.createObjectURL(image.blob);
+      nextObjectUrls.set(url, image.blob);
+      return { ...image, url };
+    });
+
+    const previousObjectUrls = this.imageObjectUrls;
+    this.imageObjectUrls = nextObjectUrls;
+    this._images.next(images);
+    previousObjectUrls.forEach((_, url) => {
+      if (!nextObjectUrls.has(url)) URL.revokeObjectURL(url);
+    });
   }
 
   getImages(): Observable<MobiansImage[]> {
@@ -85,9 +104,9 @@ export class SharedService {
 
   // Update a single image by index
   updateImage(index: number, value: MobiansImage) {
-    const images = this._images.getValue();
+    const images = [...this._images.getValue()];
     images[index] = value;
-    this._images.next(images);
+    this.setImages(images);
   }
 
   // Get a single image by index
@@ -126,6 +145,12 @@ export class SharedService {
     if (!this.referenceImageObjectUrl) return;
     URL.revokeObjectURL(this.referenceImageObjectUrl);
     this.referenceImageObjectUrl = null;
+  }
+
+  ngOnDestroy(): void {
+    this.imageObjectUrls.forEach((_, url) => URL.revokeObjectURL(url));
+    this.imageObjectUrls.clear();
+    this.revokeReferenceImageObjectUrl();
   }
 
   setUserData(value: any) {
