@@ -1,3 +1,4 @@
+import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, of } from 'rxjs';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
@@ -33,6 +34,7 @@ describe('ImageGridComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ImageGridComponent],
       providers: [
+        { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { requestSave: () => {} } },
         {
           provide: SharedService,

@@ -34,6 +34,16 @@ describe('Character search browser', () => {
     expect(service.list).toHaveBeenCalledWith('bikini amy', undefined);
     expect(service.search).not.toHaveBeenCalled();
   });
+  it('lists every saved look for image-reference selection without requiring a search', async () => {
+    const fixture = TestBed.createComponent(CharacterBrowserComponent), component = fixture.componentInstance;
+    component.looksOnly = true;
+    service.search.and.resolveTo({ items: [{ id: 'look', character_id: 'amy', name: 'Amy', recipe: { label: 'Raincoat' } }], next_cursor: null });
+    await component.load();
+    expect(service.search).toHaveBeenCalledWith('', undefined, undefined);
+    expect(service.list).not.toHaveBeenCalled();
+    expect(component.choice(component.rows()[0])).toEqual({ characterId: 'amy', imageId: 'look', name: 'Amy' });
+    fixture.destroy();
+  });
   it('does not display an old account’s results', async () => {
     const fixture = TestBed.createComponent(CharacterBrowserComponent), component = fixture.componentInstance;
     let finish!: (value: any) => void;

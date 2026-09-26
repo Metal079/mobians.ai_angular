@@ -1,6 +1,12 @@
 import { RegionalPromptingConfig } from './regional-prompting.interface';
 
 export interface MobiansImage {
+    editProvenance?: {
+      parent_image_uuid?: string; root_image_uuid?: string; instruction: string;
+      character_id?: string; character_look_id?: string;
+      model?: string; seed?: number; steps?: number; guidance_scale?: number;
+      width?: number; height?: number; masked?: boolean; reference_image_uuids?: string[];
+    };
     characterId?: string;
     characterLookId?: string;
     url?: string;
@@ -42,5 +48,5 @@ export interface ImageTag {
 export type MobiansImageMetadata = Pick<MobiansImage, 
   'characterId' | 'characterLookId' | 'UUID' | 'prompt' | 'promptSummary' | 'promptTemplate' | 'timestamp' | 'aspectRatio' |
   'width' | 'height' | 'favorite' | 'loras' | 'regional_prompting' | 'tags' | 'model' | 'seed' | 
-  'negativePrompt' | 'cfg' | 'syncPriority' | 'lastModified'
+  'negativePrompt' | 'cfg' | 'syncPriority' | 'lastModified' | 'editProvenance'
 >;

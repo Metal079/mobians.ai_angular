@@ -1,0 +1,94 @@
+@if (editor.presentation() !== 'dialog') {
+  <section class="image-editor-workspace" [hidden]="editor.presentation() !== 'inline'" aria-labelledby="image-edit-heading">
+    <header class="workspace-heading"><h1 id="image-edit-heading" tabindex="-1">{{ title }}</h1><p>Start with a picture and describe what you want to change. Your original stays available.</p></header>
+    <ng-container *ngTemplateOutlet="editorBody"></ng-container>
+  </section>
+} @else {
+<p-dialog [visible]="!!editor.context()" (visibleChange)="!$event && close()" [header]="title"
+  [modal]="true" [draggable]="false" [resizable]="false" [closable]="!busy" [closeOnEscape]="!busy"
+  closeAriaLabel="Close editor" [focusOnShow]="false" (onShow)="focusEditor()"
+  [style]="{ width: '1060px', maxWidth: '96vw' }" styleClass="image-editor-dialog">
+  <ng-container *ngTemplateOutlet="editorBody"></ng-container>
+</p-dialog>
+}
+<ng-template #editorBody>
+  @if (editor.context()) {
+    <div class="editor-help-row"><button type="button" class="editor-help" (click)="editor.showTutorial()" [disabled]="busy"><i class="bi bi-question-circle" aria-hidden="true"></i> How editing works</button></div>
+    @if (error()) { <p class="editor-error" role="alert">{{ error() }}</p> }
+    <div class="editor-layout">
+      <section class="preview-column" aria-label="Image preview">
+        @if (base() || result()) {
+          @if (result() && base()) {
+            <div class="comparison" role="group" aria-label="Compare images">
+              <button type="button" [class.selected]="comparison === 'before'" (click)="comparison = 'before'">Before</button>
+              <button type="button" [class.selected]="comparison === 'after'" (click)="comparison = 'after'">After</button>
+            </div>
+          }
+          <div class="preview-frame" [class.painting]="painting" [style.--preview-aspect]="(base()?.image?.width || result()?.width || 1) / (base()?.image?.height || result()?.height || 1)" [style.aspect-ratio]="(base()?.image?.width || result()?.width || 1) + '/' + (base()?.image?.height || result()?.height || 1)">
+            <img [src]="visibleUrl || result()?.url" alt="Image being edited" draggable="false">
+            @if (base()) {
+              <canvas #mask [width]="base()!.image.width" [height]="base()!.image.height"
+                [class.mask-hidden]="!!result() && comparison === 'after'" [class.can-paint]="painting && !busy"
+                (pointerdown)="paint($event)" (pointermove)="paint($event)" (pointerup)="endPaint()" (pointercancel)="endPaint()"
+                aria-label="Paint the area to edit"></canvas>
+            }
+          </div>
+        } @else {
+          <div class="empty-preview"><i class="bi bi-stars" aria-hidden="true"></i><h3>Choose an image to edit</h3><p>Upload a picture, choose from history, or use a saved character look. Then describe what you want to change.</p></div>
+        }
+        @if (base()) {
+          <div class="mask-tools">
+            <label><input type="checkbox" [(ngModel)]="painting" [disabled]="busy" (change)="comparison = 'before'"> Paint an area to edit</label>
+            @if (painting) { <label class="brush">Brush <input type="range" min="8" max="100" [(ngModel)]="brush" aria-label="Brush size"></label> }
+            @if (hasMask) { <button type="button" (click)="clearMask()" [disabled]="busy">Clear selection</button> }
+          </div>
+          <p class="hint">{{ hasMask ? 'Only the painted area will be replaced in the working-size image.' : 'Describe the change, or paint an area for a targeted edit.' }}</p>
+        }
+      </section>
+      <section class="editor-controls" aria-label="Editing controls">
+        <div class="source-heading"><h3>{{ base() ? 'Image 1 · Image to edit' : 'Image to edit' }}</h3></div>
+        <div class="source-actions">
+          <label class="file-button">{{ base() ? 'Replace image' : 'Upload image' }}<input type="file" accept="image/png,image/jpeg,image/webp" (change)="upload($event, 'base')" [disabled]="busy"></label>
+          <button type="button" (click)="picker('history', 'base')" [disabled]="busy">History</button>
+          <button type="button" (click)="picker('characters', 'base')" [disabled]="busy">Characters</button>
+        </div>
+        @if (base()) {
+          <div class="source-heading"><h3>References <span>{{ refs().length }}/2</span></h3></div>
+          <div class="reference-list">
+            @for (reference of refs(); track reference.url; let i = $index) {
+              <div class="reference"><img [src]="reference.url" [alt]="'Reference image ' + (i + 2)"><span>Image {{ i + 2 }}</span><button type="button" [disabled]="busy" (click)="removeReference(reference)" [attr.aria-label]="'Remove image ' + (i + 2)">×</button></div>
+            }
+          </div>
+          @if (refs().length < 2) {
+            <div class="source-actions"><label class="file-button">Add reference<input type="file" accept="image/png,image/jpeg,image/webp" (change)="upload($event, 'reference')" [disabled]="busy"></label><button type="button" (click)="picker('history', 'reference')" [disabled]="busy">History</button><button type="button" (click)="picker('characters', 'reference')" [disabled]="busy">Characters</button></div>
+          }
+          <p class="hint">Refer to each image by number: “Use the outfit from image 2.”</p>
+        }
+        <label for="image-edit-instruction">What would you like to change?</label>
+        <textarea id="image-edit-instruction" [(ngModel)]="prompt" rows="5" maxlength="8000" [disabled]="busy" placeholder="Change the jacket to red. Keep the character, pose, and art style."></textarea>
+        <details class="seed-options"><summary>Seed</summary><input type="number" [(ngModel)]="seed" [disabled]="busy" min="0" max="2147483647" placeholder="Random" aria-label="Generation seed"></details>
+        <fieldset class="queue-options" [disabled]="busy">
+          <legend>Queue</legend>
+          <label [class.selected]="queueType === 'free'"><input type="radio" name="image-edit-queue" value="free" [(ngModel)]="queueType"> Free <span>0 credits</span></label>
+          <label [class.selected]="queueType === 'priority'"><input type="radio" name="image-edit-queue" value="priority" [(ngModel)]="queueType" [disabled]="editor.priorityCreditCost() === null"> Priority <span>{{ editor.priorityCreditCost() === null ? 'Loading price…' : editor.priorityCreditCost() + ' credits' }}</span></label>
+        </fieldset>
+        <p class="hint">{{ credits() }} credits available. Priority pricing is per image, including references and painted selections.</p>
+        @if (insufficientCredits && editor.priorityCreditCost() !== null) { <p class="editor-error" role="alert">Not enough credits for priority. Choose Free or add credits to your account.</p> }
+        @if (busy) { <div class="job-status" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> {{ status() || 'Preparing your edit…' }}</div><button type="button" (click)="cancel()">Cancel</button> }
+        @else { <button class="primary-action" type="button" (click)="generate()" [disabled]="!canGenerate">{{ actionLabel }}{{ queueType === 'priority' && editor.priorityCreditCost() !== null ? ' · ' + editor.priorityCreditCost() + ' credits' : '' }}</button> }
+        @if (status() && !busy) { <p class="hint" role="status">{{ status() }}</p> }
+        @if (result() && !busy) {
+          <div class="result-actions"><button type="button" (click)="editAgain()">Edit again</button><button type="button" (click)="download()">Download PNG</button><button type="button" (click)="saveLook()">{{ contextCharacter() ? 'Save as new look' : 'Save as character' }}</button></div>
+        }
+      </section>
+    </div>
+    <section [hidden]="picking !== 'history'" class="picker-panel" aria-label="Choose from history">
+      <div class="picker-heading"><h3>Choose an image</h3><button type="button" (click)="picking = null">Close picker</button></div>
+      <app-image-history-panel #history [pickerMode]="true" [lossyImages]="false" (imageSelected)="choose($event)"></app-image-history-panel>
+    </section>
+    @if (picking === 'characters') {
+      <section class="picker-panel" aria-label="Choose a character look"><div class="picker-heading"><h3>Choose a saved look</h3><button type="button" (click)="picking = null">Close picker</button></div><app-character-browser [characterId]="''" [looksOnly]="true" (chosen)="chooseCharacter($event)"></app-character-browser></section>
+    }
+  }
+</ng-template>
+<app-image-edit-tutorial></app-image-edit-tutorial>

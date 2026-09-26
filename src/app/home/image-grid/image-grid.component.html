@@ -1,4 +1,4 @@
-<div class="image-grid" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
+<div class="image-grid" [class.single-result]="images.length === 1" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
      [style.aspect-ratio]="aspectRatio.width + ' / ' + aspectRatio.height"
      [ngStyle]="{'width.px': isMobileView() ? '100%' : aspectRatio.width, 
      'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
@@ -43,6 +43,7 @@
         <button type="button" class="image-action-btn" (click)="downloadImage(images[0], $event)" aria-label="Download image 1">
           <i class="bi bi-download"></i>
         </button>
+        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[0], $event)" aria-label="Edit image 1 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
       </div>
     </div>
   }
@@ -53,6 +54,7 @@
         <button type="button" class="image-action-btn" (click)="downloadImage(images[1], $event)" aria-label="Download image 2">
           <i class="bi bi-download"></i>
         </button>
+        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[1], $event)" aria-label="Edit image 2 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
       </div>
     </div>
   }
@@ -63,6 +65,7 @@
         <button type="button" class="image-action-btn" (click)="downloadImage(images[2], $event)" aria-label="Download image 3">
           <i class="bi bi-download"></i>
         </button>
+        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[2], $event)" aria-label="Edit image 3 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
       </div>
     </div>
   }
@@ -73,11 +76,13 @@
         <button type="button" class="image-action-btn" (click)="downloadImage(images[3], $event)" aria-label="Download image 4">
           <i class="bi bi-download"></i>
         </button>
+        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[3], $event)" aria-label="Edit image 4 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
       </div>
     </div>
   }
   @if (this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage) {
     <div class="reference-image" id="wrapper5">
+      @if (imageEditor.available()) { <div class="image-actions"><button type="button" class="image-action-btn" (click)="editWithAI(sharedService.getReferenceImageValue()!, $event)" aria-label="Edit reference image with AI" title="Edit with AI"><i class="bi bi-stars"></i></button></div> }
       <img [src]="this.sharedService.getReferenceImageValue()!.url ?? this.sharedService.getReferenceImageValue()!.thumbnailUrl" alt="Reference Image goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(4, $event)" id="referenceImage">
     </div>
   }

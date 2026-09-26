@@ -1,3 +1,4 @@
+import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
@@ -98,6 +99,7 @@ describe('ImageHistoryPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ImageHistoryPanelComponent],
       providers: [
+        { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { requestSave: () => {} } },
         { provide: MessageService, useClass: MessageServiceStub },
         { provide: BlobMigrationService, useClass: BlobMigrationServiceStub },
@@ -242,6 +244,39 @@ describe('ImageHistoryPanelComponent', () => {
       expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error' }));
       expect(component.isUpdatingTags).toBeFalse();
     });
+  });
+
+  it('retains edit lineage and lossless PNGs after saving and reloading history', async () => {
+    const databaseName = 'edit-lineage-test-' + Math.random();
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(databaseName, 1);
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore('ImageStore', { keyPath: 'UUID' });
+        request.result.createObjectStore('blobStore', { keyPath: 'UUID' });
+      };
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    spyOn(component as any, 'getDatabase').and.resolveTo(db);
+    spyOn(component as any, 'hydrateImageUrls').and.resolveTo();
+    spyOn(component as any, 'updateFavoriteImages').and.resolveTo();
+    const migration = TestBed.inject(BlobMigrationService);
+    spyOn(migration, 'convertToWebP').and.callThrough();
+    const provenance = { instruction: 'Blue jacket', root_image_uuid: 'original', parent_image_uuid: 'previous', model: 'FLUX.2-klein-4B' };
+    const image = { ...createImage({ UUID: 'edited-fixture', prompt: 'Blue jacket' }),
+      editProvenance: provenance, blob: new Blob(['lossless-pixels'], { type: 'image/png' }) };
+    try {
+      expect(await (component as any).persistGeneratedImage(image)).toBeTrue();
+      await component.searchImages();
+      expect(component.currentPageImages[0].editProvenance).toEqual(provenance);
+      expect(migration.convertToWebP).not.toHaveBeenCalled();
+      expect(JSON.parse((component as any).buildImageMetadataDict(component.currentPageImages[0]).edit_provenance)).toEqual(provenance);
+    } finally {
+      db.close();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+      });
+    }
   });
 
   it('stores a compressed history copy without replacing the generated PNG shared with the viewer', async () => {

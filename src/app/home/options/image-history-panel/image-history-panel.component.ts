@@ -15,6 +15,7 @@ import { ImageTag, MobiansImage, MobiansImageMetadata } from 'src/_shared/mobian
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
 import { DialogModule } from 'primeng/dialog';
 import { CharactersService } from 'src/app/characters/characters.service';
+import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { TabsModule } from 'primeng/tabs';
 
@@ -26,6 +27,11 @@ import { TabsModule } from 'primeng/tabs';
     imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule, MenuModule]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
+  readonly imageEditor = inject(ImageEditorService);
+  async editWithAI(image: MobiansImage) {
+    const blob = await this.getDownloadBlob(image);
+    if (blob) this.imageEditor.open({ image: { ...image, blob } });
+  }
   private readonly characters = inject(CharactersService);
   async saveCharacter(image: MobiansImage, event?: Event): Promise<void> {
     event?.stopPropagation();
@@ -203,9 +209,6 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
     this.imageUrlCache.clear();
     this.imageLoadInFlight.clear();
-    this.prevPageImages = [];
-    this.currentPageImages = [];
-    this.nextPageImages = [];
   }
 
   async initializeHistory() {
@@ -222,8 +225,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.startCloudTagSync();
   }
 
-  async ingestGeneratedImages(generatedImages: MobiansImage[]) {
-    if (!generatedImages || generatedImages.length === 0) return;
+  async ingestGeneratedImages(generatedImages: MobiansImage[]): Promise<boolean> {
+    if (!generatedImages || generatedImages.length === 0) return false;
 
     generatedImages.forEach((img: MobiansImage) => {
       if (img.url) this.blobUrls.push(img.url);
@@ -248,7 +251,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         detail: 'Could not save generated images to history. Please download them or retry.',
         life: 5000
       });
-      return;
+      return false;
     }
 
     const newMetadata = storedImages.map((image: MobiansImage) => {
@@ -257,6 +260,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         prompt: image.prompt!,
         promptSummary: image.promptSummary,
         promptTemplate: image.promptTemplate,
+        editProvenance: image.editProvenance,
+        characterId: image.characterId,
+        characterLookId: image.characterLookId,
         loras: image.loras,
         regional_prompting: image.regional_prompting,
         timestamp: image.timestamp!,
@@ -299,6 +305,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     });
     this.cdr.detectChanges();
     await this.updateFavoriteImages();
+    return failedImages.length === 0;
   }
 
   private async persistGeneratedImage(image: MobiansImage): Promise<boolean> {
@@ -308,7 +315,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
 
     let blobToStore = image.blob;
-    if (blobToStore.type === 'image/png') {
+    if (blobToStore.type === 'image/png' && !image.editProvenance) {
       blobToStore = await this.blobMigrationService.convertToWebP(blobToStore);
     }
     // The grid shares this image object. Compress only the stored copy so expanding
@@ -637,6 +644,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (image.negativePrompt) meta['negative_prompt'] = image.negativePrompt;
     if (image.seed != null) meta['seed'] = String(image.seed);
     if (image.cfg != null) meta['cfg'] = String(image.cfg);
+    if (image.editProvenance) meta['edit_provenance'] = JSON.stringify(image.editProvenance);
 
     if (Array.isArray(image.loras) && image.loras.length > 0) {
       meta['loras'] = image.loras
@@ -715,6 +723,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     let items = this.imageActionMenus.get(image);
     if (!items) {
       items = [
+        { label: 'Edit with AI', icon: 'bi bi-stars', visible: this.imageEditor.available(), command: () => { void this.editWithAI(image); } },
         { label: 'Save character', icon: 'bi bi-bookmark-heart', command: () => { void this.saveCharacter(image); } },
         { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
         { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
@@ -722,6 +731,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       ];
       this.imageActionMenus.set(image, items);
     }
+    const editAction = items.find(item => item.label === 'Edit with AI');
+    if (editAction) editAction.visible = this.imageEditor.available();
     return items;
   }
 
@@ -1360,8 +1371,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         });
       });
 
-    this.availableTags.forEach(tag => {
-      tag.imageCount = tagCounts[tag.id] || 0;
+    this.runInAngularZone(() => {
+      this.availableTags = this.availableTags.map(tag => ({ ...tag, imageCount: tagCounts[tag.id] || 0 }));
     });
   }
 
@@ -1872,6 +1883,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private runInAngularZone(action: () => void): void {
+    if (this.destroyRef.destroyed) return;
     if (NgZone.isInAngularZone()) {
       action();
     } else {
@@ -1887,7 +1899,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.cdScheduled = true;
     Promise.resolve().then(() => {
       this.cdScheduled = false;
-      this.cdr.detectChanges();
+      if (!this.destroyRef.destroyed) this.cdr.detectChanges();
     });
   }
 
@@ -1990,6 +2002,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const nextMetadata = results.map((image: MobiansImage) => {
         return {
           UUID: image.UUID,
+          editProvenance: image.editProvenance,
           prompt: image.prompt,
           promptSummary: image.promptSummary,
           promptTemplate: image.promptTemplate,
@@ -2647,7 +2660,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         }
       }
 
-      this.availableTags = Array.from(canonicalByName.values());
+      this.runInAngularZone(() => { this.availableTags = Array.from(canonicalByName.values()); });
       await this.persistTagsToStore(this.availableTags);
 
       if (this.selectedTagFilter && !this.availableTags.some(t => t.id === this.selectedTagFilter)) {

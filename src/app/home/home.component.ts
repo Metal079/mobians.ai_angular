@@ -1,4 +1,5 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ImageModalComponent } from '../home/image-modal/image-modal.component';
 
@@ -11,6 +12,8 @@ import { AprilFoolsService } from 'src/app/april-fools.service';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GenerationModeSwitchComponent } from '../generation-mode-switch/generation-mode-switch.component';
+import { ImageEditorService } from '../image-editor/image-editor.service';
+import { AccountCtaService } from '../auth/account-cta.service';
 
 interface HeaderMessage {
   severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
@@ -26,6 +29,11 @@ interface HeaderMessage {
     imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent, GenerationModeSwitchComponent]
 })
 export class HomeComponent {
+  readonly imageEditor = inject(ImageEditorService);
+  readonly editingError = signal('');
+  private readonly accountCta = inject(AccountCtaService);
+  private readonly destroyRef = inject(DestroyRef);
+  private modeChange = 0;
   @ViewChild(ImageModalComponent) imageModal!: ImageModalComponent;
 
   title = 'The best Sonic OC generator';
@@ -52,7 +60,24 @@ export class HomeComponent {
     private aprilFools: AprilFoolsService,
     private sdService: StableDiffusionService,
     private authService: AuthService,
-  ) {}
+  ) { this.destroyRef.onDestroy(() => this.imageEditor.leaveImagePage()); }
+
+  async chooseImageMode(mode: 'generate' | 'edit'): Promise<void> {
+    const version = ++this.modeChange;
+    this.editingError.set('');
+    if (mode === 'generate') { this.imageEditor.showGenerator(); return; }
+    if (!this.authService.isLoggedIn()) {
+      this.accountCta.requestLogin({ reason:'generic', title:'Sign in to edit an image',
+        message:'Start with a picture and describe your changes. The free queue is available after signing in.' });
+      return;
+    }
+    if (!this.imageEditor.context()) {
+      await this.imageEditor.refresh();
+      if (this.destroyRef.destroyed || version !== this.modeChange) return;
+      if (!this.imageEditor.available()) { this.editingError.set('Image editing is temporarily unavailable. Try again shortly.'); return; }
+    }
+    this.imageEditor.showInline({ image: this.sharedService.getReferenceImageValue() || undefined });
+  }
 
   ngOnInit() {
     if (this.aprilFools.isAprilFools()) {
@@ -64,7 +89,7 @@ export class HomeComponent {
       }];
     }
     // Discord userdata check
-    this.sharedService.getUserData().subscribe(userData => {
+    this.sharedService.getUserData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(userData => {
       if (userData) {
         // If we dont have discordUserID, we need them to login again
         if (userData.discord_user_id) {

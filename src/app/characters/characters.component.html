@@ -33,7 +33,7 @@
                 <p class="quiet">If the saved prompt says “red dress” and you add “blue jacket,” both are included. Remove conflicting details in the generator before generating. Leave extra details empty to use just the saved prompt.</p>
               </ng-template>
             </app-character-disclosure>
-            <div class="create-actions"><button class="primary-action" (click)="use('create')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-stars" aria-hidden="true"></i> {{ busy() ? 'Opening…' : 'Open in generator' }} <i class="bi bi-arrow-right" aria-hidden="true"></i></button><p class="quiet action-note">Review and edit the prompt there.</p></div>
+            <div class="create-actions"><button class="primary-action" (click)="use('create')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-stars" aria-hidden="true"></i> {{ busy() ? 'Opening…' : 'Open in generator' }} <i class="bi bi-arrow-right" aria-hidden="true"></i></button><p class="quiet action-note">Create a new picture from this look’s saved prompt and model settings.</p></div>
             <div class="setup-summary"><i class="bi bi-sliders" aria-hidden="true"></i><span>{{ image.recipe.model ? (model()?.display_name || 'Saved model') + (image.recipe.loras.length ? ' + ' + image.recipe.loras.length + ' LoRA' + (image.recipe.loras.length === 1 ? '' : 's') : '') : 'Uses your current model and LoRAs' }}</span><button class="quiet-button" (click)="editingOpen.set(true)" [disabled]="busy()">Edit look</button></div>
             @if (image.recipe.model && !model()) {
               @if (modelsLoading()) { <p role="status">Checking saved model...</p> }
@@ -44,20 +44,24 @@
 
           </section>
           <section class="gallery panel" aria-label="Saved looks">
+            @if (imageEditor.available()) {
+              <button type="button" class="primary-action" (click)="editWithAI()" [disabled]="busy() || imageEditor.pending()" aria-describedby="character-ai-edit-help"><i class="bi bi-stars" aria-hidden="true"></i> Edit with AI</button>
+              <p class="quiet image-note" id="character-ai-edit-help">Change this saved picture by describing an outfit, expression, or background change. Save the result as a new look.</p>
+            }
             <div class="portrait"><img [src]="preview() || image.thumbnail" [alt]="character.name + ' — ' + image.recipe.label"><span class="portrait-caption">{{ image.recipe.label }}</span>@if (previewLoading()) { <span class="image-loading" role="status">Loading image…</span> }</div>
             <div class="gallery-heading"><h2>Saved looks <span>{{ lookCount }}</span></h2><button class="quiet-button" (click)="pickImage(true)" [disabled]="busy()"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add look</button></div>
             <app-character-disclosure class="looks-help" panelId="saved-looks-help">
               <span disclosure-title>How saved looks work</span>
               <ng-template>
                 <p><strong>One look is enough to start.</strong> Each look saves a picture, its prompt, and any attached model or LoRAs. You choose one look at a time.</p>
-                <p><strong>Open in generator</strong> reuses the selected look’s prompt and settings. <strong>Edit image</strong> also uses its picture as a reference. New images may still vary in appearance.</p>
+                <p><strong>Open in generator</strong> creates a new image from the look’s prompt and settings. <strong>Edit with AI</strong> starts with the saved picture and follows your instructions to change it. <strong>Use as reference</strong> guides the regular generator with this picture.</p>
               </ng-template>
             </app-character-disclosure>
             <div class="filmstrip">@for (saved of character.images; track saved.id) { <button class="thumbnail" [class.selected]="saved.id === image.id" [attr.aria-pressed]="saved.id === image.id" [attr.aria-label]="'Select ' + saved.recipe.label + (isDefault(saved) ? ', default look' : '')" [title]="saved.recipe.label" (click)="selectImage(saved)" [disabled]="busy()"><img [src]="saved.thumbnail" alt="">@if (isDefault(saved)) { <i class="bi bi-star-fill" aria-hidden="true"></i> }</button> }</div>
             @if (character.next_cursor) { <button type="button" (click)="moreLooks()" [disabled]="moreLooksLoading() || busy()">{{ moreLooksLoading() ? 'Loading...' : 'Load more looks' }}</button> }
             <button type="button" class="quiet-button" (click)="lookPickerOpen.set(true)" [disabled]="busy()">Search looks</button>
             <div class="look-actions"><button class="quiet-button" (click)="makeDefault()" [disabled]="busy() || isDefault(image)"><i class="bi" [class.bi-star-fill]="isDefault(image)" [class.bi-star]="!isDefault(image)" aria-hidden="true"></i> {{ isDefault(image) ? 'Default look' : 'Make default' }}</button><button class="quiet-button" (click)="deleteMode.set('image')" [disabled]="busy() || lookCount <= 1" aria-label="Remove selected look" title="Remove selected look"><i class="bi bi-trash3" aria-hidden="true"></i></button></div>
-            <div class="secondary-actions"><button (click)="use('edit')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-brush" aria-hidden="true"></i> Edit image</button><button (click)="use('animate')" [disabled]="busy()"><i class="bi bi-camera-reels" aria-hidden="true"></i> Animate image</button></div><p class="quiet image-note">New images may vary in appearance. Edit this image to start from the saved picture.</p>
+            <div class="secondary-actions"><button (click)="use('edit')" [disabled]="busy() || (!!image.recipe.model && !model())"><i class="bi bi-brush" aria-hidden="true"></i> Use as reference</button><button (click)="use('animate')" [disabled]="busy()"><i class="bi bi-camera-reels" aria-hidden="true"></i> Animate image</button></div><p class="quiet image-note">Use as reference guides a new generation with this picture.</p>
           </section>
         </div>
       }

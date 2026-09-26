@@ -175,6 +175,7 @@ export class ImageSyncService {
         sync_priority: this.calculateSyncPriority(image),
         loras: image.loras || [],
         regional_prompting: image.regional_prompting || null,
+        edit_provenance: image.editProvenance || null,
         tags: image.tags || [],
         image_blob: base64
       };
@@ -313,6 +314,7 @@ export class ImageSyncService {
           syncPriority: item.sync_priority,
           loras: item.loras || [],
           regional_prompting: item.regional_prompting || { enabled: false, regions: [] },
+          editProvenance: item.edit_provenance || undefined,
           tags: item.tags || [],
           timestamp: new Date(item.created_at)
         };

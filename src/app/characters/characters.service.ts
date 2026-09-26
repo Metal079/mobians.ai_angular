@@ -26,6 +26,7 @@ export interface CharacterSummary {
   id: string; name: string; updated_at: string; image_count: number; thumbnail: string | null; default_image_id?: string;
 }
 export interface CharacterImage {
+  edit_provenance?: MobiansImage['editProvenance'];
   id: string; recipe: CharacterRecipe; thumbnail: string; created_at: string;
 }
 export interface CharacterDetail {
@@ -75,7 +76,7 @@ export class CharactersService {
   private readonly shared = inject(SharedService);
   private readonly accountCta = inject(AccountCtaService);
   private readonly base = `${environment.apiBaseUrl}/characters`;
-  readonly saveRequests = new Subject<{ image: MobiansImage; characterId?: string }>();
+  readonly saveRequests = new Subject<{ image: MobiansImage; characterId?: string; recipe?: CharacterRecipe }>();
   readonly saved = new Subject<string>();
   readonly imageHandoffReady = new Subject<void>();
   readonly activeCharacter = signal<{ id: string; name: string; imageId: string } | null>(null);
@@ -97,12 +98,12 @@ export class CharactersService {
 
   get owner(): string { return this.shared.getUserDataValue()?.token || ''; }
 
-  requestSave(image: MobiansImage, characterId?: string): void {
+  requestSave(image: MobiansImage, characterId?: string, recipe?: CharacterRecipe): void {
     if (!this.owner) {
       this.accountCta.requestLogin({ reason: 'generic', message: 'Sign in to save private characters and use them across your devices.' });
       return;
     }
-    this.saveRequests.next({ image, characterId });
+    this.saveRequests.next({ image, characterId, recipe });
   }
 
   list(q = '', cursor?: string) {
@@ -125,9 +126,9 @@ export class CharactersService {
   defaultLook(character: CharacterDetail): CharacterImage | undefined {
     return character.images.find(i => i.id === character.default_image_id) || character.images[0];
   }
-  save(name: string, recipe: CharacterRecipe, image_base64: string, id?: string, requestId?: string) {
+  save(name: string, recipe: CharacterRecipe, image_base64: string, id?: string, requestId?: string, editProvenance?: MobiansImage['editProvenance']) {
     return firstValueFrom(this.http.post<{ id: string; image_id?: string }>(id ? `${this.base}/${id}/images` : this.base,
-      id ? { recipe, image_base64, ...(requestId ? { request_id: requestId } : {}) } : { name, recipe, image_base64, ...(requestId ? { request_id: requestId } : {}) }).pipe(timeout(30000)));
+      id ? { recipe, image_base64, ...(editProvenance ? { edit_provenance: editProvenance } : {}), ...(requestId ? { request_id: requestId } : {}) } : { name, recipe, image_base64, ...(editProvenance ? { edit_provenance: editProvenance } : {}), ...(requestId ? { request_id: requestId } : {}) }).pipe(timeout(30000)));
   }
   rename(id: string, name: string) { return firstValueFrom(this.http.patch(`${this.base}/${id}`, { name }).pipe(timeout(15000))); }
   setDefault(id: string, imageId: string) {

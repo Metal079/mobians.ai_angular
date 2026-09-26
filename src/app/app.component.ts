@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { ImageEditorComponent } from './image-editor/image-editor.component';
 import { CharacterSaveDialogComponent } from './characters/character-save-dialog.component';
 import { SharedService } from './shared.service';
 import { SwUpdate } from '@angular/service-worker';
@@ -16,7 +17,7 @@ import { AccountCtaService, CreditPurchaseCtaContext, LoginCtaContext } from './
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     standalone: true,
-    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent, CreditsPurchaseComponent, CharacterSaveDialogComponent]
+    imports: [RouterOutlet, LoginModalComponent, ProfileMenuComponent, CreditsPurchaseComponent, CharacterSaveDialogComponent, ImageEditorComponent]
 })
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;

@@ -1,3 +1,4 @@
+import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -50,6 +51,7 @@ describe('CharactersComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CharactersComponent],
       providers: [
+        { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         provideNoopAnimations(),
         { provide: CharactersService, useValue: service },
         { provide: SharedService, useValue: { getUserData: () => user.asObservable() } },

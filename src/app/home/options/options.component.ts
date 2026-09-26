@@ -35,6 +35,7 @@ import { AccountCtaService } from 'src/app/auth/account-cta.service';
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
 import { CharactersService, characterPrompt } from 'src/app/characters/characters.service';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
+import { IMAGE_EDIT_MODELS, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
 
 
@@ -60,6 +61,7 @@ import { CharacterPickerComponent } from 'src/app/characters/character-picker.co
     ]
 })
 export class OptionsComponent implements OnInit {
+  readonly imageEditor = inject(ImageEditorService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly characters = inject(CharactersService);
   private readonly characterMask = inject(InpaintingMaskService);
@@ -82,7 +84,7 @@ export class OptionsComponent implements OnInit {
   private modelRequestInFlight = false;
 
   get canGenerate(): boolean {
-    return this.enableGenerationButton && !this.hasPendingJob && !this.submissionInProgress && !this.cancelInProgress
+    return !this.imageEditor.pending() && this.enableGenerationButton && !this.hasPendingJob && !this.submissionInProgress && !this.cancelInProgress
       && !this.modelsLoading && !this.modelsLoadError
       && !!this.getModelSetting(this.generationRequest.model);
   }
@@ -123,7 +125,7 @@ export class OptionsComponent implements OnInit {
 
   private setModelSettings(modelSettings: GenerationModelSettings[], defaultModelId?: string): void {
     const activeModels = (modelSettings || [])
-      .filter(model => model?.model_id && model.is_active !== false)
+      .filter(model => model?.model_id && model.is_active !== false && !model.editor_only && !IMAGE_EDIT_MODELS.includes(model.model_id))
       .map(model => ({
         ...model,
         default_cfg: this.validateModelDefaultCfg(model.default_cfg, model.model_id),

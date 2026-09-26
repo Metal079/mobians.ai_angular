@@ -117,6 +117,18 @@ describe('Saving a character', () => {
     component.changeTarget(''); expect(component.recipe.label).toBe('Raincoat');
   });
 
+  it('seeds edited looks with the original recipe and stores the instruction as provenance', async () => {
+    service.list.and.resolveTo({ characters: [summary] });
+    const original = { ...recipeFromImage(image, false), appearance: 'Pink hedgehog with green eyes' };
+    const editProvenance = { instruction: 'Change the shirt to red.', parent_image_uuid: image.UUID };
+    await component.open({ ...image, prompt: editProvenance.instruction, editProvenance }, 'existing', original);
+    expect(component.recipe.appearance).toBe(original.appearance);
+    expect(component.recipe.label).toBe('Edited look'); expect(component.targetId).toBe('existing');
+    await component.save();
+    expect(service.save.calls.mostRecent().args[1].appearance).toBe(original.appearance);
+    expect(service.save.calls.mostRecent().args[5]).toEqual(editProvenance);
+  });
+
   it('still blocks an explicitly attached obsolete model', async () => {
     component.recipe.model = 'novaMobianXL_v10';
     expect(component.setupReady).toBeFalse(); await component.save(); expect(service.save).not.toHaveBeenCalled();

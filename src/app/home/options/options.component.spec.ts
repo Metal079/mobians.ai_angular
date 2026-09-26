@@ -14,6 +14,7 @@ import { DynamicPromptLibraryResponse, StableDiffusionService } from 'src/app/st
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
 
 import { OptionsComponent } from './options.component';
+import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 
 const testModelSettings = [
   {
@@ -171,6 +172,7 @@ describe('OptionsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OptionsComponent],
       providers: [
+        { provide: ImageEditorService, useValue: { available: signal(true), pending: signal(false), open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: jasmine.createSpy('clearActiveCharacter').and.callFake(function(this: any) { this.activeCharacter.set(null); }) } },
         { provide: StableDiffusionService, useClass: StableDiffusionServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
@@ -201,6 +203,18 @@ describe('OptionsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('excludes editing models without replacing the generator prompt, model, or LoRAs', () => {
+    const settings = [...testModelSettings, { ...testModelSettings[0], model_id: IMAGE_EDIT_MODEL, base_model: 'FLUX.2 klein 4B', is_default: false }];
+    (component as any).setModelSettings(settings, 'novaMobianXL_v20');
+    component.generationRequest.prompt = 'Original generator prompt';
+    component.generationRequest.model = 'novaMobianXL_v20';
+    component.generationRequest.loras = [{ name: 'Selected LoRA', version: '1', strength: .8 }];
+    localStorage.setItem('model', 'novaMobianXL_v20');
+    const before = JSON.stringify(component.generationRequest);
+    expect(JSON.stringify(component.generationRequest)).toBe(before);
+    expect(component.modelSettings.some(model => model.model_id === IMAGE_EDIT_MODEL)).toBeFalse();
   });
 
   for (const fallback of [false, true]) {
@@ -827,6 +841,7 @@ describe('OptionsComponent asynchronous initial state', () => {
       imports: [OptionsComponent],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: ImageEditorService, useValue: { available: signal(true), pending: signal(false), open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: () => {} } },
         { provide: StableDiffusionService, useValue: sd },
         { provide: SharedService, useClass: SharedServiceStub },

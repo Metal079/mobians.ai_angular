@@ -16,6 +16,7 @@ import { CharacterBrowserComponent } from './character-browser.component';
 import { CharacterDraftsService } from './character-drafts.service';
 import { CharacterChoice, characterPrompt, normalizeSavedRecipe } from './characters.service';
 import { CharacterLookSettingsComponent } from './character-look-settings.component';
+import { ImageEditorService } from '../image-editor/image-editor.service';
 import { CharacterDisclosureComponent } from './character-disclosure.component';
 
 @Component({
@@ -24,6 +25,21 @@ import { CharacterDisclosureComponent } from './character-disclosure.component';
   templateUrl: './characters.component.html', styleUrls: ['./characters.shared.css', './characters.component.css'],
 })
 export class CharactersComponent {
+  readonly imageEditor = inject(ImageEditorService);
+  async editWithAI(): Promise<void> {
+    const character = this.character(), selected = this.selected(), owner = this.service.owner;
+    if (!character || !selected || this.busy()) return;
+    this.busy.set(true); this.error.set('');
+    try {
+      const blob = await this.service.media(character.id, selected.id);
+      if (owner !== this.service.owner) return;
+      this.imageEditor.open({ characterId: character.id, characterName: character.name, lookId: selected.id,
+        recipe: structuredClone(selected.recipe), image: { UUID: `character-${selected.id}`, blob,
+          width: selected.recipe.width, height: selected.recipe.height, aspectRatio: 'square', prompt: selected.recipe.appearance,
+          editProvenance: selected.edit_provenance } });
+    } catch (error) { this.error.set(characterError(error)); }
+    finally { this.busy.set(false); }
+  }
   @ViewChild('collectionBrowser') private collectionBrowser?: CharacterBrowserComponent;
   readonly service = inject(CharactersService);
   private readonly shared = inject(SharedService);
@@ -115,7 +131,7 @@ export class CharactersComponent {
     this.modelsLoading.set(true); this.modelsError.set(false);
     try {
       const catalog = await firstValueFrom(this.sd.getGenerationModels().pipe(timeout(15000)));
-      if (version === this.loadVersion) this.models.set(catalog.models);
+      if (version === this.loadVersion) this.models.set(catalog.models.filter(model => !model.evaluation_only && !model.editor_only));
     } catch { if (version === this.loadVersion) this.modelsError.set(true); }
     finally { if (version === this.loadVersion) this.modelsLoading.set(false); }
   }

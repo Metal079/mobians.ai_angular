@@ -17,6 +17,11 @@ export interface CreditPackagesResponse {
 }
 
 export interface GenerationModelSettings {
+  output_count?: number;
+  max_reference_images?: number;
+  supported_operations?: string[];
+  evaluation_only?: boolean;
+  editor_only?: boolean;
   model_id: string;
   display_name: string;
   base_model: string;
@@ -466,21 +471,17 @@ export class StableDiffusionService {
 
   getCreditCosts(): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/costs`;
-    return this.http.get<CurrentUserResponse>(url, { context: new HttpContext().set(SKIP_AUTH, true) });
+    return this.http.get<CurrentUserResponse>(url);
   }
 
   getModelCreditCost(model: string): Observable<any> {
     const url = `${this.apiBaseUrl}/credits/cost/${encodeURIComponent(model)}`;
-    return this.http.get(url, { context: new HttpContext().set(SKIP_AUTH, true) });
+    return this.http.get(url);
   }
 
   getGenerationModels(): Observable<GenerationModelCatalogResponse> {
     const url = `${this.apiBaseUrl}/models`;
-    // The catalog is public. A session header needlessly adds a preflight request
-    // that can consume the entire model-loading timeout before the GET begins.
-    return this.http.get<GenerationModelCatalogResponse>(url, {
-      context: new HttpContext().set(SKIP_AUTH, true),
-    });
+    return this.http.get<GenerationModelCatalogResponse>(url);
   }
 
   getCurrentUser(): Observable<CurrentUserResponse> {
@@ -825,7 +826,7 @@ export class StableDiffusionService {
 
   getJobImage(jobId: string, imageIndex: number): Observable<Blob> {
     const url = `${this.apiBaseUrl}/get_job_image/${encodeURIComponent(jobId)}/${imageIndex}`;
-    return this.http.get(url, { responseType: 'blob', context: new HttpContext().set(SKIP_AUTH, true) });
+    return this.http.get(url, { responseType: 'blob' });
   }
 
   cancelJob(jobId: string): Observable<any> {

@@ -58,18 +58,18 @@ export class CharacterSaveDialogComponent {
   constructor() {
     const unregister = inject(CharacterDraftsService).register(() => this.hasUnsavedChanges);
     this.destroyRef.onDestroy(unregister);
-    this.service.saveRequests.pipe(takeUntilDestroyed()).subscribe(request => void this.open(request.image, request.characterId));
+    this.service.saveRequests.pipe(takeUntilDestroyed()).subscribe(request => void this.open(request.image, request.characterId, request.recipe));
     this.shared.getUserData().pipe(takeUntilDestroyed()).subscribe(() => {
       if (this.owner && this.owner !== this.service.owner) this.close();
     });
     this.destroyRef.onDestroy(() => this.close());
   }
 
-  async open(image: MobiansImage, characterId?: string): Promise<void> {
+  async open(image: MobiansImage, characterId?: string, sourceRecipe?: CharacterRecipe): Promise<void> {
     this.close();
     const version = ++this.loadVersion;
     this.owner = this.service.owner; this.image = image;
-    this.recipe = recipeFromImage(image, false); this.models = [];
+    this.recipe = sourceRecipe ? { ...structuredClone(sourceRecipe), label: 'Edited look' } : recipeFromImage(image, false); this.models = [];
     this.hasRegions = !!image.regional_prompting?.enabled;
     this.targetId = characterId || image.characterId || ''; this.destinationRequired = false; this.destinationOpen = false; this.name = ''; this.savedName = ''; this.savedId.set(''); this.savedImageId = ''; this.error.set('');
     this.promptExpanded = !this.recipe.appearance.trim() || this.recipe.appearance.length > 8002;
@@ -113,7 +113,7 @@ export class CharacterSaveDialogComponent {
     const version = this.loadVersion; this.loadingModels.set(true); this.modelsError.set(false);
     try {
       const catalog = await firstValueFrom(this.sd.getGenerationModels().pipe(timeout(15000)));
-      if (version === this.loadVersion) this.models = catalog.models;
+      if (version === this.loadVersion) this.models = catalog.models.filter(model => !model.evaluation_only && !model.editor_only);
     } catch { if (version === this.loadVersion) this.modelsError.set(true); }
     finally { if (version === this.loadVersion) this.loadingModels.set(false); }
   }
@@ -166,7 +166,7 @@ export class CharacterSaveDialogComponent {
       if (version !== this.loadVersion || this.owner !== this.service.owner) return;
       const signature = JSON.stringify([name, recipe, targetId, encoded]);
       if (signature !== this.requestSignature) { this.requestId = crypto.randomUUID(); this.requestSignature = signature; }
-      const result = await this.service.save(name, recipe, encoded, targetId || undefined, this.requestId);
+      const result = await this.service.save(name, recipe, encoded, targetId || undefined, this.requestId, this.image.editProvenance);
       if (version !== this.loadVersion || this.owner !== this.service.owner) return;
       this.savedName = savedName; this.savedImageId = (result as { image_id?: string }).image_id || '';
       this.savedId.set(result.id); this.service.saved.next(result.id);

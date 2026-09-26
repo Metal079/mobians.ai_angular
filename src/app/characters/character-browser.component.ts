@@ -13,6 +13,7 @@ export class CharacterBrowserComponent implements OnChanges {
   private readonly destroyRef = inject(DestroyRef);
   @Input() characterId = '';
   @Input() destinationsOnly = false;
+  @Input() looksOnly = false;
   @Input() disabled = false;
   @Input() showCreate = false;
   @Input() selectionMode = false;
@@ -32,7 +33,7 @@ export class CharacterBrowserComponent implements OnChanges {
     this.destroyRef.onDestroy(() => { ++this.version; clearTimeout(this.timer); });
   }
   ngOnChanges(changes: any): void {
-    if (changes.characterId || changes.destinationsOnly || this.version === 0) void this.load();
+    if (changes.characterId || changes.destinationsOnly || changes.looksOnly || this.version === 0) void this.load();
   }
   search(value: string): void {
     this.query = value; ++this.version; clearTimeout(this.timer);
@@ -46,7 +47,7 @@ export class CharacterBrowserComponent implements OnChanges {
     this.loading.set(true); this.error.set('');
     if (!more) { this.rows.set([]); this.cursor.set(null); }
     try {
-      const looks = !this.destinationsOnly && (!!this.characterId || !!this.query.trim());
+      const looks = !this.destinationsOnly && (this.looksOnly || !!this.characterId || !!this.query.trim());
       const result = looks ? await this.service.search(this.query, cursor, this.characterId || undefined) : await this.service.list(this.query, cursor);
       if (version !== this.version || owner !== this.service.owner || this.destroyRef.destroyed) return;
       const items = 'items' in result ? result.items : result.characters;

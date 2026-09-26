@@ -1,0 +1,59 @@
+<p-dialog [visible]="editor.tutorialVisible()" (visibleChange)="!$event && editor.dismissTutorial()"
+  header="Make your first edit" [modal]="true" [draggable]="false" [resizable]="false"
+  [dismissableMask]="false" [baseZIndex]="1200" [focusOnShow]="true" (onHide)="returnFocus()"
+  closeAriaLabel="Close editing tutorial" [style]="{ width: '920px', maxWidth: 'calc(100vw - 24px)' }"
+  styleClass="image-edit-tutorial">
+  @if (editor.tutorialVisible()) {
+    <nav class="tutorial-pages" aria-label="Tutorial pages">
+      <button type="button" [attr.aria-current]="page() === 1 ? 'step' : null" (click)="goToPage(1)">1. Simple edits</button>
+      <button type="button" [attr.aria-current]="page() === 2 ? 'step' : null" (click)="goToPage(2)">2. Reference images</button>
+    </nav>
+    <h2 #pageHeading class="page-heading" tabindex="-1">{{ page() === 1 ? 'Describe a change' : 'Bring in another character' }}</h2>
+    @if (page() === 1) {
+      <p class="intro">Choose a picture, then describe what you want to change.</p>
+      <ol class="tutorial-steps">
+        <li><span class="step-number" aria-hidden="true">1</span><div><strong>Choose your image</strong><p>Upload one, open history, or pick a saved character look.</p></div></li>
+        <li><span class="step-number" aria-hidden="true">2</span><div><strong>Say what to change</strong><p>Use everyday language. Mention what should stay the same.</p></div></li>
+        <li><span class="step-number" aria-hidden="true">3</span><div><strong>Make it yours</strong><p>Compare the result, edit again, or save it as a new look.</p></div></li>
+      </ol>
+      <section aria-labelledby="tutorial-example-title">
+        <div class="example-heading"><h3 id="tutorial-example-title">Same character. A different time of day.</h3><p>Meet Mica, an original character created on Mobians for this example.</p></div>
+        <div class="example-images">
+          <figure><figcaption>Before</figcaption><img src="assets/image-edit-tutorial/mica-before.webp" width="1024" height="1024" alt="Mica, a raccoon astronomer in a coral jacket, beside a telescope in her sunlit observatory."></figure>
+          <figure><figcaption>After</figcaption><img src="assets/image-edit-tutorial/mica-after.webp" width="1024" height="1024" alt="Mica in the same outfit and pose, with a starry night outside and warm light inside the observatory."></figure>
+        </div>
+        <p class="instruction-label">The editing instruction</p>
+        <blockquote>{{ instruction }}</blockquote>
+      </section>
+      <p class="extra-tip"><i class="bi bi-lightbulb" aria-hidden="true"></i><span>Paint an area when you only want to change that part. Next, see how a reference image can guide a character replacement.</span></p>
+    } @else {
+      <p class="intro">Choose the picture to change as <strong>Image 1</strong>. Under <strong>References</strong>, use <strong>Add reference</strong> to upload the new character as <strong>Image 2</strong>. You can also choose from history or saved character looks.</p>
+      <section aria-labelledby="tutorial-reference-title">
+        <h3 id="tutorial-reference-title" class="visually-hidden">Character replacement example</h3>
+        <div class="reference-guide">
+          <figure><figcaption>Image 2 · Reference</figcaption><img src="assets/image-edit-tutorial/juniper-reference.webp" width="1024" height="1024" alt="Juniper, an original lavender rabbit with green eyes, white hair, and teal overalls, on a plain background."></figure>
+          <div><strong>Meet Juniper</strong><p>This original character was created on Mobians for the example. Use her design to replace Mica in the picture below.</p><p>Tell the editor what to take from <strong>image 2</strong> and what to keep from <strong>image 1</strong>.</p></div>
+        </div>
+        <div class="example-images">
+          <figure><figcaption>Image 1 · Before</figcaption><img src="assets/image-edit-tutorial/mica-before.webp" width="1024" height="1024" alt="The base image: Mica the raccoon holds a telescope in a sunlit observatory, wearing a red jacket and yellow scarf."></figure>
+          <figure><figcaption>After</figcaption><img src="assets/image-edit-tutorial/juniper-replacement.webp" width="1024" height="1024" alt="The edited result: Juniper the lavender rabbit in Mica's pose and outfit, holding the telescope in the same observatory."></figure>
+        </div>
+        <p class="instruction-label">The editing instruction</p>
+        <blockquote>{{ referenceInstruction }}</blockquote>
+      </section>
+      <p class="extra-tip"><i class="bi bi-lightbulb" aria-hidden="true"></i><span>A clear reference makes the character easier to follow. Say whether to keep the original outfit or use the reference outfit, too.</span></p>
+    }
+    <p class="original-note">Your original stays available. Reopen this guide from <strong>How editing works</strong>.</p>
+  }
+  <ng-template #footer>
+    <div class="tutorial-footer">
+      @if (page() === 1) {
+        <button type="button" class="secondary-action" (click)="editor.dismissTutorial()">Skip tutorial</button>
+        <button type="button" class="start-editing" (click)="goToPage(2)">Next: References <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+      } @else {
+        <button type="button" class="secondary-action" (click)="goToPage(1)"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</button>
+        <button type="button" class="start-editing" (click)="editor.dismissTutorial()">Start editing <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+      }
+    </div>
+  </ng-template>
+</p-dialog>

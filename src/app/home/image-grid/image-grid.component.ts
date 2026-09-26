@@ -1,4 +1,5 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild, inject } from '@angular/core';
+import { ImageEditorService } from '../../image-editor/image-editor.service';
 import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -21,6 +22,8 @@ import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.co
     imports: [CommonModule, RingGameComponent, RingLeaderboardComponent]
 })
 export class ImageGridComponent implements OnDestroy {
+  readonly imageEditor = inject(ImageEditorService);
+  editWithAI(image: MobiansImage, event: Event) { event.stopPropagation(); this.imageEditor.open({ image }); }
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   imagesIDs: string[] = [];
