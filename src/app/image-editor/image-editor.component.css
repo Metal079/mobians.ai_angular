@@ -36,6 +36,8 @@ button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-vis
 .file-button { display:inline-flex; align-items:center; margin:0; }
 .file-button input { position:absolute; width:1px; height:1px; clip-path:inset(50%); overflow:hidden; }
 .hint { font-size:.83rem; opacity:.8; margin:.35rem 0; line-height:1.5; }
+.model-limitation { display:flex; align-items:flex-start; gap:.45rem; margin:0; }
+.model-limitation i { flex:none; margin-top:.1rem; }
 .mask-tools { margin-top:.7rem; font-size:.87rem; }
 .brush { display:flex; align-items:center; gap:.5rem; }
 .brush input { width:100px; }

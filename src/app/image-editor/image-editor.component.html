@@ -65,7 +65,8 @@
           <p class="hint">Refer to each image by number: “Use the outfit from image 2.”</p>
         }
         <label for="image-edit-instruction">What would you like to change?</label>
-        <textarea id="image-edit-instruction" [(ngModel)]="prompt" rows="5" maxlength="8000" [disabled]="busy" placeholder="Change the jacket to red. Keep the character, pose, and art style."></textarea>
+        <textarea id="image-edit-instruction" [(ngModel)]="prompt" rows="5" maxlength="8000" [disabled]="busy" aria-describedby="image-edit-nsfw-note" placeholder="Change the jacket to red. Keep the character, pose, and art style."></textarea>
+        <p id="image-edit-nsfw-note" class="hint model-limitation"><i class="bi bi-info-circle" aria-hidden="true"></i><span>NSFW edits do not work well with this model.</span></p>
         <details class="seed-options"><summary>Seed</summary><input type="number" [(ngModel)]="seed" [disabled]="busy" min="0" max="2147483647" placeholder="Random" aria-label="Generation seed"></details>
         <fieldset class="queue-options" [disabled]="busy">
           <legend>Queue</legend>
