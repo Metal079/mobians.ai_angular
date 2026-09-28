@@ -2,6 +2,8 @@ import { ChangeDetectorRef, Component, DestroyRef, EventEmitter, Input, NgZone, 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { concatMap, filter } from 'rxjs';
+import { ImageHistoryEventsService } from './image-history-events.service';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
 import { ZipWriter } from '@zip.js/zip.js';
@@ -43,6 +45,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.characters.requestSave({ ...image, blob }, image.characterId);
   }
   private readonly destroyRef = inject(DestroyRef);
+  private readonly historyEvents = inject(ImageHistoryEventsService);
 
   // Large downloads can fail (or appear to “never start”) on slower devices if we revoke
   // object URLs too quickly or try to build a massive single ZIP in memory.
@@ -180,6 +183,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.setImagesPerPageDefaults();
 
+    this.historyEvents.imagesSaved$.pipe(
+      filter(source => source !== this),
+      concatMap(() => this.searchImages(true)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe();
+
     this.imageSyncService.syncStatus$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
@@ -253,6 +262,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
       return false;
     }
+
+    // Persistence has committed; update the generator history and any open pickers.
+    this.historyEvents.notifyImagesSaved(this);
 
     const newMetadata = storedImages.map((image: MobiansImage) => {
       return {

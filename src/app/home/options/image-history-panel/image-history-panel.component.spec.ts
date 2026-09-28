@@ -125,6 +125,86 @@ describe('ImageHistoryPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('history shared by the generator and editor picker', () => {
+    let pickerFixture: ComponentFixture<ImageHistoryPanelComponent>;
+    let picker: ImageHistoryPanelComponent;
+    let db: IDBDatabase;
+    let databaseName: string;
+    const editedImage = (id: string, prompt = 'Make the jacket blue'): MobiansImage => ({
+      ...createImage({ UUID:id, prompt, model:'FLUX.2-klein-4B', timestamp:new Date() }),
+      blob:new Blob(['png pixels'], { type:'image/png' }),
+      editProvenance:{ instruction:prompt, parent_image_uuid:'original', root_image_uuid:'original' },
+    });
+
+    beforeEach(async () => {
+      databaseName = 'shared-history-test-' + Math.random();
+      db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(databaseName, 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('ImageStore', { keyPath:'UUID' });
+          request.result.createObjectStore('blobStore', { keyPath:'UUID' });
+        };
+        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+      });
+      pickerFixture = TestBed.createComponent(ImageHistoryPanelComponent);
+      picker = pickerFixture.componentInstance; picker.pickerMode = true;
+      for (const panel of [component, picker]) {
+        spyOn(panel, 'getDatabase').and.resolveTo(db);
+        spyOn(panel, 'initializeHistory').and.resolveTo();
+        spyOn<any>(panel, 'hydrateImageUrls').and.resolveTo();
+        spyOn<any>(panel, 'updateFavoriteImages').and.resolveTo();
+        panel.ngOnInit();
+      }
+    });
+    afterEach(async () => {
+      pickerFixture.destroy(); fixture.destroy(); db.close();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+      });
+    });
+
+    it('shows a committed edit in the already-mounted generator history without a reload', async () => {
+      const refresh = spyOn(component, 'searchImages').and.callThrough();
+      const image = editedImage('fresh-edit');
+      expect(component.currentPageImages).toEqual([]);
+      expect(await picker.ingestGeneratedImages([image])).toBeTrue();
+      expect(refresh).toHaveBeenCalledOnceWith(true);
+      await refresh.calls.mostRecent().returnValue;
+      expect(component.currentPageImages.map(item => item.UUID)).toContain(image.UUID);
+      expect(component.currentPageImages[0].editProvenance).toEqual(image.editProvenance);
+
+      const pickerRefresh = spyOn(picker, 'searchImages').and.callThrough();
+      expect(await component.ingestGeneratedImages([editedImage('generator-result')])).toBeTrue();
+      expect(pickerRefresh).toHaveBeenCalledOnceWith(true);
+      await pickerRefresh.calls.mostRecent().returnValue;
+      expect(picker.currentPageImages.map(item => item.UUID)).toContain('generator-result');
+      // The saving panel updates itself; the event must not cause a refresh loop.
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the generator search and current page when an edit is saved elsewhere', async () => {
+      await component.ingestGeneratedImages([editedImage('existing')]);
+      component.searchQuery = 'jacket';
+      await component.searchImages();
+      const refresh = spyOn(component, 'searchImages').and.callThrough();
+      expect(await picker.ingestGeneratedImages([editedImage('nonmatching', 'Make it nighttime')])).toBeTrue();
+      await refresh.calls.mostRecent().returnValue;
+      expect(component.searchQuery).toBe('jacket'); expect(component.currentPageNumber).toBe(1);
+      expect(component.currentPageImages.map(item => item.UUID)).toEqual(['existing']);
+    });
+
+    it('does not announce a failed save or refresh a destroyed history panel', async () => {
+      const refresh = spyOn(component, 'searchImages').and.callThrough();
+      const persist = spyOn<any>(picker, 'persistGeneratedImage').and.resolveTo(false);
+      expect(await picker.ingestGeneratedImages([editedImage('failed')])).toBeFalse();
+      expect(refresh).not.toHaveBeenCalled();
+      persist.and.callThrough(); fixture.destroy();
+      expect(await picker.ingestGeneratedImages([editedImage('after-navigation')])).toBeTrue();
+      expect(refresh).not.toHaveBeenCalled();
+    });
+  });
+
   describe('image tag editing', () => {
     let db: IDBDatabase;
     let databaseName: string;
