@@ -17,6 +17,8 @@ describe('ImageGridComponent', () => {
   beforeEach(async () => {
     sharedServiceStub = {
       getImages: () => of([]),
+      getDownloadSlots: () => of(null),
+      getImagesValue: () => [],
       getReferenceImage: () => of(null),
       getGenerationRequestValue: jasmine.createSpy('getGenerationRequestValue').and.returnValue({ lossy_images: true }),
       getInstructionValue: () => false,
@@ -59,6 +61,18 @@ describe('ImageGridComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('reserves original grid positions separately from completed image data', () => {
+    const image = { UUID: 'second', width: 512, height: 512, aspectRatio: 'square', url: 'blob:second' };
+    const slots = new BehaviorSubject<any>([null, image, null, null]);
+    sharedServiceStub.getDownloadSlots = () => slots.asObservable();
+    sharedServiceStub.getImages = () => of([image]);
+    component.ngOnInit();
+    expect(component.displaySlots).toEqual([null, image, null, null]);
+    expect(component.images).toEqual([image]);
+    slots.next(null);
+    expect(component.displaySlots).toEqual([null, image, null, null]);
   });
 
   it('refreshes individual previews and clears the grid when shared results change', () => {

@@ -11,7 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, takeUntil, finalize, exhaustMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { MessageService } from 'primeng/api';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import { NotificationService } from 'src/app/notification.service';
 import { SwPush } from '@angular/service-worker';
 import { environment } from 'src/environments/environment';
@@ -37,6 +37,7 @@ import { CharactersService, characterPrompt } from 'src/app/characters/character
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { IMAGE_EDIT_MODELS, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
+import { imageDownloadConcurrency, runImageDownloadPool } from './image-download-pool';
 
 
 @Component({
@@ -1596,6 +1597,7 @@ export class OptionsComponent implements OnInit {
   // Invalidate callbacks before unsubscribing: finalize must not finish an old job.
   private stopJobMonitoring(): void {
     this.jobSession++;
+    this.sharedService.setDownloadSlots(null);
     this.stopJobRequests.next();
     this.jobPollSub?.unsubscribe();
     this.jobPollSub = undefined;
@@ -1847,116 +1849,90 @@ export class OptionsComponent implements OnInit {
   private async downloadJobImages(job_id: string) {
     const session = this.jobSession;
     if (!this.isCurrentJobSession(session)) return;
-
     const imageCount = 4;
     const maxRetries = 10;
-    const blobs: (Blob | null)[] = new Array(imageCount).fill(null);
-
-    this.queueStatusMessageChange.emit('Downloading images...');
-
-    // Download images sequentially (better for slow connections — no bandwidth competition)
-    for (let i = 0; i < imageCount; i++) {
-      if (!this.isCurrentJobSession(session)) return;
-      this.queueStatusMessageChange.emit(`Downloading image ${i + 1} of ${imageCount}...`);
-
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        if (!this.isCurrentJobSession(session)) return;
-        try {
-          blobs[i] = await firstValueFrom(
-            this.stableDiffusionService.getJobImage(job_id, i).pipe(
-              timeout(120000), // 2 minute timeout per image
-              takeUntil(this.stopJobRequests)
-            )
-          );
-          if (!this.isCurrentJobSession(session)) return;
-          break; // success — move to next image
-        } catch (err: any) {
-          if (!this.isCurrentJobSession(session)) return;
-          const status = err?.status;
-          const retryable = status == null || [0, 408, 500, 502, 503, 504].includes(status) || err?.name === 'TimeoutError';
-          if (!retryable || attempt >= maxRetries - 1) {
-            console.error(`Failed to download image ${i} after ${attempt + 1} attempts`, err);
-            break; // give up on this image
-          }
-          // Exponential backoff: 3s, 6s, 12s, 24s, 30s (capped)
-          const delay = Math.min(3000 * Math.pow(2, attempt), 30000);
-          this.queueStatusMessageChange.emit(
-            `Downloading image ${i + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`
-          );
-          await firstValueFrom(timer(delay).pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
-        }
-      }
-    }
-
-    if (!this.isCurrentJobSession(session)) return;
-    this.queueStatusMessageChange.emit(undefined);
-
-    const successfulBlobs = blobs.filter((b): b is Blob => b !== null);
-
-    if (successfulBlobs.length === 0) {
-      // All individual downloads failed — fall back to full /get_job/ endpoint
-      console.warn('All individual image downloads failed, falling back to /get_job/');
-      await this.downloadJobImagesFallback(job_id);
-      return;
-    }
-
-    // Build MobiansImage array from downloaded blobs
+    const slots: (MobiansImage | null)[] = new Array(imageCount).fill(null);
+    const request = { ...this.generationRequest };
+    const ratio = { ...this.aspectRatio };
+    const seed = this.currentSeed;
+    const attribution = this.getCharacterAttributionSnapshot();
     const historyLoras = this.getHistoryLorasSnapshot();
     const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
     const historyPrompt = this.getHistoryPromptSnapshot();
     const historyPromptTemplate = this.getHistoryPromptTemplateSnapshot();
     const historyPromptSummary = this.getPromptSummary(historyPrompt);
+    const timestamp = new Date();
 
-    const generatedImages: MobiansImage[] = [];
-    for (let i = 0; i < blobs.length; i++) {
-      const blob = blobs[i];
-      if (!blob) continue;
-      const blobUrl = URL.createObjectURL(blob);
-      generatedImages.push({
-        ...this.getCharacterAttributionSnapshot(),
-        blob: blob,
-        width: this.generationRequest.width,
-        height: this.generationRequest.height,
-        aspectRatio: this.aspectRatio.aspectRatio,
-        UUID: uuidv4(),
-        rated: false,
-        timestamp: new Date(),
-        prompt: historyPrompt,
-        promptTemplate: historyPromptTemplate,
-        loras: historyLoras,
-        regional_prompting: historyRegionalPrompting,
-        promptSummary: historyPromptSummary,
-        url: blobUrl,
-        model: this.generationRequest.model,
-        seed: this.currentSeed,
-        negativePrompt: this.generationRequest.negative_prompt,
-        cfg: this.generationRequest.guidance_scale,
-        tags: [],
-        syncPriority: 0,
-        lastModified: new Date()
-      } as MobiansImage);
-    }
-
-    // Track created URLs for later revocation
-    generatedImages.forEach((img: MobiansImage) => {
-      if (img.url) this.blobUrls.push(img.url);
-    });
-    this.images = generatedImages;
     this.sharedService.disableInstructions();
-    this.sharedService.setImages(this.images);
+    this.sharedService.setDownloadSlots(slots);
+    this.loadingChange.emit(false);
+    this.queueStatusMessageChange.emit('Downloading images...');
 
-    // Dismiss loading UI immediately so users see their images
+    const publish = () => {
+      const ready = slots.filter((image): image is MobiansImage => image !== null);
+      this.sharedService.setImages(ready);
+      // Reuse SharedService's owned URLs on subsequent arrivals. This avoids
+      // revoking an already visible image while another slot finishes.
+      const canonical = new Map(this.sharedService.getImagesValue().map(image => [image.UUID, image]));
+      slots.forEach((image, index) => { if (image) slots[index] = canonical.get(image.UUID)!; });
+      this.images = this.sharedService.getImagesValue();
+      this.sharedService.setDownloadSlots(slots);
+      this.queueStatusMessageChange.emit(`Downloading images... (${ready.length} of ${imageCount} ready)`);
+    };
+
+    await runImageDownloadPool(imageCount, imageDownloadConcurrency((navigator as any).connection), async index => {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (!this.isCurrentJobSession(session)) return;
+        try {
+          const blob = await firstValueFrom(this.stableDiffusionService.getJobImage(job_id, index).pipe(
+            timeout(120000), takeUntil(this.stopJobRequests)));
+          if (!this.isCurrentJobSession(session)) return;
+          const url = URL.createObjectURL(blob);
+          this.blobUrls.push(url);
+          slots[index] = {
+            ...attribution, blob, url, UUID: uuidv5(`mobians.ai/generation/${job_id}/image/${index}`, uuidv5.URL), width: request.width, height: request.height,
+            aspectRatio: ratio.aspectRatio, timestamp, prompt: historyPrompt,
+            promptTemplate: historyPromptTemplate, loras: historyLoras,
+            regional_prompting: historyRegionalPrompting, promptSummary: historyPromptSummary,
+            model: request.model, seed, negativePrompt: request.negative_prompt,
+            cfg: request.guidance_scale, tags: [], syncPriority: 0, lastModified: timestamp,
+          } as MobiansImage;
+          publish();
+          // Persist only this newly delivered image, with its stable identity.
+          const delivered = slots[index]!;
+          void this.ingestDeliveredImages(job_id, [delivered])
+            .catch(error => console.error('Failed to store a delivered image in history', error));
+          return;
+        } catch (error: any) {
+          if (!this.isCurrentJobSession(session)) return;
+          const retryable = error?.status == null || [0, 408, 500, 502, 503, 504].includes(error.status)
+            || error?.name === 'TimeoutError';
+          if (!retryable || attempt >= maxRetries - 1) {
+            console.error(`Failed to download image ${index} after ${attempt + 1} attempts`, error);
+            return;
+          }
+          this.queueStatusMessageChange.emit(`Downloading image ${index + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`);
+          await firstValueFrom(timer(Math.min(3000 * Math.pow(2, attempt), 30000))
+            .pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
+        }
+      }
+    });
+    if (!this.isCurrentJobSession(session)) return;
+    this.sharedService.setDownloadSlots(null);
+    this.queueStatusMessageChange.emit(undefined);
+    if (!slots.some(image => image !== null)) {
+      this.loadingChange.emit(true);
+      await this.downloadJobImagesFallback(job_id);
+      return;
+    }
     this.loadingChange.emit(false);
     this.enableGenerationButton = true;
     this.hasPendingJob = false;
-    this.jobID = "";
+    this.jobID = '';
     this.queuePositionChange.emit(0);
     this.etaChange.emit(undefined);
     this.removePendingJob();
     this.lockService.release();
-
-    // History compresses its own stored copy; keep the original format for viewing/saving.
-    await this.historyPanel?.ingestGeneratedImages(generatedImages);
   }
 
   /**
@@ -2000,12 +1976,12 @@ export class OptionsComponent implements OnInit {
         const historyPrompt = response.prompt || this.getHistoryPromptSnapshot();
         const historyPromptTemplate = response.prompt_template || this.getHistoryPromptTemplateSnapshot();
         const historyPromptSummary = this.getPromptSummary(historyPrompt);
-        const generatedImages = response.result.map((base64String: string) => {
+        const generatedImages = response.result.map((base64String: string, index: number) => {
           const blob = this.blobMigrationService.base64ToBlob(base64String);
           const blobUrl = URL.createObjectURL(blob);
           return {
             blob, width: this.generationRequest.width, height: this.generationRequest.height,
-            aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv4(), rated: false, timestamp: new Date(),
+            aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv5(`mobians.ai/generation/${job_id}/image/${index}`, uuidv5.URL), rated: false, timestamp: new Date(),
             ...this.getCharacterAttributionSnapshot(),
             prompt: historyPrompt, promptTemplate: historyPromptTemplate, loras: historyLoras, regional_prompting: historyRegionalPrompting,
             promptSummary: historyPromptSummary, url: blobUrl,
@@ -2030,7 +2006,7 @@ export class OptionsComponent implements OnInit {
         this.lockService.release();
 
         // Preserve the original here too, including when the bulk-download fallback is used.
-        await this.historyPanel?.ingestGeneratedImages(generatedImages);
+        await this.ingestDeliveredImages(job_id, generatedImages);
         return; // success
       } catch (err: any) {
         if (!this.isCurrentJobSession(session)) return;
@@ -2296,7 +2272,21 @@ export class OptionsComponent implements OnInit {
   }
 
   // Persistence helpers
-  private getPendingJob(): { job_id: string; request?: any; createdAt?: number } | null {
+  private async ingestDeliveredImages(job_id: string, images: MobiansImage[]): Promise<void> {
+    const pending = this.getPendingJob();
+    const saved = new Set(pending?.job_id === job_id ? pending.savedGeneratedImages ?? [] : []);
+    const fresh = images.filter(image => !saved.has(image.UUID));
+    if (!fresh.length || !this.historyPanel) return;
+    for (const image of fresh) {
+      if (await this.historyPanel.ingestGeneratedImages([image]) !== true) continue;
+      const current = this.getPendingJob();
+      if (current?.job_id !== job_id) continue;
+      current.savedGeneratedImages = [...new Set([...(current.savedGeneratedImages ?? []), image.UUID])];
+      try { localStorage.setItem(this.pendingJobKey, JSON.stringify(current)); } catch {}
+    }
+  }
+
+  private getPendingJob(): { job_id: string; request?: any; createdAt?: number; savedGeneratedImages?: string[] } | null {
     const raw = localStorage.getItem(this.pendingJobKey);
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }

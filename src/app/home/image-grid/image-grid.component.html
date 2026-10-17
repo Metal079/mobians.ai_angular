@@ -1,4 +1,4 @@
-<div class="image-grid" [class.single-result]="images.length === 1" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
+<div class="image-grid" [class.single-result]="displaySlots.length === 1" (dragover)="allowDrop($event)" (drop)="onDrop($event)" (click)="openFileDialog()"
      [style.aspect-ratio]="aspectRatio.width + ' / ' + aspectRatio.height"
      [ngStyle]="{'width.px': isMobileView() ? '100%' : aspectRatio.width, 
      'height.px': isMobileView() ? screenHeight : aspectRatio.height}">
@@ -35,50 +35,33 @@
       <app-ring-game (ringsCollected)="onRingsCollected($event)"></app-ring-game>
     }
   }
-  <!-- Images -->
-  @if (images.length > 0 && !showLoading && !showReferenceImage) {
-    <div class="image-wrapper" id="wrapper1">
-      <img [src]="images[0].url" class="small-image" alt="Image1 goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(0, $event)" id="image0">
-      <div class="image-actions">
-        <button type="button" class="image-action-btn" (click)="downloadImage(images[0], $event)" aria-label="Download image 1">
-          <i class="bi bi-download"></i>
-        </button>
-        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[0], $event)" aria-label="Edit image 1 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
+  <!-- Keep each result in its original position while other downloads finish. -->
+  @if (!showLoading && !showReferenceImage) {
+    @for (image of displaySlots; track $index; let i = $index) {
+      <div class="image-wrapper" [id]="'wrapper' + (i + 1)">
+        @if (image) {
+          <img [src]="image.url" class="small-image" [alt]="'Generated image ' + (i + 1)"
+               [attr.loading]="i === 0 ? 'eager' : 'lazy'" decoding="async"
+               (click)="inpaintingEnabled || expandImage(i, $event)" [id]="'image' + i">
+          <div class="image-actions">
+            <button type="button" class="image-action-btn" (click)="downloadImage(image, $event)"
+                    [attr.aria-label]="'Download image ' + (i + 1)"><i class="bi bi-download"></i></button>
+            @if (imageEditor.available()) {
+              <button type="button" class="image-action-btn" (click)="editWithAI(image, $event)"
+                      [attr.aria-label]="'Edit image ' + (i + 1) + ' with AI'" title="Edit with AI"><i class="bi bi-stars"></i></button>
+            }
+          </div>
+        } @else {
+          <div class="image-pending" role="img" [attr.aria-label]="'Image ' + (i + 1) + (downloadSlots !== null ? ' downloading' : ' unavailable')">
+            @if (downloadSlots !== null) { <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span> }
+            <span>Image {{ i + 1 }}{{ downloadSlots === null ? ' unavailable' : '' }}</span>
+          </div>
+        }
       </div>
-    </div>
+    }
   }
-  @if (images.length > 1 && !showLoading && !showReferenceImage) {
-    <div class="image-wrapper" id="wrapper2">
-      <img [src]="images[1].url" class="small-image" alt="Image2 goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(1, $event)" id="image1">
-      <div class="image-actions">
-        <button type="button" class="image-action-btn" (click)="downloadImage(images[1], $event)" aria-label="Download image 2">
-          <i class="bi bi-download"></i>
-        </button>
-        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[1], $event)" aria-label="Edit image 2 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
-      </div>
-    </div>
-  }
-  @if (images.length > 2 && !showLoading && !showReferenceImage) {
-    <div class="image-wrapper" id="wrapper3">
-      <img [src]="images[2].url" class="small-image" alt="Image3 goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(2, $event)" id="image2">
-      <div class="image-actions">
-        <button type="button" class="image-action-btn" (click)="downloadImage(images[2], $event)" aria-label="Download image 3">
-          <i class="bi bi-download"></i>
-        </button>
-        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[2], $event)" aria-label="Edit image 3 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
-      </div>
-    </div>
-  }
-  @if (images.length > 3 && !showLoading && !showReferenceImage) {
-    <div class="image-wrapper" id="wrapper4">
-      <img [src]="images[3].url" class="small-image" alt="Image4 goes here" loading="lazy" decoding="async" (click)="inpaintingEnabled || expandImage(3, $event)" id="image3">
-      <div class="image-actions">
-        <button type="button" class="image-action-btn" (click)="downloadImage(images[3], $event)" aria-label="Download image 4">
-          <i class="bi bi-download"></i>
-        </button>
-        @if (imageEditor.available()) { <button type="button" class="image-action-btn" (click)="editWithAI(images[3], $event)" aria-label="Edit image 4 with AI" title="Edit with AI"><i class="bi bi-stars"></i></button> }
-      </div>
-    </div>
+  @if (downloadSlots !== null && !showLoading) {
+    <div class="download-status" role="status" aria-live="polite">{{ queueStatusMessage || 'Downloading images...' }}</div>
   }
   @if (this.sharedService.getReferenceImageValue() && !showLoading && showReferenceImage) {
     <div class="reference-image" id="wrapper5">

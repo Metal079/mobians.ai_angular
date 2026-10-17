@@ -85,6 +85,34 @@
   background-color: var(--theme-image-bg);
 }
 
+.image-pending {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  color: inherit;
+  background: var(--theme-image-bg);
+}
+
+.download-status {
+  position: absolute;
+  left: 50%;
+  bottom: .5rem;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: calc(100% - 1rem);
+  border: 1px solid var(--theme-border-strong);
+  border-radius: .5rem;
+  padding: .35rem .65rem;
+  text-align: center;
+  background: var(--theme-surface-bg);
+  color: inherit;
+  font-size: .875rem;
+  pointer-events: none;
+}
+
 .image-actions {
   position: absolute;
   bottom: 6px;

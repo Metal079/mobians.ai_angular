@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, ViewChild, inject } from '@angular/core';
 import { ImageEditorService } from '../../image-editor/image-editor.service';
 import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -22,6 +22,7 @@ import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.co
     imports: [CommonModule, RingGameComponent, RingLeaderboardComponent]
 })
 export class ImageGridComponent implements OnDestroy {
+  private readonly cdr = inject(ChangeDetectorRef);
   readonly imageEditor = inject(ImageEditorService);
   editWithAI(image: MobiansImage, event: Event) { event.stopPropagation(); this.imageEditor.open({ image }); }
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
@@ -31,12 +32,16 @@ export class ImageGridComponent implements OnDestroy {
   screenWidth: number;
   screenHeight: number = window.innerHeight;
   images: MobiansImage[] = [];
+  downloadSlots: (MobiansImage | null)[] | null = null;
+  private settledDownloadSlots: (MobiansImage | null)[] | null = null;
+  get displaySlots(): (MobiansImage | null)[] { return this.downloadSlots ?? this.settledDownloadSlots ?? this.images; }
   prevRefImageBase64?: string;
   showReferenceImage: boolean = false;
   imagesJustChanged: boolean = false;
 
   private erasing = false;
   private imageSubscription!: Subscription;
+  private downloadSlotsSubscription?: Subscription;
   private referenceImageSubscription!: Subscription;
   private maskSubscription!: Subscription;
   private previousImages: MobiansImage[] = [];
@@ -86,9 +91,26 @@ export class ImageGridComponent implements OnDestroy {
   private drawing = false;
 
   ngOnInit() {
+    this.downloadSlotsSubscription = this.sharedService.getDownloadSlots().subscribe(slots => {
+      if (slots === null && this.downloadSlots?.some(image => image === null)) {
+        this.settledDownloadSlots = this.downloadSlots.some(image => image !== null) ? this.downloadSlots : null;
+      } else if (slots !== null) {
+        this.settledDownloadSlots = null;
+      }
+      if (slots !== null && this.downloadSlots === null) {
+        this.showReferenceImage = false;
+        this.imagesJustChanged = true;
+        this.imageExpansionId++;
+        this.imageExpandedChange.emit(false);
+        this.inpaintingMaskService.clearCanvasData();
+      }
+      this.downloadSlots = slots;
+      this.cdr.markForCheck();
+    });
     this.imageSubscription = this.sharedService.getImages().subscribe(images => {
+      if (this.downloadSlots === null) this.settledDownloadSlots = null;
       // Check if all 4 images have changed or modified
-      if (images.length === 4 && this.allImagesChanged(images)) {
+      if (this.downloadSlots === null && images.length === 4 && this.allImagesChanged(images)) {
         // Hide old ref image
         this.showReferenceImage = false;
 
@@ -106,6 +128,7 @@ export class ImageGridComponent implements OnDestroy {
       this.images = images;
       // Update previous images for future comparison
       this.previousImages = images;
+      this.cdr.markForCheck();
     });
 
     //  Check when the inpainting mask changes
@@ -483,7 +506,8 @@ export class ImageGridComponent implements OnDestroy {
       }
     }
     else {
-      const imageInfo = this.sharedService.getImage(imageIndex);
+      const positioned = this.downloadSlots ?? this.settledDownloadSlots;
+      const imageInfo = positioned !== null && imageIndex !== 4 ? positioned[imageIndex] : this.sharedService.getImage(imageIndex);
       if (!imageInfo) return;
 
       // Native right-click/long-press saving uses the displayed blob, so apply
@@ -495,8 +519,10 @@ export class ImageGridComponent implements OnDestroy {
         console.warn('Failed to prepare image for viewing', error);
         return;
       }
-      if (!blob || expansionId !== this.imageExpansionId
-        || this.sharedService.getImage(imageIndex) !== imageInfo) return;
+      const stillCurrent = positioned !== null && imageIndex !== 4
+        ? this.sharedService.getImagesValue().some(image => image.UUID === imageInfo.UUID && image.blob === imageInfo.blob)
+        : this.sharedService.getImage(imageIndex) === imageInfo;
+      if (!blob || expansionId !== this.imageExpansionId || !stillCurrent) return;
 
       this.imagesJustChanged = false;
 
@@ -522,6 +548,7 @@ export class ImageGridComponent implements OnDestroy {
   ngOnDestroy() {
     this.imageExpansionId++;
     this.imageSubscription?.unsubscribe();
+    this.downloadSlotsSubscription?.unsubscribe();
     this.referenceImageSubscription?.unsubscribe();
     this.maskSubscription?.unsubscribe();
     this.stopQueueMessageRotation();

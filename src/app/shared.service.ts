@@ -9,6 +9,7 @@ export class SharedService implements OnDestroy {
   private _prompt: BehaviorSubject<string> = new BehaviorSubject<string>("");
   private _generationRequest: BehaviorSubject<GenerationRequest | null> = new BehaviorSubject<GenerationRequest | null>(null);
   private _images: BehaviorSubject<MobiansImage[]> = new BehaviorSubject<MobiansImage[]>([]);
+  private _downloadSlots = new BehaviorSubject<(MobiansImage | null)[] | null>(null);
   private imageObjectUrls = new Map<string, Blob>();
   private _referenceImage: BehaviorSubject<MobiansImage | null> = new BehaviorSubject<MobiansImage | null>(null);
   private referenceImageObjectUrl: string | null = null;
@@ -131,6 +132,14 @@ export class SharedService implements OnDestroy {
     }
 
     this._referenceImage.next(value);
+  }
+
+  setDownloadSlots(slots: (MobiansImage | null)[] | null): void {
+    this._downloadSlots.next(slots ? [...slots] : null);
+  }
+
+  getDownloadSlots(): Observable<(MobiansImage | null)[] | null> {
+    return this._downloadSlots.asObservable();
   }
 
   getReferenceImage(): Observable<MobiansImage | null> {

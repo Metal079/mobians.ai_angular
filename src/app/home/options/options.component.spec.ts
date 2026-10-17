@@ -1,4 +1,5 @@
 import { signal } from '@angular/core';
+import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { NO_ERRORS_SCHEMA, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { BehaviorSubject, NEVER, Observable, Subject, of, throwError } from 'rxjs';
@@ -131,6 +132,11 @@ class StableDiffusionServiceStub {
 }
 
 class SharedServiceStub {
+  images: any[] = [];
+  setImages(images: any[]) { this.images = images; }
+  getImagesValue() { return this.images; }
+  setDownloadSlots(_slots: any) {}
+  disableInstructions() {}
   user = { user_id: 'owner-a', token: 'token-a' };
   getUserDataValue() { return this.user; }
   getPrompt() { return of(''); }
@@ -251,7 +257,7 @@ describe('OptionsComponent', () => {
         migration.convertToWebP = jasmine.createSpy().and.resolveTo(new Blob(['compressed'], { type: 'image/webp' }));
         const shared = TestBed.inject(SharedService) as any;
         shared.disableInstructions = () => {};
-        shared.setImages = jasmine.createSpy();
+        spyOn(shared, 'setImages').and.callThrough();
         const ingest = jasmine.createSpy().and.resolveTo(undefined);
         (component as any).historyPanel = { ingestGeneratedImages: ingest };
         component.generationRequest.lossy_images = lossy;
@@ -260,7 +266,9 @@ describe('OptionsComponent', () => {
 
         const images = shared.setImages.calls.mostRecent().args[0];
         expect(images.length).toBe(4);
-        expect(ingest).toHaveBeenCalledWith(images);
+        expect(ingest).toHaveBeenCalledTimes(4);
+        expect(ingest.calls.allArgs().flatMap((args: any[]) => args[0]).map((image: any) => image.UUID).sort())
+          .toEqual(images.map((image: any) => image.UUID).sort());
         for (const image of images) {
           expect(image.blob).toBe(original);
           expect((await (await fetch(image.url)).blob()).type).toBe(original.type);
@@ -269,6 +277,83 @@ describe('OptionsComponent', () => {
       });
     }
   }
+
+  it('shows out-of-order arrivals in stable slots and stores each image once', fakeAsync(() => {
+    const shared = new SharedService();
+    (component as any).sharedService = shared;
+    const responses = Array.from({ length: 4 }, () => new Subject<Blob>());
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJobImage = jasmine.createSpy().and.callFake((_job: string, index: number) => responses[index]);
+    const ingest = jasmine.createSpy().and.resolveTo(undefined);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    component.enableGenerationButton = false;
+    component.hasPendingJob = true;
+    let slots: any = null;
+    const subscription = shared.getDownloadSlots().subscribe(value => { slots = value; });
+    const pending = (component as any).downloadJobImages('fixture');
+    expect(sd.getJobImage.calls.allArgs().map((args: any[]) => args[1])).toEqual([0, 1]);
+    responses[1].next(new Blob(['second'], { type: 'image/png' })); responses[1].complete();
+    flushMicrotasks();
+    expect(slots[0]).toBeNull();
+    const firstVisible = slots[1];
+    expect(shared.getImagesValue().length).toBe(1);
+    expect(component.enableGenerationButton).toBeFalse();
+    expect(sd.getJobImage.calls.mostRecent().args[1]).toBe(2);
+    responses[0].next(new Blob(['first'], { type: 'image/png' })); responses[0].complete();
+    flushMicrotasks();
+    responses[2].next(new Blob(['third'], { type: 'image/png' })); responses[2].complete();
+    responses[3].next(new Blob(['fourth'], { type: 'image/png' })); responses[3].complete();
+    let finished = false; pending.then(() => { finished = true; });
+    flushMicrotasks();
+    expect(finished).toBeTrue();
+    expect(slots).toBeNull();
+    expect(shared.getImagesValue()[1].UUID).toBe(firstVisible.UUID);
+    expect(shared.getImagesValue()[1].url).toBe(firstVisible.url);
+    expect(ingest).toHaveBeenCalledTimes(4);
+    expect(new Set(ingest.calls.allArgs().map((args: any[]) => args[0][0].UUID)).size).toBe(4);
+    expect(component.enableGenerationButton).toBeTrue();
+    subscription.unsubscribe(); shared.ngOnDestroy();
+  }));
+
+  it('reuses image identities after a resumed download or full-result fallback', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const shared = TestBed.inject(SharedService) as any;
+    const blob = new Blob(['image'], { type: 'image/png' });
+    sd.getJobImage = jasmine.createSpy().and.returnValue(of(blob));
+    sd.getJob = jasmine.createSpy().and.returnValue(of({ status: 'completed', result: Array(4).fill('fixture') }));
+    (TestBed.inject(BlobMigrationService) as any).base64ToBlob = () => blob;
+    (component as any).historyPanel = { ingestGeneratedImages: jasmine.createSpy().and.resolveTo(true) };
+    await (component as any).downloadJobImages('same-job');
+    const first = shared.getImagesValue().map((image: MobiansImage) => image.UUID);
+    await (component as any).downloadJobImages('same-job');
+    expect(shared.getImagesValue().map((image: MobiansImage) => image.UUID)).toEqual(first);
+    await (component as any).downloadJobImagesFallback('same-job');
+    expect(shared.getImagesValue().map((image: MobiansImage) => image.UUID)).toEqual(first);
+  });
+
+  it('does not ingest an already saved image again when a pending job resumes', async () => {
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('resumed-job');
+    const image = { UUID: 'same-image' };
+    await (component as any).ingestDeliveredImages('resumed-job', [image]);
+    await (component as any).ingestDeliveredImages('resumed-job', [image]);
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect((component as any).getPendingJob().savedGeneratedImages).toEqual(['same-image']);
+    (component as any).removePendingJob();
+  });
+
+  it('retries only unsaved history images after a partial fallback save', async () => {
+    const ingest = jasmine.createSpy().and.returnValues(Promise.resolve(true), Promise.resolve(false), Promise.resolve(true));
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('partial-history');
+    const images = [{ UUID: 'saved' }, { UUID: 'retry' }];
+    await (component as any).ingestDeliveredImages('partial-history', images);
+    await (component as any).ingestDeliveredImages('partial-history', images);
+    expect(ingest.calls.allArgs().map((args: any[]) => args[0][0].UUID)).toEqual(['saved', 'retry', 'retry']);
+    expect((component as any).getPendingJob().savedGeneratedImages).toEqual(['saved', 'retry']);
+    (component as any).removePendingJob();
+  });
 
   it('latches early cancel until the submit response arrives and ignores rapid repeated clicks', fakeAsync(() => {
     const sd = TestBed.inject(StableDiffusionService) as any;
@@ -368,8 +453,8 @@ describe('OptionsComponent', () => {
       (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('download');
       component.cancelPendingJob();
       flushMicrotasks(); tick(60000);
-      expect(aborted).toHaveBeenCalledTimes(1);
-      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(1);
+      expect(aborted).toHaveBeenCalledTimes(fallback ? 1 : 2);
+      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(fallback ? 1 : 2);
       expect(publish).not.toHaveBeenCalled();
       expect(component.canGenerate).toBeTrue();
     }));
@@ -385,7 +470,7 @@ describe('OptionsComponent', () => {
       component.cancelPendingJob();
       component.submitJob();
       flushMicrotasks(); tick(60000);
-      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(1);
+      expect(sd[fallback ? 'getJob' : 'getJobImage']).toHaveBeenCalledTimes(fallback ? 1 : 2);
       expect(component.hasPendingJob).toBeTrue();
     }));
   }
