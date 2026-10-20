@@ -46,10 +46,6 @@
           <div class="image-actions">
             <button type="button" class="image-action-btn" (click)="downloadImage(image, $event)"
                     [attr.aria-label]="'Download image ' + (i + 1)"><i class="bi bi-download"></i></button>
-            @if (imageEditor.available()) {
-              <button type="button" class="image-action-btn" (click)="editWithAI(image, $event)"
-                      [attr.aria-label]="'Edit image ' + (i + 1) + ' with AI'" title="Edit with AI"><i class="bi bi-stars"></i></button>
-            }
           </div>
         } @else {
           <div class="image-pending" role="img" [attr.aria-label]="'Image ' + (i + 1) + (downloadSlots !== null ? ' downloading' : ' unavailable')">

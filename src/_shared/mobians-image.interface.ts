@@ -25,6 +25,10 @@ export interface MobiansImage {
     thumbnailUrl?: string;
     blob?: Blob;
     favorite?: boolean;
+    // Retained locally until the cloud acknowledges this favorite change.
+    favoriteSyncPending?: boolean;
+    favoriteSyncUserId?: string;
+    favoriteSyncRevision?: string;
     // New fields for enhanced history features
     tags?: string[];           // User-defined tags for organizing images
     model?: string;            // Model used for generation (for display in hover)

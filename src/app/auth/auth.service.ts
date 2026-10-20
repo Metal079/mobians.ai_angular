@@ -317,6 +317,11 @@ export class AuthService {
     return !!user && (user.discord_user_id || user.google_user_id || user.user_id);
   }
 
+  getUserId(): string | null {
+    const user = this.shared.getUserDataValue();
+    return user?.user_id ? String(user.user_id) : null;
+  }
+
   startLogin(provider: AuthProvider, mode: AuthMode = 'login') {
     const state = encodeURIComponent(`p=${provider}&m=${mode}`);
     const redirectUri = encodeURIComponent(environment.oauthRedirectUri || environment.discordRedirectUri);

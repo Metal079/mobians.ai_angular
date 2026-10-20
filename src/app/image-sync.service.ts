@@ -5,6 +5,8 @@ import { MobiansImage, MobiansImageMetadata, ImageTag } from '../_shared/mobians
 import { AuthService } from './auth/auth.service';
 import { environment } from '../environments/environment';
 
+export const CLOUD_IMAGE_LIMIT = 1500;
+
 export interface SyncStatus {
   syncEnabled: boolean;
   imagesInCloud: number;
@@ -31,7 +33,7 @@ interface SyncedImageInfo {
   providedIn: 'root'
 })
 export class ImageSyncService {
-  private readonly SYNC_LIMIT = 1000;
+  private readonly SYNC_LIMIT = CLOUD_IMAGE_LIMIT;
   private readonly CLOUD_BLOB_BATCH_SIZE = 50;
   private readonly API_URL = environment.apiBaseUrl;
   
@@ -39,7 +41,7 @@ export class ImageSyncService {
   private syncStatusSubject = new BehaviorSubject<SyncStatus>({
     syncEnabled: false,
     imagesInCloud: 0,
-    quota: { used: 0, limit: 1000 },
+    quota: { used: 0, limit: CLOUD_IMAGE_LIMIT },
     lastSyncTime: null,
     isSyncing: false
   });
@@ -47,6 +49,7 @@ export class ImageSyncService {
 
   // Track which images are synced (cached locally)
   private syncedImageUUIDs = new Set<string>();
+  private syncedUserId: string | null = null;
 
   constructor(
     private http: HttpClient,
@@ -82,6 +85,7 @@ export class ImageSyncService {
    * Check if an image is synced to the cloud
    */
   isImageSynced(imageUUID: string): boolean {
+    this.ensureSyncAccount();
     return this.syncedImageUUIDs.has(imageUUID);
   }
 
@@ -89,6 +93,7 @@ export class ImageSyncService {
    * Get auth headers for API calls
    */
   private getAuthHeaders(): HttpHeaders {
+    this.ensureSyncAccount();
     const token = this.authService.getToken();
     return new HttpHeaders({
       'Authorization': `Bearer ${token}`,
@@ -100,6 +105,8 @@ export class ImageSyncService {
    * Fetch sync status from server
    */
   async fetchSyncStatus(): Promise<SyncStatus> {
+    this.ensureSyncAccount();
+    const userId = this.authService.getUserId();
     if (!this.authService.isLoggedIn()) {
       return this.syncStatusSubject.value;
     }
@@ -111,12 +118,17 @@ export class ImageSyncService {
         })
       );
 
+      if (userId !== this.authService.getUserId()) {
+        this.ensureSyncAccount();
+        return this.syncStatusSubject.value;
+      }
+
       const status: SyncStatus = {
         syncEnabled: true,
         imagesInCloud: response.images_in_cloud || 0,
         quota: { 
           used: response.images_in_cloud || 0, 
-          limit: this.SYNC_LIMIT 
+          limit: response.quota_limit > 0 ? response.quota_limit : this.SYNC_LIMIT
         },
         lastSyncTime: response.last_sync_time || null,
         isSyncing: false
@@ -140,6 +152,7 @@ export class ImageSyncService {
    * Sync a single image to the cloud (used when favoriting)
    */
   async syncImage(image: MobiansImage, blob: Blob): Promise<boolean> {
+    const userId = this.authService.getUserId();
     if (!this.authService.isLoggedIn()) {
       console.log('Cannot sync - user not logged in');
       return false;
@@ -157,6 +170,7 @@ export class ImageSyncService {
     try {
       // Convert blob to base64
       const base64 = await this.blobToBase64(blob);
+      if (userId !== this.authService.getUserId()) return false;
 
       const payload = {
         image_uuid: image.UUID,
@@ -187,6 +201,7 @@ export class ImageSyncService {
       );
 
       // Mark as synced locally
+      if (userId !== this.authService.getUserId()) return false;
       this.syncedImageUUIDs.add(image.UUID);
       this.saveSyncedUUIDsToStorage();
 
@@ -237,14 +252,18 @@ export class ImageSyncService {
     // Sort by priority and filter to limit
     const sortedImages = [...images]
       .map(img => ({ ...img, syncPriority: this.calculateSyncPriority(img) }))
-      .sort((a, b) => (b.syncPriority || 0) - (a.syncPriority || 0))
-      .slice(0, this.SYNC_LIMIT);
+      .sort((a, b) => (b.syncPriority || 0) - (a.syncPriority || 0));
 
     // Filter out already synced images
     const imagesToSync = sortedImages.filter(img => !this.isImageSynced(img.UUID));
 
     for (let i = 0; i < imagesToSync.length; i++) {
       const image = imagesToSync[i];
+      const quota = this.syncStatusSubject.value.quota;
+      if (quota.used >= quota.limit) {
+        result.errors.push(`Cloud backup is full (${quota.limit} images). ${imagesToSync.length - i} image(s) remain on this device.`);
+        break;
+      }
       
       if (progressCallback) {
         progressCallback(i + 1, imagesToSync.length);
@@ -257,6 +276,8 @@ export class ImageSyncService {
           if (success) {
             result.uploadedCount++;
             result.syncedCount++;
+          } else {
+            result.errors.push(`Could not back up image ${image.UUID}. Check your connection and cloud quota.`);
           }
         } else {
           result.errors.push(`No blob found for image ${image.UUID}`);
@@ -273,6 +294,7 @@ export class ImageSyncService {
       lastSyncTime: new Date().toISOString()
     });
 
+    result.success = result.errors.length === 0;
     return result;
   }
 
@@ -280,6 +302,7 @@ export class ImageSyncService {
    * Download synced images from cloud to local device
    */
   async downloadFromCloud(includeBlobs: boolean = true): Promise<{ images: MobiansImage[], blobs: Map<string, Blob> }> {
+    const userId = this.authService.getUserId();
     const images: MobiansImage[] = [];
     const blobs = new Map<string, Blob>();
 
@@ -297,6 +320,7 @@ export class ImageSyncService {
       );
 
       for (const item of response) {
+        if (userId !== this.authService.getUserId()) return { images: [], blobs: new Map() };
         const image: MobiansImage = {
           UUID: item.image_uuid,
           characterId: item.character_id || undefined, characterLookId: item.character_look_id || undefined,
@@ -334,7 +358,8 @@ export class ImageSyncService {
       return { images, blobs };
     } catch (error) {
       console.error('Failed to download from cloud:', error);
-      return { images, blobs };
+      // A failed request must not be mistaken for an empty cloud library.
+      throw error;
     }
   }
 
@@ -342,6 +367,7 @@ export class ImageSyncService {
    * Download image blobs for a known set of cloud image UUIDs.
    */
   async downloadImageBlobs(imageUUIDs: string[]): Promise<Map<string, Blob>> {
+    const userId = this.authService.getUserId();
     const blobs = new Map<string, Blob>();
 
     if (!this.authService.isLoggedIn()) {
@@ -361,6 +387,7 @@ export class ImageSyncService {
     }
 
     for (let i = 0; i < uniqueUUIDs.length; i += this.CLOUD_BLOB_BATCH_SIZE) {
+      if (userId !== this.authService.getUserId()) return new Map();
       const chunk = uniqueUUIDs.slice(i, i + this.CLOUD_BLOB_BATCH_SIZE);
 
       try {
@@ -373,6 +400,7 @@ export class ImageSyncService {
         );
 
         for (const item of response || []) {
+          if (userId !== this.authService.getUserId()) return new Map();
           if (!item?.image_uuid || !item.image_blob) {
             continue;
           }
@@ -485,6 +513,10 @@ export class ImageSyncService {
       );
       return true;
     } catch (error) {
+      if ((error as any)?.status === 404) {
+        this.syncedImageUUIDs.delete(imageUUID);
+        this.saveSyncedUUIDsToStorage();
+      }
       console.error('Failed to update image metadata:', error);
       return false;
     }
@@ -494,10 +526,13 @@ export class ImageSyncService {
    * Remove an image from cloud sync
    */
   async unsyncImage(imageUUID: string): Promise<boolean> {
+    this.ensureSyncAccount();
+    const userId = this.authService.getUserId();
     if (!this.authService.isLoggedIn()) {
       return false;
     }
 
+    let alreadyMissing = false;
     try {
       await firstValueFrom(
         this.http.delete(`${this.API_URL}/history/sync/image/${imageUUID}`, {
@@ -505,24 +540,25 @@ export class ImageSyncService {
         })
       );
 
-      this.syncedImageUUIDs.delete(imageUUID);
-      this.saveSyncedUUIDsToStorage();
-
-      const currentStatus = this.syncStatusSubject.value;
-      this.syncStatusSubject.next({
-        ...currentStatus,
-        imagesInCloud: Math.max(0, currentStatus.imagesInCloud - 1),
-        quota: {
-          ...currentStatus.quota,
-          used: Math.max(0, currentStatus.quota.used - 1)
-        }
-      });
-
-      return true;
     } catch (error) {
-      console.error('Failed to unsync image:', error);
-      return false;
+      if ((error as any)?.status !== 404) {
+        console.error('Failed to unsync image:', error);
+        return false;
+      }
+      // A previous request may have succeeded before its response was lost.
+      alreadyMissing = true;
     }
+    if (userId !== this.authService.getUserId()) return false;
+    const wasSynced = this.syncedImageUUIDs.delete(imageUUID);
+    this.saveSyncedUUIDsToStorage();
+    const removedCount = !alreadyMissing || wasSynced ? 1 : 0;
+    const currentStatus = this.syncStatusSubject.value;
+    this.syncStatusSubject.next({
+      ...currentStatus,
+      imagesInCloud: Math.max(0, currentStatus.imagesInCloud - removedCount),
+      quota: { ...currentStatus.quota, used: Math.max(0, currentStatus.quota.used - removedCount) }
+    });
+    return true;
   }
 
   // Helper: Convert Blob to base64
@@ -553,8 +589,11 @@ export class ImageSyncService {
 
   // Load synced UUIDs from localStorage
   private loadSyncedUUIDsFromStorage(): void {
+    this.syncedUserId = this.authService.getUserId();
+    this.syncedImageUUIDs.clear();
+    if (!this.syncedUserId) return;
     try {
-      const stored = localStorage.getItem('syncedImageUUIDs');
+      const stored = localStorage.getItem(`syncedImageUUIDs:${this.syncedUserId}`);
       if (stored) {
         this.syncedImageUUIDs = new Set(JSON.parse(stored));
       }
@@ -565,10 +604,18 @@ export class ImageSyncService {
 
   // Save synced UUIDs to localStorage
   private saveSyncedUUIDsToStorage(): void {
+    if (!this.syncedUserId || this.syncedUserId !== this.authService.getUserId()) return;
     try {
-      localStorage.setItem('syncedImageUUIDs', JSON.stringify([...this.syncedImageUUIDs]));
+      localStorage.setItem(`syncedImageUUIDs:${this.syncedUserId}`, JSON.stringify([...this.syncedImageUUIDs]));
     } catch (error) {
       console.error('Failed to save synced UUIDs to storage:', error);
     }
+  }
+
+  private ensureSyncAccount(): void {
+    if (this.syncedUserId === this.authService.getUserId()) return;
+    this.loadSyncedUUIDsFromStorage();
+    this.syncStatusSubject.next({ syncEnabled: false, imagesInCloud: 0,
+      quota: { used: 0, limit: CLOUD_IMAGE_LIMIT }, lastSyncTime: null, isSyncing: false });
   }
 }

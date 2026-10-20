@@ -11,7 +11,7 @@ import { MenuItem, MessageService } from 'primeng/api';
 import { MenuModule } from 'primeng/menu';
 import { AuthService } from 'src/app/auth/auth.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
-import { ImageSyncService, SyncStatus } from 'src/app/image-sync.service';
+import { CLOUD_IMAGE_LIMIT, ImageSyncService, SyncStatus } from 'src/app/image-sync.service';
 import { SharedService } from 'src/app/shared.service';
 import { ImageTag, MobiansImage, MobiansImageMetadata } from 'src/_shared/mobians-image.interface';
 import { LoraHistoryPromptService } from '../lora-history-prompt.service';
@@ -126,7 +126,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   syncStatus: SyncStatus = {
     syncEnabled: false,
     imagesInCloud: 0,
-    quota: { used: 0, limit: 1000 },
+    quota: { used: 0, limit: CLOUD_IMAGE_LIMIT },
     lastSyncTime: null,
     isSyncing: false
   };
@@ -145,6 +145,17 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private readonly tagsLastSyncKey = 'mobians:tags-last-sync';
   private tagsSyncInProgress = false;
   private cdScheduled = false;
+  private historyInitialized = false;
+  private cloudImages = new Map<string, MobiansImage>();
+  private cloudMetadataLoaded = false;
+  private cloudMetadataRequest?: Promise<void>;
+  private cloudMetadataUserId: string | null = null;
+  private cloudSyncTask?: Promise<void>;
+  private localHistoryCache: MobiansImage[] = [];
+  private favoriteMutationRevision = 0;
+  private readonly deletedCloudImages = new Set<string>();
+  readonly favoriteSavesInFlight = new Set<string>();
+  private readonly onOnline = () => { void this.syncFromCloud(); };
 
   private readonly onStorage = (e: StorageEvent) => {
     if (e.key === this.tagsUpdateKey) {
@@ -198,20 +209,29 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.authService.credits$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((creditsData) => {
+        const previousUserId = this.cloudMetadataUserId;
         this.isLoggedIn = !!creditsData || this.authService.isLoggedIn();
+        this.ensureCloudAccount();
+        if (this.historyInitialized && this.isLoggedIn && previousUserId !== this.cloudMetadataUserId) {
+          void this.syncFromCloud();
+        }
       });
 
     window.addEventListener('storage', this.onStorage);
     window.addEventListener('resize', this.onViewportResize);
+    window.addEventListener('online', this.onOnline);
     this.initializeHistory().catch((error) => {
       console.error('Failed to initialize image history:', error);
     });
   }
 
   ngOnDestroy() {
+    this.favoritePageLoadToken++;
+    this.pageLoadToken++;
     if (this.promptCopyResetTimer) clearTimeout(this.promptCopyResetTimer);
     window.removeEventListener('storage', this.onStorage);
     window.removeEventListener('resize', this.onViewportResize);
+    window.removeEventListener('online', this.onOnline);
     if (this.cloudSyncInterval) {
       clearInterval(this.cloudSyncInterval);
     }
@@ -226,9 +246,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     await this.loadTags();
     await this.searchImages();
     await this.updateTagCounts();
+    this.historyInitialized = true;
 
     if (this.authService.isLoggedIn()) {
-      await this.syncFromCloud();
+      await this.syncFromCloud(true);
     }
 
     this.startCloudTagSync();
@@ -1146,27 +1167,144 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async toggleFavorite(image: MobiansImage) {
-    const nextFavorite = !image.favorite;
-    image.favorite = nextFavorite;
-    this.updateFavoriteStateAcrossCollections(image.UUID, nextFavorite);
-    await this.updateImageInDB(image);
-    await this.updateFavoriteImages();
-    await this.updateTagCounts();
+    if (this.favoriteSavesInFlight.has(image.UUID)) return;
+    this.favoriteSavesInFlight.add(image.UUID);
+    const previous = { favorite: image.favorite, favoriteSyncPending: image.favoriteSyncPending,
+      favoriteSyncUserId: image.favoriteSyncUserId, favoriteSyncRevision: image.favoriteSyncRevision };
+    try {
+      this.markFavoriteMutation();
+      image.favorite = !image.favorite;
+      if (image.favorite) this.deletedCloudImages.delete(image.UUID);
+      if (this.authService.isLoggedIn()) {
+        image.favoriteSyncPending = true;
+        image.favoriteSyncUserId = this.authService.getUserId() || undefined;
+        image.favoriteSyncRevision = uuidv4();
+      }
+      this.updateFavoriteStateAcrossCollections(image.UUID, !!image.favorite);
+      if (!await this.updateImageInDB(image)) {
+        Object.assign(image, previous);
+        this.updateFavoriteStateAcrossCollections(image.UUID, !!previous.favorite);
+        this.messageService.add({ severity: 'error', summary: 'Favorite not saved',
+          detail: 'Could not save your favorite on this device. Please try again.' });
+        return;
+      }
+      await this.updateFavoriteImages();
+      await this.updateTagCounts();
+      if (image.favoriteSyncPending && !await this.syncFavoriteChange(image)) {
+        const cloudFull = image.favorite && this.syncStatus.quota.used >= this.syncStatus.quota.limit;
+        this.messageService.add({ severity: 'warn', summary: cloudFull ? 'Cloud backup full' : image.favorite ? 'Cloud backup pending' : 'Cloud removal pending',
+          detail: cloudFull
+            ? `Your favorite is saved on this device. You've reached the ${this.syncStatus.quota.limit.toLocaleString()}-image cloud limit. Unfavorite an image to free space. This backup will retry automatically.`
+            : image.favorite
+            ? `Your favorite change is saved on this device. Cloud sync will retry automatically. Check your connection or the ${this.syncStatus.quota.limit.toLocaleString()}-image cloud limit.`
+            : 'Your favorite change is saved here. Cloud removal will retry automatically once a local copy is available and the connection is restored.', life: 7000 });
+      }
+    } finally {
+      this.favoriteSavesInFlight.delete(image.UUID);
+      this.runInAngularZone(() => {});
+    }
+  }
 
-    if (this.authService.isLoggedIn()) {
-      if (this.isImageSynced(image.UUID)) {
-        this.imageSyncService.updateImageMetadata(image.UUID, { is_favorite: image.favorite });
-      } else if (image.favorite) {
-        const blob = await this.getImageBlob(image.UUID);
-        if (blob) {
-          this.imageSyncService.syncImage(image, blob).then(success => {
-            if (success) {
-              console.log('Image synced to cloud:', image.UUID);
-            }
-          });
+  private async syncFavoriteChange(image: MobiansImage): Promise<boolean> {
+    try {
+      return await this.persistFavoriteChange(image);
+    } catch (error) {
+      console.error('Favorite change is still pending:', error);
+      return false;
+    }
+  }
+
+  private async persistFavoriteChange(image: MobiansImage): Promise<boolean> {
+    const userId = this.authService.getUserId();
+    if (!this.authService.isLoggedIn() || image.favoriteSyncUserId !== userId) return false;
+    const revision = image.favoriteSyncRevision;
+    const db = await this.getDatabase();
+    const latest = await this.getLocalImage(db, image.UUID);
+    if (!latest || latest.favoriteSyncRevision !== revision || !latest.favoriteSyncPending) return true;
+    if (userId !== this.authService.getUserId()) return false;
+    let saved = false;
+    if (!image.favorite) {
+      // Keep a durable local copy before removing the only cloud copy.
+      let blob = await this.getImageBlob(image.UUID);
+      if (!blob?.size) {
+        blob = image.blob?.size ? image.blob : (await this.imageSyncService.downloadImageBlobs([image.UUID])).get(image.UUID);
+        if (!blob?.size || !await this.storeCloudImageBlob(db, image.UUID, blob)) return false;
+      }
+      if (userId !== this.authService.getUserId()) return false;
+      const current = await this.getLocalImage(db, image.UUID);
+      if (!current || current.favoriteSyncRevision !== revision || !current.favoriteSyncPending) return true;
+      if (userId !== this.authService.getUserId()) return false;
+      // DELETE is intentional even when the local sync-membership cache is stale.
+      saved = await this.imageSyncService.unsyncImage(image.UUID);
+    } else if (this.isImageSynced(image.UUID)) {
+      saved = await this.imageSyncService.updateImageMetadata(image.UUID, { is_favorite: true });
+    }
+    if (image.favorite && !saved && !this.isImageSynced(image.UUID)) {
+      const blob = image.blob || await this.getImageBlob(image.UUID);
+      if (userId !== this.authService.getUserId()) return false;
+      saved = !!blob && await this.imageSyncService.syncImage(image, blob);
+    }
+    if (!saved || userId !== this.authService.getUserId()) return false;
+
+    // Do not clear a newer change or resurrect an image deleted during the request.
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(this.storeName, 'readwrite');
+      const store = tx.objectStore(this.storeName);
+      const request = store.get(image.UUID);
+      request.onsuccess = () => {
+        const current = request.result as MobiansImage | undefined;
+        if (current && current.favoriteSyncRevision === revision) {
+          current.favoriteSyncPending = false;
+          store.put(current);
         }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    this.markFavoriteMutation();
+    if (image.favorite) {
+      this.deletedCloudImages.delete(image.UUID);
+      const cached = this.cloudImages.get(image.UUID);
+      if (cached) cached.favorite = true;
+    } else {
+      this.cloudImages.delete(image.UUID);
+      this.deletedCloudImages.add(image.UUID);
+    }
+    image.favoriteSyncPending = false;
+    return true;
+  }
+
+  private async retryFavoriteChanges(): Promise<void> {
+    const userId = this.authService.getUserId();
+    const images = await this.getAllImagesFromDb(true);
+    const pending = images.filter(i => i.favoriteSyncPending && i.favoriteSyncUserId === userId)
+      .sort((a, b) => Number(!!a.favorite) - Number(!!b.favorite));
+    for (const image of pending.slice(0, 20)) {
+      if (this.favoriteSavesInFlight.has(image.UUID)) continue;
+      this.favoriteSavesInFlight.add(image.UUID);
+      try {
+        await this.syncFavoriteChange(image);
+      } finally {
+        this.favoriteSavesInFlight.delete(image.UUID);
       }
     }
+  }
+
+  private getFavoriteRevision(): string {
+    try {
+      return `${localStorage.getItem('mobians:favorite-revision') || ''}:${this.favoriteMutationRevision}`;
+    } catch {
+      return String(this.favoriteMutationRevision);
+    }
+  }
+
+  private markFavoriteMutation(): void {
+    this.favoriteMutationRevision++;
+    try {
+      // Shared by the generator, pickers, and other tabs using this browser history.
+      localStorage.setItem('mobians:favorite-revision', uuidv4());
+    } catch {}
   }
 
   async deleteImage(image: MobiansImage) {
@@ -1177,8 +1315,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (!confirmed) {
         return;
       }
-      await this.imageSyncService.unsyncImage(image.UUID);
+      if (!await this.imageSyncService.unsyncImage(image.UUID)) {
+        this.messageService.add({ severity: 'error', summary: 'Delete failed',
+          detail: 'Could not delete the cloud image. Please try again.' });
+        return;
+      }
     }
+
+    this.deletedCloudImages.add(image.UUID);
+    this.cloudImages.delete(image.UUID);
 
     this.safeRevoke(image.url);
     this.imageUrlCache.delete(image.UUID);
@@ -1207,7 +1352,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     await this.updateFavoriteImages();
   }
 
-  async updateImageInDB(image: MobiansImage) {
+  async updateImageInDB(image: MobiansImage): Promise<boolean> {
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction(this.storeName, 'readwrite');
@@ -1226,8 +1371,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         request.onerror = () => reject(request.error);
       });
       await transactionDone;
+      return true;
     } catch (error) {
       console.error('Failed to update image in IndexedDB', error);
+      return false;
     }
   }
 
@@ -1353,7 +1500,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         try {
           if (this.isImageSynced(image.UUID)) {
             if (!await this.imageSyncService.updateImageMetadata(image.UUID, { tags: image.tags })) cloudSyncFailed = true;
-          } else if (!remove) {
+          } else if (!remove && image.favorite) {
             const blob = await this.getImageBlob(image.UUID);
             if (blob && !await this.imageSyncService.syncImage(image, blob)) cloudSyncFailed = true;
           }
@@ -1414,6 +1561,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       return;
     }
 
+    await this.imageSyncService.fetchSyncStatus();
     const allImages: MobiansImage[] = [];
     const allMetadata = await this.getAllImagesFromDb();
     for (const meta of allMetadata) {
@@ -1452,15 +1600,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
     } else {
       this.messageService.add({
-        severity: 'error',
-        summary: 'Sync Failed',
-        detail: result.errors.join(', ')
+        severity: result.uploadedCount > 0 ? 'warn' : 'error',
+        summary: result.uploadedCount > 0 ? 'Partial Backup' : 'Sync Failed',
+        detail: `Backed up ${result.uploadedCount} image(s). ${result.errors.join(', ')}`
       });
     }
   }
 
   async refreshSyncStatus() {
-    await this.imageSyncService.fetchSyncStatus();
+    await this.syncFromCloud();
   }
 
   async syncSingleImage(image: MobiansImage) {
@@ -1832,6 +1980,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (!blob) {
         blob = await this.getBlobFromLegacyBase64(image);
       }
+      if (!blob && this.authService.isLoggedIn() && this.cloudImages.has(uuid)) {
+        const cloudBlobs = await this.imageSyncService.downloadImageBlobs([uuid]);
+        blob = cloudBlobs.get(uuid);
+        if (blob) {
+          // Rendering a cloud favorite must also work when local storage is full.
+          const db = await this.getDatabase();
+          await this.storeCloudImage(db, image, blob);
+        }
+      }
       if (!blob) return;
 
       const previousUrl = image.url;
@@ -1994,8 +2151,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
           request.onerror = () => reject(request.error);
         });
       } catch (error) {
-        console.warn('Failed to load images for search, falling back:', error);
-        results = [];
+        // Keep the current list on a storage failure instead of showing an empty history.
+        throw error;
       }
 
       if (query.length > 0) {
@@ -2186,7 +2343,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async updateFavoriteImages(preservePage: boolean = true) {
+    const token = ++this.favoritePageLoadToken;
     const allImages = await this.getHistorySourceImages();
+    if (token !== this.favoritePageLoadToken) return;
 
     const favorites = allImages
       .filter((img) => img.favorite)
@@ -2220,6 +2379,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     });
 
     const nextFavoriteImages = await this.paginateFavoriteImages(filteredFavorites, this.favoriteCurrentPageNumber);
+    if (token !== this.favoritePageLoadToken) return;
     this.runInAngularZone(() => {
       this.favoritePageImages = nextFavoriteImages;
     });
@@ -2227,16 +2387,52 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async getHistorySourceImages(): Promise<MobiansImage[]> {
-    const localImages = await this.getAllImagesFromDb();
-    if (localImages.length > 0 || !this.authService.isLoggedIn()) {
-      return localImages;
-    }
-
     try {
+      this.localHistoryCache = await this.getAllImagesFromDb(true);
+    } catch (error) {
+      console.warn('Keeping the previous history after a storage read failed:', error);
+    }
+    this.ensureCloudAccount();
+    if (!this.authService.isLoggedIn()) return this.localHistoryCache;
+    if (!this.cloudMetadataLoaded) {
+      try {
+        await this.loadCloudMetadata();
+      } catch (error) {
+        console.warn('Keeping the previous cloud favorites after a sync failed:', error);
+      }
+    }
+    // Local metadata wins for duplicate UUIDs, including changes awaiting upload.
+    const images = new Map(this.cloudImages);
+    for (const image of this.localHistoryCache) images.set(image.UUID, image);
+    return Array.from(images.values());
+  }
+
+  private ensureCloudAccount(): void {
+    const userId = this.authService.getUserId();
+    if (userId === this.cloudMetadataUserId) return;
+    this.cloudMetadataUserId = userId;
+    this.cloudImages.clear();
+    this.deletedCloudImages.clear();
+    this.cloudMetadataLoaded = false;
+    this.cloudMetadataRequest = undefined;
+  }
+
+  private async loadCloudMetadata(refresh = false): Promise<void> {
+    this.ensureCloudAccount();
+    if (this.cloudMetadataRequest) return this.cloudMetadataRequest;
+    if (this.cloudMetadataLoaded && !refresh) return;
+    const userId = this.cloudMetadataUserId;
+    const request = (async () => {
       const { images } = await this.imageSyncService.downloadFromCloud(false);
-      return Array.isArray(images) ? images : [];
-    } catch {
-      return [];
+      if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return;
+      this.cloudImages = new Map(images.filter(image => !this.deletedCloudImages.has(image.UUID)).map(image => [image.UUID, image]));
+      this.cloudMetadataLoaded = true;
+    })();
+    this.cloudMetadataRequest = request;
+    try {
+      await request;
+    } finally {
+      if (this.cloudMetadataRequest === request) this.cloudMetadataRequest = undefined;
     }
   }
 
@@ -2463,7 +2659,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     return createdAt >= lastSyncAt;
   }
 
-  private async getAllImagesFromDb(): Promise<MobiansImage[]> {
+  private async getAllImagesFromDb(throwOnError = false): Promise<MobiansImage[]> {
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction([this.storeName], 'readonly');
@@ -2475,6 +2671,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
     } catch (error) {
       console.error('Failed to load images from IndexedDB', error);
+      if (throwOnError) throw error;
       return [];
     }
   }
@@ -2705,6 +2902,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     void this.syncTagsFromCloud();
     this.cloudSyncInterval = window.setInterval(() => {
       void this.syncTagsFromCloud();
+      void this.syncFromCloud();
     }, this.cloudSyncIntervalMs);
   }
 
@@ -2759,12 +2957,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         transaction.onerror = () => resolve(false);
         transaction.onabort = () => resolve(false);
 
-        const imageMetadata: any = { ...cloudImage };
-        delete imageMetadata.blob;
-        delete imageMetadata.url;
-
-        const imageRequest = imageStore.put(imageMetadata);
-        imageRequest.onerror = () => { failed = true; };
+        const currentRequest = imageStore.get(cloudImage.UUID);
+        currentRequest.onsuccess = () => {
+          // A star click may have created local metadata while the blob was downloading.
+          const imageMetadata: any = { ...cloudImage, ...currentRequest.result };
+          delete imageMetadata.blob;
+          delete imageMetadata.url;
+          imageStore.put(imageMetadata);
+        };
+        currentRequest.onerror = () => { failed = true; };
 
         const blobRequest = blobStore.put({ UUID: cloudImage.UUID, blob });
         blobRequest.onerror = () => { failed = true; };
@@ -2796,56 +2997,69 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private async updateLocalCloudMetadata(
     db: IDBDatabase,
     localImage: MobiansImage,
-    cloudImage: MobiansImage
+    cloudImage: MobiansImage,
+    favoriteRevision = this.getFavoriteRevision()
   ): Promise<boolean> {
-    const tagsChanged = JSON.stringify(localImage.tags || []) !== JSON.stringify(cloudImage.tags || []);
-    const favoriteChanged = localImage.favorite !== cloudImage.favorite;
-
-    if (!tagsChanged && !favoriteChanged) {
-      return false;
-    }
-
-    localImage.tags = cloudImage.tags || [];
-    localImage.favorite = cloudImage.favorite;
-
-    await new Promise<void>((resolve) => {
+    return new Promise<boolean>((resolve) => {
       const transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
-      store.put(localImage);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => resolve();
-      transaction.onabort = () => resolve();
+      let updated: MobiansImage | undefined;
+      const request = store.get(localImage.UUID);
+      request.onsuccess = () => {
+        const current = request.result as MobiansImage | undefined;
+        if (!current) return;
+        const favorite = current.favoriteSyncPending || favoriteRevision !== this.getFavoriteRevision()
+          ? current.favorite : cloudImage.favorite;
+        if (current.favorite === favorite && JSON.stringify(current.tags || []) === JSON.stringify(cloudImage.tags || [])) return;
+        updated = { ...current, tags: cloudImage.tags || [], favorite };
+        store.put(updated);
+      };
+      transaction.oncomplete = () => {
+        if (updated) {
+          Object.assign(localImage, updated);
+          const cached = this.imageHistoryMetadata.find(i => i.UUID === updated!.UUID);
+          if (cached) Object.assign(cached, { tags: updated.tags, favorite: updated.favorite });
+        }
+        resolve(!!updated);
+      };
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
     });
-
-    const cachedImg = this.imageHistoryMetadata.find(i => i.UUID === cloudImage.UUID);
-    if (cachedImg) {
-      cachedImg.tags = cloudImage.tags || [];
-      cachedImg.favorite = cloudImage.favorite;
-    }
-
-    return true;
   }
 
-  private async syncFromCloud() {
-    try {
-      await this.imageSyncService.fetchSyncStatus();
-
-      const mergedCount = await this.mergeCloudImages();
-      if (mergedCount > 0) {
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Synced from Cloud',
-          detail: `${mergedCount} image(s) restored from cloud.`
-        });
+  private async syncFromCloud(notify = false): Promise<void> {
+    if (!this.authService.isLoggedIn() || this.destroyRef.destroyed) return;
+    if (this.cloudSyncTask) return this.cloudSyncTask;
+    const task = (async () => {
+      try {
+        await this.imageSyncService.fetchSyncStatus();
+        await this.retryFavoriteChanges();
+        const mergedCount = await this.mergeCloudImages();
+        if (notify && mergedCount > 0 && !this.destroyRef.destroyed) {
+          this.messageService.add({ severity: 'success', summary: 'Synced from Cloud',
+            detail: `${mergedCount} image(s) restored from cloud.` });
+        }
+      } catch (error) {
+        console.error('Failed to sync from cloud; will retry:', error);
       }
-    } catch (error) {
-      console.error('Failed to sync from cloud:', error);
+    })();
+    this.cloudSyncTask = task;
+    try {
+      await task;
+    } finally {
+      if (this.cloudSyncTask === task) this.cloudSyncTask = undefined;
     }
   }
 
   async mergeCloudImages(): Promise<number> {
     try {
-      const { images } = await this.imageSyncService.downloadFromCloud(false);
+      const favoriteRevision = this.getFavoriteRevision();
+      const userId = this.authService.getUserId();
+      await this.loadCloudMetadata(true);
+      if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return 0;
+      const images = Array.from(this.cloudImages.values());
+      // Publish metadata before restoring files; generating cannot hide these entries.
+      await this.updateFavoriteImages();
       if (images.length === 0) return 0;
 
       const db = await this.getDatabase();
@@ -2856,6 +3070,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const blobOnlyUUIDs: string[] = [];
 
       for (const cloudImage of images) {
+        if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return 0;
         const localImage = await this.getLocalImage(db, cloudImage.UUID);
 
         if (!localImage) {
@@ -2863,7 +3078,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
           continue;
         }
 
-        if (await this.updateLocalCloudMetadata(db, localImage, cloudImage)) {
+        if (await this.updateLocalCloudMetadata(db, localImage, cloudImage, favoriteRevision)) {
           imagesUpdated++;
         }
 
@@ -2877,8 +3092,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         ...blobOnlyUUIDs
       ];
       const cloudBlobs = await this.imageSyncService.downloadImageBlobs(blobUUIDsToDownload);
+      if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return 0;
 
       for (const cloudImage of imagesToAdd) {
+        if (this.deletedCloudImages.has(cloudImage.UUID)) continue;
         const blob = cloudBlobs.get(cloudImage.UUID);
         if (!blob) {
           continue;
@@ -2890,6 +3107,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       }
 
       for (const uuid of blobOnlyUUIDs) {
+        if (this.deletedCloudImages.has(uuid)) continue;
         const blob = cloudBlobs.get(uuid);
         if (!blob) {
           continue;

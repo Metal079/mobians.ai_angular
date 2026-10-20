@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { ImageSyncService } from './image-sync.service';
 
@@ -9,11 +9,12 @@ describe('ImageSyncService', () => {
   let service: ImageSyncService;
 
   beforeEach(() => {
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['getToken', 'isLoggedIn']);
+    authService = jasmine.createSpyObj<AuthService>('AuthService', ['getToken', 'isLoggedIn', 'getUserId']);
     http = jasmine.createSpyObj<HttpClient>('HttpClient', ['delete', 'get', 'patch', 'post']);
 
     authService.getToken.and.returnValue('test-token');
     authService.isLoggedIn.and.returnValue(true);
+    authService.getUserId.and.returnValue('user-1');
 
     try {
       localStorage.clear();
@@ -60,5 +61,111 @@ describe('ImageSyncService', () => {
       { tags: [] }, jasmine.any(Object)
     );
     expect(http.delete).not.toHaveBeenCalled();
+  });
+
+  it('uses the quota reported by the API and permits the 1,500th upload', async () => {
+    http.get.and.returnValue(of({ images_in_cloud: 1499, quota_limit: 1500, synced_uuids: [] }));
+    const status = await service.fetchSyncStatus();
+    expect(status.quota).toEqual({ used: 1499, limit: 1500 });
+    http.post.and.returnValue(of({ success: true }));
+    const image: any = { UUID: 'last-slot', width: 1, height: 1, aspectRatio: '1:1', favorite: true };
+    expect(await service.syncImage(image, new Blob(['pixels']))).toBeTrue();
+    expect(await service.syncImage({ ...image, UUID: 'over-limit' }, new Blob(['pixels']))).toBeFalse();
+    expect(http.post).toHaveBeenCalledTimes(1);
+    // Updating an existing image remains allowed at the limit.
+    expect(await service.syncImage(image, new Blob(['pixels']))).toBeTrue();
+  });
+
+  it('reports batch upload failures instead of returning a successful backup', async () => {
+    spyOn(service, 'syncImage').and.resolveTo(false);
+    const result = await service.syncBatchImages([{ UUID: 'failed' } as any], async () => new Blob(['pixels']));
+    expect(result.success).toBeFalse();
+    expect(result.uploadedCount).toBe(0);
+    expect(result.errors.length).toBe(1);
+  });
+
+  it('reports images left on the device when a batch reaches the cloud limit', async () => {
+    const subject = (service as any).syncStatusSubject;
+    subject.next({ ...subject.value, quota: { used: 1499, limit: 1500 } });
+    spyOn(service, 'syncImage').and.callFake(async () => {
+      subject.next({ ...subject.value, quota: { used: 1500, limit: 1500 } });
+      return true;
+    });
+    const result = await service.syncBatchImages(['a', 'b', 'c'].map(UUID => ({ UUID } as any)), async () => new Blob(['pixels']));
+    expect(result.uploadedCount).toBe(1);
+    expect(result.success).toBeFalse();
+    expect(result.errors[0]).toContain('2 image(s) remain on this device');
+  });
+
+  it('does not turn a failed cloud read into an empty library', async () => {
+    http.get.and.returnValue(throwError(() => new Error('Offline')));
+    await expectAsync(service.downloadFromCloud(false)).toBeRejected();
+  });
+
+  it('clears stale sync membership after a missing-image PATCH so it can be uploaded again', async () => {
+    (service as any).syncedImageUUIDs.add('missing');
+    http.patch.and.returnValue(throwError(() => ({ status: 404 })));
+    expect(await service.updateImageMetadata('missing', { is_favorite: true })).toBeFalse();
+    expect(service.isImageSynced('missing')).toBeFalse();
+  });
+
+  it('does not reuse another account\'s synced UUID cache', async () => {
+    (service as any).syncedImageUUIDs.add('first-user-image');
+    expect(service.isImageSynced('first-user-image')).toBeTrue();
+    authService.getUserId.and.returnValue('user-2');
+    expect(service.isImageSynced('first-user-image')).toBeFalse();
+  });
+
+  it('deletes the cloud backup and immediately frees its quota slot', async () => {
+    http.get.and.returnValue(of({ images_in_cloud: 30, quota_limit: 1500, synced_uuids: ['unstarred'] }));
+    await service.fetchSyncStatus();
+    http.delete.and.returnValue(of({ success: true }));
+    expect(await service.unsyncImage('unstarred')).toBeTrue();
+    expect(http.delete).toHaveBeenCalledWith(
+      jasmine.stringMatching(/\/history\/sync\/image\/unstarred$/), jasmine.any(Object));
+    expect(service.isImageSynced('unstarred')).toBeFalse();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(29);
+    expect((service as any).syncStatusSubject.value.imagesInCloud).toBe(29);
+  });
+
+  it('treats an already removed backup as success without decrementing quota twice', async () => {
+    http.get.and.returnValue(of({ images_in_cloud: 30, quota_limit: 1500, synced_uuids: ['missing'] }));
+    await service.fetchSyncStatus();
+    http.delete.and.returnValue(throwError(() => ({ status: 404 })));
+    expect(await service.unsyncImage('missing')).toBeTrue();
+    expect(await service.unsyncImage('missing')).toBeTrue();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(29);
+    expect(service.isImageSynced('missing')).toBeFalse();
+  });
+
+  it('keeps membership and quota when cloud removal fails', async () => {
+    http.get.and.returnValue(of({ images_in_cloud: 30, quota_limit: 1500, synced_uuids: ['retained'] }));
+    await service.fetchSyncStatus();
+    http.delete.and.returnValue(throwError(() => ({ status: 503 })));
+    expect(await service.unsyncImage('retained')).toBeFalse();
+    expect(service.isImageSynced('retained')).toBeTrue();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(30);
+  });
+
+  it('does not apply a cloud deletion response to another account', async () => {
+    const response = new Subject<any>();
+    http.delete.and.returnValue(response);
+    const deletion = service.unsyncImage('first-user-image');
+    authService.getUserId.and.returnValue('user-2');
+    service.isImageSynced('second-user-image'); // Initialize the second account's cache.
+    (service as any).syncedImageUUIDs.add('second-user-image');
+    response.next({ success: true });
+    expect(await deletion).toBeFalse();
+    expect(service.isImageSynced('second-user-image')).toBeTrue();
+  });
+
+  it('discards a cloud response if the signed-in account changed during the request', async () => {
+    const response = new Subject<any[]>();
+    http.get.and.returnValue(response);
+    const download = service.downloadFromCloud(false);
+    authService.getUserId.and.returnValue('user-2');
+    response.next([{ image_uuid: 'first-user-image' }]);
+    expect((await download).images).toEqual([]);
+    expect(service.isImageSynced('first-user-image')).toBeFalse();
   });
 });

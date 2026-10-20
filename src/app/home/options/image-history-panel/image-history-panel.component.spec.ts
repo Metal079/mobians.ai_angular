@@ -1,7 +1,7 @@
 import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AuthService } from 'src/app/auth/auth.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
@@ -36,15 +36,16 @@ class SharedServiceStub {
 }
 
 class AuthServiceStub {
-  credits$ = of(null);
+  credits$ = new BehaviorSubject<any>(null);
   isLoggedIn = jasmine.createSpy('isLoggedIn').and.returnValue(false);
+  getUserId = jasmine.createSpy('getUserId').and.returnValue('user-1');
 }
 
 class ImageSyncServiceStub {
   syncStatus$ = of({
     syncEnabled: false,
     imagesInCloud: 0,
-    quota: { used: 0, limit: 1000 },
+    quota: { used: 0, limit: 1500 },
     lastSyncTime: null,
     isSyncing: false
   });
@@ -59,7 +60,7 @@ class ImageSyncServiceStub {
   fetchSyncStatus = jasmine.createSpy('fetchSyncStatus').and.resolveTo({
     syncEnabled: false,
     imagesInCloud: 0,
-    quota: { used: 0, limit: 1000 },
+    quota: { used: 0, limit: 1500 },
     lastSyncTime: null,
     isSyncing: false
   });
@@ -405,6 +406,7 @@ describe('ImageHistoryPanelComponent', () => {
 
     spyOn(component as any, 'updateImageInDB').and.callFake(async () => {
       callOrder.push('update-db');
+      return true;
     });
     spyOn(component, 'updateFavoriteImages').and.callFake(async () => {
       callOrder.push('update-favorites');
@@ -427,7 +429,7 @@ describe('ImageHistoryPanelComponent', () => {
     component.imageHistoryMetadata = [metadataImage];
     component.favoritePageImages = [favoriteViewImage];
 
-    spyOn(component as any, 'updateImageInDB').and.resolveTo();
+    spyOn(component as any, 'updateImageInDB').and.resolveTo(true);
     spyOn(component, 'updateFavoriteImages').and.resolveTo();
     spyOn(component, 'updateTagCounts').and.resolveTo();
     authService.isLoggedIn.and.returnValue(false);
@@ -438,15 +440,17 @@ describe('ImageHistoryPanelComponent', () => {
     expect(component.favoritePageImages[0].favorite).toBeFalse();
   });
 
-  it('getHistorySourceImages should use local IndexedDB data before cloud data', async () => {
+  it('merges local and cloud history by UUID and keeps local changes', async () => {
     const localImage = createImage({ UUID: 'local-1', favorite: true });
     authService.isLoggedIn.and.returnValue(true);
     spyOn(component as any, 'getAllImagesFromDb').and.resolveTo([localImage]);
+    const cloudOnly = createImage({ UUID: 'cloud-only', favorite: true });
+    imageSyncService.downloadFromCloud.and.resolveTo({ images: [cloudOnly, { ...localImage, favorite: false }], blobs: new Map() });
 
     const images = await (component as any).getHistorySourceImages();
 
-    expect(images).toEqual([localImage]);
-    expect(imageSyncService.downloadFromCloud).not.toHaveBeenCalled();
+    expect(images).toEqual([cloudOnly, localImage]);
+    expect(imageSyncService.downloadFromCloud).toHaveBeenCalledWith(false);
   });
 
   it('getHistorySourceImages should fall back to cloud data when local history is empty', async () => {
@@ -552,6 +556,253 @@ describe('ImageHistoryPanelComponent', () => {
     const tag2 = component.availableTags.find((tag) => tag.id === 't2');
     expect(tag1?.imageCount).toBe(2);
     expect(tag2?.imageCount).toBe(1);
+  });
+
+  describe('cloud favorites survive generation and failed saves', () => {
+    let db: IDBDatabase;
+    let databaseName: string;
+    const cloudFavorite = () => createImage({ UUID: 'cloud-favorite', favorite: true, timestamp: new Date('2026-10-01') });
+
+    beforeEach(async () => {
+      databaseName = 'favorites-regression-' + Math.random();
+      db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(databaseName, 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore('ImageStore', { keyPath: 'UUID' });
+          request.result.createObjectStore('blobStore', { keyPath: 'UUID' });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      spyOn(component as any, 'getDatabase').and.resolveTo(db);
+      spyOn(component as any, 'hydrateImageUrls').and.resolveTo();
+      authService.isLoggedIn.and.returnValue(true);
+      imageSyncService.downloadFromCloud.and.resolveTo({ images: [cloudFavorite()], blobs: new Map() });
+    });
+
+    afterEach(async () => {
+      db.close();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+      });
+    });
+
+    const newImage = (UUID: string, favorite = false) => ({ ...createImage({ UUID, favorite }), blob: new Blob(['pixels'], { type: 'image/webp' }) });
+    const readImage = (uuid: string) => (component as any).getLocalImage(db, uuid) as Promise<MobiansImage>;
+
+    it('unfavoriting deletes the backup, retains the local image, and permits favoriting it again', async () => {
+      const image = newImage('unstarred', true);
+      await (component as any).persistGeneratedImage(image);
+      (component as any).cloudImages.set(image.UUID, { ...image });
+      // Even stale membership must not skip the DELETE request.
+      imageSyncService.isImageSynced.and.returnValue(false);
+      await component.toggleFavorite(image);
+      expect(imageSyncService.unsyncImage).toHaveBeenCalledOnceWith(image.UUID);
+      expect(imageSyncService.updateImageMetadata).not.toHaveBeenCalled();
+      expect(imageSyncService.syncImage).not.toHaveBeenCalled();
+      expect((await readImage(image.UUID)).favorite).toBeFalse();
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeFalse();
+      expect(await (await component.getImageBlob(image.UUID))!.text()).toBe('pixels');
+      expect((component as any).cloudImages.has(image.UUID)).toBeFalse();
+      imageSyncService.downloadFromCloud.and.resolveTo({ images: [{ ...image, favorite: true }], blobs: new Map() });
+      await component.mergeCloudImages();
+      expect((await readImage(image.UUID)).favorite).toBeFalse();
+      expect(component.favoritePageImages.some(i => i.UUID === image.UUID)).toBeFalse();
+
+      await component.toggleFavorite(image);
+      expect(imageSyncService.syncImage).toHaveBeenCalledWith(image, jasmine.any(Blob));
+      expect((await readImage(image.UUID)).favorite).toBeTrue();
+      expect((component as any).deletedCloudImages.has(image.UUID)).toBeFalse();
+    });
+
+    it('retains a failed removal across reload and retries DELETE without restoring the star', async () => {
+      const image = newImage('pending-removal', true);
+      await (component as any).persistGeneratedImage(image);
+      imageSyncService.unsyncImage.and.resolveTo(false);
+      const messages = spyOn(TestBed.inject(MessageService), 'add');
+      await component.toggleFavorite(image);
+      const pending = await readImage(image.UUID);
+      expect(pending.favorite).toBeFalse();
+      expect(pending.favoriteSyncPending).toBeTrue();
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Cloud removal pending' }));
+      await (component as any).updateLocalCloudMetadata(db, pending, { ...pending, favorite: true });
+      expect((await readImage(image.UUID)).favorite).toBeFalse();
+
+      const reloaded = TestBed.createComponent(ImageHistoryPanelComponent);
+      spyOn(reloaded.componentInstance as any, 'getDatabase').and.resolveTo(db);
+      imageSyncService.unsyncImage.and.resolveTo(true);
+      await (reloaded.componentInstance as any).retryFavoriteChanges();
+      expect(imageSyncService.unsyncImage).toHaveBeenCalledTimes(2);
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeFalse();
+      expect((await readImage(image.UUID)).favorite).toBeFalse();
+      expect((await component.getImageBlob(image.UUID))!.size).toBeGreaterThan(0);
+      reloaded.destroy();
+    });
+
+    it('saves a cloud-only image locally before removing its backup', async () => {
+      const image = createImage({ UUID: 'cloud-only', favorite: true });
+      imageSyncService.downloadImageBlobs.and.resolveTo(new Map([[image.UUID, new Blob(['restored'])]]));
+      imageSyncService.unsyncImage.and.callFake(async () => {
+        expect(await (await component.getImageBlob(image.UUID))!.text()).toBe('restored');
+        return true;
+      });
+      await component.toggleFavorite(image);
+      expect(imageSyncService.unsyncImage).toHaveBeenCalledOnceWith(image.UUID);
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeFalse();
+    });
+
+    it('keeps the backup when a cloud-only image cannot be saved locally', async () => {
+      const image = createImage({ UUID: 'no-local-space', favorite: true });
+      imageSyncService.downloadImageBlobs.and.resolveTo(new Map([[image.UUID, new Blob(['restored'])]]));
+      spyOn(component as any, 'storeCloudImageBlob').and.resolveTo(false);
+      await component.toggleFavorite(image);
+      expect(imageSyncService.unsyncImage).not.toHaveBeenCalled();
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeTrue();
+      expect((await readImage(image.UUID)).favorite).toBeFalse();
+    });
+
+    it('does not delete through a different account after downloading a local copy', async () => {
+      const image = createImage({ UUID: 'account-switch-removal', favorite: true });
+      imageSyncService.downloadImageBlobs.and.callFake(async () => {
+        authService.getUserId.and.returnValue('user-2');
+        return new Map([[image.UUID, new Blob(['restored'])]]);
+      });
+      await component.toggleFavorite(image);
+      expect(imageSyncService.unsyncImage).not.toHaveBeenCalled();
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeTrue();
+    });
+
+    it('does not reupload an unfavorited local image when assigning a tag', async () => {
+      const image = newImage('tagged-local', false);
+      await (component as any).persistGeneratedImage(image);
+      await (component as any).updateTagOnImages({ id: 'local-tag' }, [image.UUID], false);
+      expect((await readImage(image.UUID)).tags).toContain('local-tag');
+      expect(imageSyncService.syncImage).not.toHaveBeenCalled();
+    });
+
+    it('keeps cloud favorites before and after saving a new generation and an incomplete restore', async () => {
+      await component.updateFavoriteImages();
+      expect(component.favoritePageImages.map(i => i.UUID)).toEqual(['cloud-favorite']);
+      await component.ingestGeneratedImages([newImage('new-generation')]);
+      expect(component.favoritePageImages.map(i => i.UUID)).toEqual(['cloud-favorite']);
+      await component.mergeCloudImages(); // No blob returned on the first attempt.
+      expect(component.favoritePageImages.map(i => i.UUID)).toEqual(['cloud-favorite']);
+      imageSyncService.downloadImageBlobs.and.resolveTo(new Map([['cloud-favorite', new Blob(['cloud'])]]));
+      await component.mergeCloudImages();
+      expect((await readImage('cloud-favorite')).favorite).toBeTrue();
+      expect(component.favoritePageImages.map(i => i.UUID)).toEqual(['cloud-favorite']);
+    });
+
+    it('persists a failed favorite PATCH across reload and retries without letting stale cloud state undo it', async () => {
+      const image = newImage('existing-cloud');
+      await (component as any).persistGeneratedImage(image);
+      imageSyncService.isImageSynced.and.returnValue(true);
+      imageSyncService.updateImageMetadata.and.resolveTo(false);
+      const messages = spyOn(TestBed.inject(MessageService), 'add');
+      await component.toggleFavorite(image);
+      const pending = await readImage(image.UUID);
+      expect(pending.favorite).toBeTrue();
+      expect(pending.favoriteSyncPending).toBeTrue();
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'warn', summary: 'Cloud backup pending' }));
+      await (component as any).updateLocalCloudMetadata(db, pending, { ...pending, favorite: false });
+      expect((await readImage(image.UUID)).favorite).toBeTrue();
+
+      const reloaded = TestBed.createComponent(ImageHistoryPanelComponent);
+      spyOn(reloaded.componentInstance as any, 'getDatabase').and.resolveTo(db);
+      imageSyncService.updateImageMetadata.and.resolveTo(true);
+      await (reloaded.componentInstance as any).retryFavoriteChanges();
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeFalse();
+      expect((await readImage(image.UUID)).favorite).toBeTrue();
+      reloaded.destroy();
+    });
+
+    it('does not replay pending favorite writes into another account', async () => {
+      const image = { ...newImage('other-account'), favoriteSyncPending: true, favoriteSyncUserId: 'other-user' };
+      await (component as any).persistGeneratedImage(image);
+      await (component as any).retryFavoriteChanges();
+      expect(imageSyncService.syncImage).not.toHaveBeenCalled();
+      expect(imageSyncService.updateImageMetadata).not.toHaveBeenCalled();
+    });
+
+    it('notifies when a new favorite reaches the cloud limit and retains it locally for retry', async () => {
+      const image = newImage('cloud-full');
+      await (component as any).persistGeneratedImage(image);
+      component.syncStatus.quota = { used: 1500, limit: 1500 };
+      imageSyncService.syncImage.and.resolveTo(false);
+      const messages = spyOn(TestBed.inject(MessageService), 'add');
+      await component.toggleFavorite(image);
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({
+        severity: 'warn', summary: 'Cloud backup full',
+        detail: jasmine.stringMatching(/1,500-image cloud limit.*Unfavorite an image to free space/)
+      }));
+      expect((await readImage(image.UUID)).favorite).toBeTrue();
+      expect((await readImage(image.UUID)).favoriteSyncPending).toBeTrue();
+      expect((await component.getImageBlob(image.UUID))!.size).toBeGreaterThan(0);
+    });
+
+    it('ignores a cloud snapshot taken in another picker before a successful star click', async () => {
+      const image = newImage('existing-cloud');
+      await (component as any).persistGeneratedImage(image);
+      imageSyncService.isImageSynced.and.returnValue(true);
+      let deliver!: (value: any) => void;
+      imageSyncService.downloadFromCloud.and.returnValue(new Promise(resolve => { deliver = resolve; }));
+      const picker = TestBed.createComponent(ImageHistoryPanelComponent);
+      spyOn(picker.componentInstance as any, 'getDatabase').and.resolveTo(db);
+      spyOn(picker.componentInstance as any, 'hydrateImageUrls').and.resolveTo();
+      const merge = picker.componentInstance.mergeCloudImages();
+      // Avoid making the star refresh await the intentionally delayed metadata request.
+      (component as any).cloudMetadataLoaded = true;
+      (component as any).cloudMetadataUserId = 'user-1';
+      await component.toggleFavorite(image);
+      deliver({ images: [{ ...image, favorite: false }], blobs: new Map() });
+      await merge;
+      expect((await readImage(image.UUID)).favorite).toBeTrue();
+      picker.destroy();
+    });
+
+    it('keeps the previous favorite list when IndexedDB temporarily fails', async () => {
+      const image = newImage('local-favorite', true);
+      await (component as any).persistGeneratedImage(image);
+      await component.updateFavoriteImages();
+      spyOn(component as any, 'getAllImagesFromDb').and.rejectWith(new Error('Storage unavailable'));
+      await component.updateFavoriteImages();
+      expect(component.favoritePageImages.map(i => i.UUID)).toContain(image.UUID);
+    });
+
+    it('rolls back the star and reports a local save failure without uploading it', async () => {
+      spyOn(component, 'updateImageInDB').and.resolveTo(false);
+      const messages = spyOn(TestBed.inject(MessageService), 'add');
+      const image = newImage('local-save-failure');
+      await component.toggleFavorite(image);
+      expect(image.favorite).toBeFalse();
+      expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Favorite not saved' }));
+      expect(imageSyncService.syncImage).not.toHaveBeenCalled();
+    });
+
+    it('renders a cloud image even if local storage cannot retain its blob', async () => {
+      const image = cloudFavorite();
+      (component as any).cloudImages.set(image.UUID, image);
+      const blob = new Blob(['webp'], { type: 'image/webp' });
+      imageSyncService.downloadImageBlobs.and.resolveTo(new Map([[image.UUID, blob]]));
+      spyOn(component as any, 'storeCloudImage').and.resolveTo(false);
+      spyOn(component as any, 'preloadImageUrl').and.resolveTo();
+      await component.loadImageData(image);
+      expect(image.blob).toBe(blob);
+      expect(image.url).toMatch(/^blob:/);
+      URL.revokeObjectURL(image.url!);
+    });
+  });
+
+  it('starts cloud restoration when login completes after history initialization', async () => {
+    authService.getUserId.and.returnValue(null);
+    spyOn(component, 'initializeHistory').and.callFake(async () => { (component as any).historyInitialized = true; });
+    const sync = spyOn(component as any, 'syncFromCloud').and.resolveTo();
+    fixture.detectChanges();
+    authService.getUserId.and.returnValue('user-1');
+    authService.isLoggedIn.and.returnValue(true);
+    authService.credits$.next({ credits: 10 });
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 
   it('getDownloadBlob should convert URL-backed WebP blobs to PNG when lossy downloads are disabled', async () => {

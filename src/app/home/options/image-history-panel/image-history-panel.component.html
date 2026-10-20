@@ -237,7 +237,7 @@
               </div>
             </p-tabpanel>
           </p-tabpanels>
-        </p-tabs>
+    </p-tabs>
         </div>
       </div>
 
@@ -292,6 +292,7 @@
     <button type="button" class="history-icon-btn" [class.is-favorite]="image.favorite"
       [attr.aria-label]="image.favorite ? 'Remove from favorites' : 'Add to favorites'"
       [attr.aria-pressed]="!!image.favorite"
+      [disabled]="favoriteSavesInFlight.has(image.UUID)" [attr.aria-busy]="favoriteSavesInFlight.has(image.UUID)"
       (click)="$event.stopPropagation(); toggleFavorite(image)">
       <i class="bi" [ngClass]="image.favorite ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
     </button>
@@ -302,6 +303,7 @@
     </button>
   </div>
   <button type="button" class="history-icon-btn history-delete-btn" aria-label="Delete image" title="Delete image"
+    [disabled]="favoriteSavesInFlight.has(image.UUID)"
     (click)="$event.stopPropagation(); deleteImage(image)">
     <i class="bi bi-trash" aria-hidden="true"></i>
   </button>
