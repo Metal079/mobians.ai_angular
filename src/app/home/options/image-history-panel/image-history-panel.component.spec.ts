@@ -1,7 +1,7 @@
 import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { BehaviorSubject, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AuthService } from 'src/app/auth/auth.service';
@@ -128,6 +128,61 @@ describe('ImageHistoryPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('closing history during cloud requests', () => {
+    it('does not restart its minute timer when initialization completes after navigation', fakeAsync(() => {
+      authService.isLoggedIn.and.returnValue(true);
+      spyOn(component, 'getDatabase').and.resolveTo({} as IDBDatabase);
+      spyOn(component, 'migrateBase64ToBlobStore').and.resolveTo();
+      spyOn(component, 'loadTags').and.resolveTo();
+      spyOn(component, 'searchImages').and.resolveTo();
+      spyOn(component, 'updateTagCounts').and.resolveTo();
+      let finishSync!: () => void;
+      spyOn<any>(component, 'syncFromCloud').and.returnValue(new Promise<void>(resolve => { finishSync = resolve; }));
+      const tags = spyOn<any>(component, 'syncTagsFromCloud').and.resolveTo();
+      void component.initializeHistory();
+      flushMicrotasks();
+      fixture.destroy();
+      finishSync();
+      flushMicrotasks();
+      try {
+        tick(120000);
+        expect(tags).not.toHaveBeenCalled();
+        expect((component as any).cloudSyncInterval).toBeUndefined();
+      } finally { clearInterval((component as any).cloudSyncInterval); }
+    }));
+
+    it('ignores a tag response delivered after closing the panel', async () => {
+      authService.isLoggedIn.and.returnValue(true);
+      let finishTags!: (tags: ImageTag[]) => void;
+      imageSyncService.getCloudTags.and.returnValue(new Promise(resolve => { finishTags = resolve; }));
+      const persist = spyOn<any>(component, 'persistTagsToStore').and.resolveTo();
+      const counts = spyOn(component, 'updateTagCounts').and.resolveTo();
+      const favorites = spyOn(component, 'updateFavoriteImages').and.resolveTo();
+      const task = (component as any).syncTagsFromCloud();
+      fixture.destroy();
+      finishTags([]);
+      await task;
+      expect(persist).not.toHaveBeenCalled();
+      expect(counts).not.toHaveBeenCalled();
+      expect(favorites).not.toHaveBeenCalled();
+      expect((component as any).tagsSyncInProgress).toBeFalse();
+    });
+
+    it('stops cloud recovery if its status response arrives after navigation', async () => {
+      authService.isLoggedIn.and.returnValue(true);
+      let finishStatus!: () => void;
+      imageSyncService.fetchSyncStatus.and.returnValue(new Promise<void>(resolve => { finishStatus = resolve; }));
+      const retryFavorites = spyOn<any>(component, 'retryFavoriteChanges').and.resolveTo();
+      const merge = spyOn(component, 'mergeCloudImages').and.resolveTo(0);
+      const task = (component as any).syncFromCloud();
+      fixture.destroy();
+      finishStatus();
+      await task;
+      expect(retryFavorites).not.toHaveBeenCalled();
+      expect(merge).not.toHaveBeenCalled();
+    });
+  });
+
   describe('native database recovery', () => {
     let databaseName: string;
     const savedImage = (UUID: string): MobiansImage => ({
@@ -176,6 +231,31 @@ describe('ImageHistoryPanelComponent', () => {
       expect((await component.getImageBlob('retry-aborted'))?.size).toBeGreaterThan(0);
       expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
         jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ attempt: 0 }));
+    });
+
+    it('reopens and retries an aborted native metadata read without losing favorites', async () => {
+      await component.ingestGeneratedImages([{ ...savedImage('keep-favorite'), favorite: true }]);
+      const db = await component.getDatabase();
+      const transaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake(((stores: string | string[], mode?: IDBTransactionMode) => {
+        const tx = transaction(stores, mode);
+        if (mode === 'readonly') queueMicrotask(() => tx.abort());
+        return tx;
+      }) as typeof db.transaction);
+      const reopen = spyOn(component, 'openDatabase').and.callThrough();
+      const images = await (component as any).getAllImagesFromDb(true);
+      expect(images.map((image: MobiansImage) => image.UUID)).toEqual(['keep-favorite']);
+      expect(images[0].favorite).toBeTrue();
+      expect(reopen).toHaveBeenCalledTimes(1);
+    });
+
+    it('bounds transient read retries and preserves the last successful library', async () => {
+      await component.getDatabase();
+      const cached = { ...savedImage('cached-favorite'), favorite: true };
+      (component as any).localHistoryCache = [cached];
+      const read = spyOn(IDBObjectStore.prototype, 'getAll').and.throwError(new DOMException('read fixture', 'UnknownError'));
+      expect(await (component as any).getHistorySourceImages()).toEqual([cached]);
+      expect(read).toHaveBeenCalledTimes(2);
     });
 
     it('reports quota failure precisely and rolls back both stores without retrying', async () => {

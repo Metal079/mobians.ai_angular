@@ -245,6 +245,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     window.removeEventListener('online', this.onOnline);
     if (this.cloudSyncInterval) {
       clearInterval(this.cloudSyncInterval);
+      this.cloudSyncInterval = undefined;
     }
     this.blobUrls.forEach((url) => URL.revokeObjectURL(url));
     this.imageUrlCache.clear();
@@ -254,11 +255,16 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   async initializeHistory() {
     try {
       await this.getDatabase();
+      if (this.historyDestroyed) return;
       await this.migrateBase64ToBlobStore();
+      if (this.historyDestroyed) return;
       await this.loadTags();
+      if (this.historyDestroyed) return;
       await this.searchImages();
+      if (this.historyDestroyed) return;
       await this.updateTagCounts();
     } catch (error) {
+      if (this.historyDestroyed) return;
       this.reportHistoryError('history.load', error);
       // Cloud favorites are usable even when the browser cannot open local storage.
       await this.updateFavoriteImages();
@@ -269,7 +275,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (this.authService.isLoggedIn()) {
       await this.syncFromCloud(true);
     }
-
+    if (this.historyDestroyed) return;
     this.startCloudTagSync();
   }
 
@@ -1954,6 +1960,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private reportHistoryError(operation: string, error: unknown, context: Record<string, unknown> = {}): void {
+    // getDatabase deliberately aborts work after navigation; that is not a storage failure.
+    if (this.historyDestroyed && (error as DOMException)?.name === 'AbortError'
+      && (error as DOMException)?.message === 'History panel closed') return;
     if ((error as { name?: string })?.name === 'NotSupportedError') {
       if (this.unsupportedStorageReported) return;
       this.unsupportedStorageReported = true;
@@ -1979,10 +1988,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       return;
     }
 
-    while (hasMore) {
+    while (hasMore && !this.historyDestroyed) {
       const batch = await this.readBatch(db, cursorPosition, batchSize);
       if (batch.length > 0) {
         for (const record of batch) {
+          if (this.historyDestroyed) return;
           await this.processAndStoreBlob(record, db);
         }
         cursorPosition = batch[batch.length - 1].UUID;
@@ -2282,6 +2292,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async searchImages(preservePage: boolean = false) {
+    if (this.historyDestroyed) return;
     if (!this.localHistorySupported) {
       await this.updateFavoriteImages();
       return;
@@ -2289,24 +2300,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.isSearching = true;
     const previousPage = this.currentPageNumber;
     try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction([this.storeName], 'readonly');
-      const store = transaction.objectStore(this.storeName);
-
       const query = this.searchQuery.trim().toLowerCase();
-
-      let results: MobiansImage[];
-
-      try {
-        results = await new Promise<MobiansImage[]>((resolve, reject) => {
-          const request = store.getAll();
-          request.onsuccess = () => resolve(request.result || []);
-          request.onerror = () => reject(request.error);
-        });
-      } catch (error) {
-        // Keep the current list on a storage failure instead of showing an empty history.
-        throw error;
-      }
+      let results = await this.getAllImagesFromDb(true);
+      if (this.historyDestroyed) return;
 
       if (query.length > 0) {
         results = results.filter((image: MobiansImage) =>
@@ -2357,6 +2353,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       });
 
       const nextImages = await this.paginateImages(this.currentPageNumber);
+      if (this.historyDestroyed) return;
       this.runInAngularZone(() => {
         this.currentPageImages = nextImages;
       });
@@ -2497,6 +2494,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async updateFavoriteImages(preservePage: boolean = true) {
+    if (this.historyDestroyed) return;
     const token = ++this.favoritePageLoadToken;
     const allImages = await this.getHistorySourceImages();
     if (token !== this.favoritePageLoadToken) return;
@@ -2541,11 +2539,13 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async getHistorySourceImages(): Promise<MobiansImage[]> {
+    if (this.historyDestroyed) return this.localHistoryCache;
     try {
       this.localHistoryCache = await this.getAllImagesFromDb(true);
     } catch (error) {
       this.reportHistoryError('db.read', error);
     }
+    if (this.historyDestroyed) return this.localHistoryCache;
     this.ensureCloudAccount();
     if (!this.authService.isLoggedIn()) return this.localHistoryCache;
     if (!this.cloudMetadataLoaded) {
@@ -2825,20 +2825,31 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   private async getAllImagesFromDb(throwOnError = false): Promise<MobiansImage[]> {
     if (!this.localHistorySupported) return [];
-    try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction([this.storeName], 'readonly');
-      const store = transaction.objectStore(this.storeName);
-      return await new Promise<MobiansImage[]>((resolve, reject) => {
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error);
-      });
-    } catch (error) {
-      this.reportHistoryError('db.read', error);
-      if (throwOnError) throw error;
-      return [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let db: IDBDatabase | undefined;
+      try {
+        db = await this.getDatabase();
+        return await new Promise<MobiansImage[]>((resolve, reject) => {
+          const transaction = db!.transaction([this.storeName], 'readonly');
+          const request = transaction.objectStore(this.storeName).getAll();
+          let failure: DOMException | null = null;
+          transaction.oncomplete = () => resolve(request.result || []);
+          transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+          transaction.onabort = () => reject(failure || transaction.error || new DOMException('History read aborted', 'AbortError'));
+        });
+      } catch (error) {
+        if (!this.historyDestroyed) {
+          this.reportHistoryError('db.read', error, { attempt });
+          if (attempt === 0 && db && ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes((error as DOMException)?.name)) {
+            this.invalidateDatabase(db);
+            continue;
+          }
+        }
+        if (throwOnError) throw error;
+        return [];
+      }
     }
+    return [];
   }
 
   private async getAllImageUUIDs(): Promise<string[]> {
@@ -2926,12 +2937,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async syncTagsFromCloud(): Promise<void> {
-    if (!this.localHistorySupported) return;
+    if (this.historyDestroyed || !this.localHistorySupported) return;
     if (!this.authService.isLoggedIn() || this.tagsSyncInProgress) return;
     this.tagsSyncInProgress = true;
     try {
       const cloudTags = await this.imageSyncService.getCloudTags();
-      if (!Array.isArray(cloudTags)) return;
+      if (this.historyDestroyed || !Array.isArray(cloudTags)) return;
 
       const lastSyncAt = this.getTagsLastSyncAt();
       const hasCloudData = cloudTags.length > 0;
@@ -2993,13 +3004,16 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       if (idRemaps.length > 0) {
         for (const remap of idRemaps) {
+          if (this.historyDestroyed) return;
           await this.replaceTagIdInImages(remap.from, remap.to);
         }
       }
 
       if (tagsToRemove.length > 0) {
+        if (this.historyDestroyed) return;
         const allUUIDs = await this.getAllImageUUIDs();
         for (const tag of tagsToRemove) {
+          if (this.historyDestroyed) return;
           await this.removeTagFromImages(tag, allUUIDs);
         }
       }
@@ -3031,12 +3045,15 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       if (duplicateNameRemaps.length > 0) {
         for (const remap of duplicateNameRemaps) {
+          if (this.historyDestroyed) return;
           await this.replaceTagIdInImages(remap.from, remap.to);
         }
       }
 
+      if (this.historyDestroyed) return;
       this.runInAngularZone(() => { this.availableTags = Array.from(canonicalByName.values()); });
       await this.persistTagsToStore(this.availableTags);
+      if (this.historyDestroyed) return;
 
       if (this.selectedTagFilter && !this.availableTags.some(t => t.id === this.selectedTagFilter)) {
         this.selectedTagFilter = null;
@@ -3044,6 +3061,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       if (tagsToUpload.length > 0 || idRemaps.length > 0) {
         const synced = await this.imageSyncService.syncTags(this.availableTags);
+        if (this.historyDestroyed) return;
         if (synced) {
           this.setTagsLastSyncAt(Date.now());
         }
@@ -3052,7 +3070,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       }
 
       await this.updateTagCounts();
-      this.updateFavoriteImages();
+      if (!this.historyDestroyed) await this.updateFavoriteImages();
     } catch (error) {
       console.error('Failed to sync tags from cloud:', error);
     } finally {
@@ -3061,12 +3079,14 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private startCloudTagSync() {
+    if (this.historyDestroyed) return;
     if (this.cloudSyncInterval) {
       clearInterval(this.cloudSyncInterval);
     }
 
     void this.syncTagsFromCloud();
     this.cloudSyncInterval = window.setInterval(() => {
+      if (this.historyDestroyed) return;
       void this.syncTagsFromCloud();
       void this.syncFromCloud();
     }, this.cloudSyncIntervalMs);
@@ -3208,11 +3228,13 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const task = (async () => {
       try {
         await this.imageSyncService.fetchSyncStatus();
+        if (this.historyDestroyed) return;
         try {
           if (this.localHistorySupported) await this.retryFavoriteChanges();
         } catch (error) {
           this.reportHistoryError('history.favorite', error);
         }
+        if (this.historyDestroyed) return;
         const mergedCount = await this.mergeCloudImages();
         if (notify && mergedCount > 0 && !this.destroyRef.destroyed) {
           this.messageService.add({ severity: 'success', summary: 'Synced from Cloud',
