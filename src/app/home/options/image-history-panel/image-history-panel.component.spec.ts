@@ -591,6 +591,34 @@ describe('ImageHistoryPanelComponent', () => {
     const newImage = (UUID: string, favorite = false) => ({ ...createImage({ UUID, favorite }), blob: new Blob(['pixels'], { type: 'image/webp' }) });
     const readImage = (uuid: string) => (component as any).getLocalImage(db, uuid) as Promise<MobiansImage>;
 
+    it('finishes saving generated images while an unrelated cloud favorite download is stalled', async () => {
+      (component as any).hydrateImageUrls.and.callThrough();
+      spyOn(component as any, 'preloadImageUrl').and.resolveTo();
+      const refresh = spyOn(component, 'updateFavoriteImages').and.callThrough();
+      let releaseCloud!: (blobs: Map<string, Blob>) => void;
+      let cloudStarted!: () => void;
+      const started = new Promise<void>(resolve => { cloudStarted = resolve; });
+      imageSyncService.downloadImageBlobs.and.callFake(() => {
+        cloudStarted();
+        return new Promise<Map<string, Blob>>(resolve => { releaseCloud = resolve; });
+      });
+      let saved = false;
+      const ingestion = component.ingestGeneratedImages([newImage('completed-during-cloud-stall')])
+        .then(result => { saved = result; });
+      try {
+        await started;
+        await Promise.resolve();
+        expect(await readImage('completed-during-cloud-stall')).toBeDefined();
+        expect((await component.getImageBlob('completed-during-cloud-stall'))?.size).toBeGreaterThan(0);
+        expect(saved).withContext('local save completion must not wait for a cloud favorite').toBeTrue();
+      } finally {
+        releaseCloud(new Map([['cloud-favorite', new Blob(['cloud-pixels'])]]));
+        await ingestion;
+        await refresh.calls.mostRecent().returnValue;
+      }
+      expect(component.favoritePageImages.map(image => image.UUID)).toEqual(['cloud-favorite']);
+    });
+
     it('unfavoriting deletes the backup, retains the local image, and permits favoriting it again', async () => {
       const image = newImage('unstarred', true);
       await (component as any).persistGeneratedImage(image);

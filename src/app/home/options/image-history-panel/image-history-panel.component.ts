@@ -337,7 +337,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       this.currentPageImages = nextImages;
     });
     this.cdr.detectChanges();
-    await this.updateFavoriteImages();
+    // The generated images are committed locally. Cloud-only favorites may need
+    // network downloads, which must not keep a completed edit locked in its modal.
+    void this.updateFavoriteImages().catch(error => {
+      console.error('Failed to refresh favorites after saving generated images:', error);
+    });
     return failedImages.length === 0;
   }
 
