@@ -230,6 +230,30 @@ describe('ImageHistoryPanelComponent', () => {
     });
   });
 
+  it('reports unsupported storage once while keeping cloud favorites usable without local reads or writes', async () => {
+    spyOnProperty(component, 'localHistorySupported', 'get').and.returnValue(false);
+    const open = spyOn(component, 'openDatabase').and.callThrough();
+    spyOn<any>(component, 'preloadImageUrl').and.resolveTo();
+    const image = createImage({ UUID: 'cloud-on-unsupported', favorite: true });
+    authService.isLoggedIn.and.returnValue(true);
+    imageSyncService.downloadFromCloud.and.resolveTo({ images: [image], blobs: new Map() });
+    imageSyncService.downloadImageBlobs.and.resolveTo(new Map([[image.UUID, new Blob(['fixture'])]]));
+    await component.initializeHistory();
+    await (component as any).syncFromCloud();
+    await component.searchImages();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(component.favoritePageImages.map(i => i.UUID)).toEqual([image.UUID]);
+    expect(component.favoritePageImages[0].url).toMatch(/^blob:/);
+    const diagnostics = TestBed.inject(HistoryDiagnosticsService).report as jasmine.Spy;
+    expect(diagnostics).toHaveBeenCalledTimes(1);
+    expect(diagnostics.calls.first().args[1].name).toBe('NotSupportedError');
+    await component.toggleFavorite(image);
+    expect(image.favorite).toBeTrue();
+    expect(imageSyncService.unsyncImage).not.toHaveBeenCalled();
+    expect(await component.ingestGeneratedImages([{ ...image, blob: new Blob(['new']) }], { notifyFailure: false })).toBeFalse();
+    expect(diagnostics).toHaveBeenCalledTimes(1);
+  });
+
   it('initializes cloud recovery even if the local database cannot open', async () => {
     spyOn(component, 'getDatabase').and.rejectWith(new DOMException('unavailable', 'UnknownError'));
     const favorites = spyOn(component, 'updateFavoriteImages').and.resolveTo();

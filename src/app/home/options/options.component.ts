@@ -39,6 +39,7 @@ import { IMAGE_EDIT_MODELS, ImageEditorService } from 'src/app/image-editor/imag
 import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
 import { imageDownloadConcurrency, runImageDownloadPool } from './image-download-pool';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
+import { supportsLocalHistory, unsupportedHistoryError } from 'src/app/history-storage';
 
 interface PendingGenerationJob {
   job_id: string;
@@ -71,6 +72,7 @@ interface PendingGenerationJob {
     ]
 })
 export class OptionsComponent implements OnInit {
+  get localHistorySupported(): boolean { return supportsLocalHistory(); }
   readonly imageEditor = inject(ImageEditorService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly historyDiagnostics = inject(HistoryDiagnosticsService);
@@ -397,7 +399,7 @@ export class OptionsComponent implements OnInit {
   }
 
   private readonly onRecoveryOpportunity = (): void => {
-    if (this.componentDestroyed || !this.historyRecoveryPending || this.deliveryInProgress
+    if (!this.localHistorySupported || this.componentDestroyed || !this.historyRecoveryPending || this.deliveryInProgress
       || this.historyRecoveryInProgress || !navigator.onLine || document.visibilityState !== 'visible'
       || this.recoveryAttempts >= 2 || Date.now() - this.lastAutomaticRecoveryAt < 30000) return;
     this.recoveryAttempts++;
@@ -591,7 +593,7 @@ export class OptionsComponent implements OnInit {
         if (pending.phase === 'saving') {
           this.showHistoryRecovery(pending.job_id);
           // Let Angular create the history panel before retrying its local save.
-          setTimeout(() => { if (!this.componentDestroyed) void this.retryHistorySave(); });
+          setTimeout(() => { if (!this.componentDestroyed && this.localHistorySupported) void this.retryHistorySave(); });
         } else {
           this.getJob(pending.job_id);
         }
@@ -2377,7 +2379,7 @@ export class OptionsComponent implements OnInit {
     const complete = Array.from({ length: pending.expectedImageCount ?? 4 }, (_, index) =>
       this.generatedImageId(job_id, index)).every(id => saved.has(id));
     if (!complete) {
-      this.historyDiagnostics.report('generation.save', new Error('Generated images not fully saved'), {
+      this.historyDiagnostics.report('generation.save', this.localHistorySupported ? new Error('Generated images not fully saved') : unsupportedHistoryError(), {
         requestedCount: pending.expectedImageCount ?? 4, savedCount: saved.size,
         unsavedCount: Math.max(0, (pending.expectedImageCount ?? 4) - saved.size),
       });
@@ -2417,6 +2419,7 @@ export class OptionsComponent implements OnInit {
   }
 
   async retryHistorySave(): Promise<void> {
+    if (!this.localHistorySupported) return;
     const pending = this.getPendingJob();
     if (this.componentDestroyed || this.historyRecoveryInProgress || this.deliveryInProgress || pending?.phase !== 'saving') return;
     this.historyRecoveryInProgress = true;
@@ -2440,8 +2443,29 @@ export class OptionsComponent implements OnInit {
 
   stopHistoryRecovery(): void {
     if (this.historyRecoveryInProgress || this.deliveryInProgress || !this.historyRecoveryPending) return;
-    if (!window.confirm('Stop retrying these images? Download the previews first. Any images not saved to history may be lost when you leave this page.')) return;
+    const message = this.localHistorySupported
+      ? 'Stop retrying these images? Download the previews first. Any images not saved to history may be lost when you leave this page.'
+      : 'Have you downloaded the images and prompts you want to keep? Continuing allows the next generation to replace these previews.';
+    if (!window.confirm(message)) return;
     this.resetCancelledJob();
+  }
+
+  downloadGeneratedPrompts(): void {
+    const images = this.sharedService.getImagesValue().map(image => ({
+      imageId: image.UUID, prompt: image.prompt, promptTemplate: image.promptTemplate,
+      negativePrompt: image.negativePrompt, model: image.model, seed: image.seed, cfg: image.cfg,
+      width: image.width, height: image.height, regionalPrompting: image.regional_prompting,
+      loras: image.loras?.map(lora => ({ name: lora.name, versionId: lora.version_id, strength: lora.strength })),
+    }));
+    const blob = new Blob([JSON.stringify({ images }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'mobians-image-prompts.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
   private getPendingJob(): PendingGenerationJob | null {

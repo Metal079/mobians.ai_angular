@@ -1,6 +1,12 @@
 <!-- Image History Content Panel -->
 <div class="w-100" id="historyCollapse" [class.collapse]="!pickerMode" [class.show]="pickerMode" [class.picker-mode]="pickerMode">
   <div class="card card-body">
+    @if (!localHistorySupported) {
+      <div class="history-storage-notice" role="note">
+        <strong>Local history unavailable</strong>
+        <p>This browser cannot save image history or favorite changes. Download new images and prompts before leaving, or use another browser. Existing cloud favorites can still be viewed and downloaded.</p>
+      </div>
+    }
     <p-tabs [value]="historyTab" (valueChange)="historyTab = +($event ?? 0)">
       <p-tablist>
         <p-tab [value]="0">All Images</p-tab>
@@ -63,7 +69,7 @@
           <!-- Show message if no images are available -->
           @if (currentPageImages.length === 0 && !isLoadingAll) {
             <div class="no-images-message">
-              No generated images available.
+              {{ localHistorySupported ? 'No generated images available.' : 'Download new images from the generation previews above.' }}
             </div>
           }
           <div class="pagination">
@@ -83,7 +89,7 @@
         <p-tabpanel [value]="1">
           <div class="favorites-tab">
             <!-- Bulk Selection Controls -->
-            <div class="bulk-controls d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <div class="bulk-controls d-flex align-items-center gap-2 mb-2 flex-wrap" *ngIf="localHistorySupported">
               <button class="btn btn-sm favorites-control-btn"
                 [ngClass]="bulkSelectMode ? 'btn-warning' : 'btn-outline-secondary'" (click)="toggleBulkSelectMode()">
                 <i class="bi" [ngClass]="bulkSelectMode ? 'bi-x-circle' : 'bi-check2-square'"></i>
@@ -116,7 +122,7 @@
             </div>
 
             <!-- Tag Filter + Manager -->
-            <div class="tag-section mb-3">
+            <div class="tag-section mb-3" *ngIf="localHistorySupported">
               <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                 <button class="btn btn-sm favorites-tag-btn"
                   [ngClass]="selectedTagFilter === null ? 'btn-primary' : 'btn-outline-primary'"
@@ -292,7 +298,8 @@
     <button type="button" class="history-icon-btn" [class.is-favorite]="image.favorite"
       [attr.aria-label]="image.favorite ? 'Remove from favorites' : 'Add to favorites'"
       [attr.aria-pressed]="!!image.favorite"
-      [disabled]="favoriteSavesInFlight.has(image.UUID)" [attr.aria-busy]="favoriteSavesInFlight.has(image.UUID)"
+      [disabled]="!localHistorySupported || favoriteSavesInFlight.has(image.UUID)" [attr.aria-busy]="favoriteSavesInFlight.has(image.UUID)"
+      [attr.title]="localHistorySupported ? null : 'Favorite changes require a browser with local history support'"
       (click)="$event.stopPropagation(); toggleFavorite(image)">
       <i class="bi" [ngClass]="image.favorite ? 'bi-star-fill' : 'bi-star'" aria-hidden="true"></i>
     </button>
@@ -303,7 +310,7 @@
     </button>
   </div>
   <button type="button" class="history-icon-btn history-delete-btn" aria-label="Delete image" title="Delete image"
-    [disabled]="favoriteSavesInFlight.has(image.UUID)"
+    [disabled]="!localHistorySupported || favoriteSavesInFlight.has(image.UUID)"
     (click)="$event.stopPropagation(); deleteImage(image)">
     <i class="bi bi-trash" aria-hidden="true"></i>
   </button>

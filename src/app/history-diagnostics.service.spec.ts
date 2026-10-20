@@ -3,6 +3,7 @@ import { fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { HistoryDiagnosticsService } from './history-diagnostics.service';
 import { sessionInvalid$ } from './auth/auth.interceptor';
+import { rememberHistoryHttpContext } from './history-http-context';
 
 describe('HistoryDiagnosticsService', () => {
   let service: HistoryDiagnosticsService;
@@ -25,6 +26,18 @@ describe('HistoryDiagnosticsService', () => {
   });
 
   function request(): HttpRequest<any> { return backend.handle.calls.mostRecent().args[0]; }
+
+  it('includes bounded transport correlation without raw headers, paths, or body text', fakeAsync(() => {
+    const error = { name: 'HttpErrorResponse', status: 504 };
+    rememberHistoryHttpContext(error, { requestId: 'request-12345', requestDurationMs: 15500, retryCount: 1,
+      requestMethod: 'GET', responseSource: 'gateway-or-network', serviceWorkerBypassed: true, includeBlobs: false,
+      privateBody: 'secret', url: 'https://secret.test/?token=secret' });
+    service.report('history.sync.metadata', error, { httpStatus: 504 });
+    flushMicrotasks();
+    expect(request().body.context).toEqual(jasmine.objectContaining({ requestId: 'request-12345', requestDurationMs: 15500, retryCount: 1, serviceWorkerBypassed: true }));
+    expect(JSON.stringify(request().body)).not.toContain('secret');
+    expect(request().headers.get('ngsw-bypass')).toBe('1');
+  }));
 
   it('captures useful browser and storage metadata without content, raw errors or credentials', fakeAsync(() => {
     service.report('history.save', new DOMException('private prompt https://host/?token=secret', 'QuotaExceededError'), {

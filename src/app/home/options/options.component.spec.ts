@@ -213,6 +213,39 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('does not automatically or manually retry saves when local history is unsupported', async () => {
+    spyOnProperty(component, 'localHistorySupported', 'get').and.returnValue(false);
+    const download = spyOn<any>(component, 'downloadJobImages').and.resolveTo();
+    (component as any).savePendingJob('unsupported-browser', { prompt: 'kept prompt' });
+    (component as any).beginCompletedJobRecovery('unsupported-browser');
+    (component as any).showHistoryRecovery('unsupported-browser');
+    (component as any).onRecoveryOpportunity();
+    await component.retryHistorySave();
+    expect(download).not.toHaveBeenCalled();
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect((component as any).getPendingJob().job_id).toBe('unsupported-browser');
+    spyOn(window, 'confirm').and.returnValue(true);
+    component.stopHistoryRecovery();
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+  });
+
+  it('exports prompts and generation settings without credentials or image binaries', async () => {
+    const originalShared = (component as any).sharedService;
+    (component as any).sharedService = { getImagesValue: () => [{ UUID: 'preview', prompt: 'kept prompt', negativePrompt: 'negative', seed: 42,
+      model: 'fixture', blob: new Blob(['private binary']), url: 'blob:private', authToken: 'private token',
+      loras: [{ name: 'LoRA', version_id: 2, strength: .7, authToken: 'private token' }] }] };
+    const create = spyOn(URL, 'createObjectURL').and.returnValue('blob:fixture-download');
+    spyOn(HTMLAnchorElement.prototype, 'click');
+    component.downloadGeneratedPrompts();
+    const text = await (create.calls.first().args[0] as Blob).text();
+    expect(text).toContain('kept prompt');
+    expect(text).toContain('42');
+    expect(text).not.toContain('private');
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    (component as any).sharedService = originalShared;
+  });
+
   it('excludes editing models without replacing the generator prompt, model, or LoRAs', () => {
     const settings = [...testModelSettings, { ...testModelSettings[0], model_id: IMAGE_EDIT_MODEL, base_model: 'FLUX.2 klein 4B', is_default: false }];
     (component as any).setModelSettings(settings, 'novaMobianXL_v20');

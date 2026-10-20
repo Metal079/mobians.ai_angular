@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpBackend, HttpClient, HttpHeaders } from '@angular/common/http';
 import { timeout } from 'rxjs';
 import { environment } from '../environments/environment';
+import { historyHttpContext } from './history-http-context';
 
 const OPERATIONS = new Set([
   'db.open', 'db.read', 'db.write', 'db.reopen', 'db.closed', 'db.versionchange',
@@ -25,6 +26,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   DataCloneError: 'Browser database could not copy the record.',
   SecurityError: 'Browser storage access was denied.',
   NotAllowedError: 'Browser denied access to this operation.',
+  NotSupportedError: 'This browser does not support local image history.',
   TimeoutError: 'Operation timed out.',
   NetworkError: 'Network request failed.',
   HttpErrorResponse: 'History API request failed.',
@@ -34,6 +36,7 @@ const NUMBER_LIMITS: Record<string, number> = {
   dbVersion: 100000, imageCount: 10000000, favoriteCount: 10000000,
   cloudCount: 10000000, unsavedCount: 100000, requestedCount: 100000,
   savedCount: 100000, attempt: 1000, httpStatus: 599,
+  requestDurationMs: 600000, retryCount: 10,
 };
 
 /** Failure-only metadata. Never read image/prompt values, complete URLs or error stacks. */
@@ -54,7 +57,7 @@ export class HistoryDiagnosticsService {
     try {
       if (!OPERATIONS.has(operation) || this.sentCount >= 20) return;
       const safeError = this.describeError(error);
-      const safeContext = this.sanitizeContext(context);
+      const safeContext = this.sanitizeContext({ ...historyHttpContext(error), ...context });
       const key = [operation, safeError.name, safeContext['dbState'], safeContext['httpStatus']].join(':');
       const now = Date.now();
       if (this.seen.has(key) && now - this.seen.get(key)! < 60000) return;
@@ -73,7 +76,7 @@ export class HistoryDiagnosticsService {
         console.warn('[History diagnostics]', report);
         if (!token) return;
         this.http.post(`${environment.apiBaseUrl}/history/diagnostics`, report, {
-          headers: new HttpHeaders({ Authorization: `Bearer ${token}` }),
+          headers: new HttpHeaders({ Authorization: `Bearer ${token}`, 'ngsw-bypass': '1' }),
         }).pipe(timeout(5000)).subscribe({ error: () => { /* Telemetry cannot affect application state. */ } });
       }).catch(() => { /* Browser capability failures must not escape. */ });
     } catch { /* Storage and browser APIs may be unavailable in private/restricted contexts. */ }
@@ -101,6 +104,12 @@ export class HistoryDiagnosticsService {
     }
     if (['open', 'closed', 'opening', 'unavailable', 'unknown'].includes(context['dbState'] as string)) result['dbState'] = context['dbState'];
     if (typeof context['syncEnabled'] === 'boolean') result['syncEnabled'] = context['syncEnabled'];
+    for (const key of ['serviceWorkerBypassed', 'includeBlobs']) {
+      if (typeof context[key] === 'boolean') result[key] = context[key];
+    }
+    if (typeof context['requestId'] === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(context['requestId'])) result['requestId'] = context['requestId'];
+    if (['GET', 'POST', 'PATCH', 'DELETE'].includes(context['requestMethod'] as string)) result['requestMethod'] = context['requestMethod'];
+    if (['api', 'network', 'gateway-or-network'].includes(context['responseSource'] as string)) result['responseSource'] = context['responseSource'];
     return result;
   }
 

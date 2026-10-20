@@ -51,6 +51,24 @@ describe('ImageSyncService', () => {
     expect(http.post).not.toHaveBeenCalled();
   });
 
+  it('splits rejected blob batches without omitting any images or retrying an oversized single image forever', async () => {
+    http.post.and.callFake(((_url: string, body: any) => body.image_uuids.length > 1 || body.image_uuids[0] === 'too-big'
+      ? throwError(() => ({ status: 413 }))
+      : of([{ image_uuid: body.image_uuids[0], image_blob: btoa('pixels') }])) as any);
+    const result = await service.downloadImageBlobs(['first', 'second', 'too-big']);
+    expect([...result.keys()]).toEqual(['first', 'second']);
+    expect(http.post).toHaveBeenCalledTimes(4);
+  });
+
+  it('downloads complete metadata then bounded blobs even when a caller asks for all images', async () => {
+    http.get.and.returnValue(of([{ image_uuid: 'first', created_at: '2026-10-20' }, { image_uuid: 'second', created_at: '2026-10-20' }]));
+    http.post.and.callFake((_url: string, body: any) => of(body.image_uuids.map((id: string) => ({ image_uuid: id, image_blob: btoa('pixels') }))));
+    const result = await service.downloadFromCloud(true);
+    expect((http.get.calls.mostRecent().args[1] as any).params.get('include_blobs')).toBe('false');
+    expect(result.images.length).toBe(2);
+    expect(result.blobs.size).toBe(2);
+  });
+
   it('PATCHes an empty tag array when removing the last tag without deleting the image or tag', async () => {
     spyOn(service, 'isImageSynced').and.returnValue(true);
     http.patch.and.returnValue(of({ success: true }));

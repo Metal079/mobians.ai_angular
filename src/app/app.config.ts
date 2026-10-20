@@ -12,6 +12,7 @@ import Aura from '@primeuix/themes/aura';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { DialogService } from 'primeng/dynamicdialog';
 import { AuthInterceptor } from './auth/auth.interceptor';
+import { HistoryNetworkInterceptor } from './history-network.interceptor';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 
@@ -36,6 +37,11 @@ export const appConfig: ApplicationConfig = {
     {
       provide: HTTP_INTERCEPTORS,
       useClass: AuthInterceptor,
+      multi: true
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: HistoryNetworkInterceptor,
       multi: true
     }
   ]

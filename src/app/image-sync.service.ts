@@ -338,7 +338,7 @@ export class ImageSyncService {
   /**
    * Download synced images from cloud to local device
    */
-  async downloadFromCloud(includeBlobs: boolean = true): Promise<{ images: MobiansImage[], blobs: Map<string, Blob> }> {
+  async downloadFromCloud(includeBlobs: boolean = false): Promise<{ images: MobiansImage[], blobs: Map<string, Blob> }> {
     const userId = this.authService.getUserId();
     const images: MobiansImage[] = [];
     const blobs = new Map<string, Blob>();
@@ -348,7 +348,7 @@ export class ImageSyncService {
     }
 
     try {
-      const params = new HttpParams().set('include_blobs', includeBlobs ? 'true' : 'false');
+      const params = new HttpParams().set('include_blobs', 'false');
       const response = await firstValueFrom(
         this.http.get<any[]>(`${this.API_URL}/history/sync/images`, {
           headers: this.getAuthHeaders(),
@@ -381,17 +381,16 @@ export class ImageSyncService {
         };
         images.push(image);
 
-        // Convert base64 blob back to Blob
-        if (includeBlobs && item.image_blob) {
-          const blob = this.base64ToBlob(item.image_blob, 'image/webp');
-          blobs.set(item.image_uuid, blob);
-        }
-
         // Mark as synced
         this.markImageSynced(item.image_uuid);
       }
 
       this.saveSyncedUUIDsToStorage();
+      if (includeBlobs) {
+        const downloaded = await this.downloadImageBlobs(images.map(image => image.UUID));
+        if (userId !== this.authService.getUserId()) return { images: [], blobs: new Map() };
+        downloaded.forEach((blob, id) => blobs.set(id, blob));
+      }
       return { images, blobs };
     } catch (error) {
       console.error('Failed to download from cloud:', error);
@@ -424,10 +423,8 @@ export class ImageSyncService {
       return blobs;
     }
 
-    for (let i = 0; i < uniqueUUIDs.length; i += this.CLOUD_BLOB_BATCH_SIZE) {
-      if (userId !== this.authService.getUserId()) return new Map();
-      const chunk = uniqueUUIDs.slice(i, i + this.CLOUD_BLOB_BATCH_SIZE);
-
+    const downloadChunk = async (chunk: string[]): Promise<void> => {
+      if (userId !== this.authService.getUserId()) return;
       try {
         const response = await firstValueFrom(
           this.http.post<any[]>(`${this.API_URL}/history/sync/images/blobs`, {
@@ -438,7 +435,7 @@ export class ImageSyncService {
         );
 
         for (const item of response || []) {
-          if (userId !== this.authService.getUserId()) return new Map();
+          if (userId !== this.authService.getUserId()) return;
           if (!item?.image_uuid || !item.image_blob) {
             continue;
           }
@@ -447,9 +444,19 @@ export class ImageSyncService {
           this.markImageSynced(item.image_uuid);
         }
       } catch (error) {
+        if ((error as any)?.status === 413 && chunk.length > 1) {
+          const middle = Math.ceil(chunk.length / 2);
+          await downloadChunk(chunk.slice(0, middle));
+          await downloadChunk(chunk.slice(middle));
+          return;
+        }
         console.error('Failed to download cloud image blobs:', error);
         this.reportSyncError('history.sync.blobs', error, chunk.length);
       }
+    };
+    for (let i = 0; i < uniqueUUIDs.length; i += this.CLOUD_BLOB_BATCH_SIZE) {
+      await downloadChunk(uniqueUUIDs.slice(i, i + this.CLOUD_BLOB_BATCH_SIZE));
+      if (userId !== this.authService.getUserId()) return new Map();
     }
 
     this.saveSyncedUUIDsToStorage();

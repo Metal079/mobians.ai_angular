@@ -21,6 +21,7 @@ import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { TabsModule } from 'primeng/tabs';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
+import { supportsLocalHistory, unsupportedHistoryError } from 'src/app/history-storage';
 
 @Component({
     selector: 'app-image-history-panel',
@@ -30,6 +31,8 @@ import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
     imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule, MenuModule]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
+  get localHistorySupported(): boolean { return supportsLocalHistory(); }
+  private unsupportedStorageReported = false;
   readonly imageEditor = inject(ImageEditorService);
   async editWithAI(image: MobiansImage) {
     const blob = await this.getDownloadBlob(image);
@@ -293,7 +296,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (options.notifyFailure !== false) this.messageService.add({
         severity: 'error',
         summary: 'Save Failed',
-        detail: this.lastSaveErrorName === 'QuotaExceededError'
+        detail: !this.localHistorySupported
+          ? 'This browser cannot save local image history. Download the image and prompts, or use another browser.'
+          : this.lastSaveErrorName === 'QuotaExceededError'
           ? 'Browser storage is full. Download these images, free device space, then retry saving. Keep this page open.'
           : 'Could not save generated images to history. Keep this page open and retry saving, or download them.',
         life: 5000
@@ -375,6 +380,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async persistGeneratedImage(image: MobiansImage): Promise<boolean> {
+    if (!this.localHistorySupported) {
+      this.lastSaveErrorName = 'NotSupportedError';
+      this.reportHistoryError('history.save', unsupportedHistoryError(), { dbState: 'unavailable' });
+      return false;
+    }
     if (!image?.UUID || !image.blob) {
       this.reportHistoryError('history.save', new DOMException('Required image data unavailable', 'DataError'));
       return false;
@@ -659,6 +669,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async getBlobFromStore(uuid: string): Promise<Blob | undefined> {
+    if (!this.localHistorySupported) return undefined;
     try {
       const db = await this.getDatabase();
       return await new Promise<Blob | undefined>((resolve) => {
@@ -675,6 +686,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async getBase64FromImageStore(uuid: string): Promise<string | undefined> {
+    if (!this.localHistorySupported) return undefined;
     try {
       const db = await this.getDatabase();
       return await new Promise<string | undefined>((resolve) => {
@@ -823,6 +835,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
     const editAction = items.find(item => item.label === 'Edit with AI');
     if (editAction) editAction.visible = this.imageEditor.available();
+    const tagAction = items.find(item => item.label === 'Edit tags');
+    if (tagAction) tagAction.disabled = !this.localHistorySupported;
     return items;
   }
 
@@ -1224,6 +1238,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async toggleFavorite(image: MobiansImage) {
+    if (!this.localHistorySupported) return;
     if (this.favoriteSavesInFlight.has(image.UUID)) return;
     this.favoriteSavesInFlight.add(image.UUID);
     const previous = { favorite: image.favorite, favoriteSyncPending: image.favoriteSyncPending,
@@ -1365,6 +1380,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async deleteImage(image: MobiansImage) {
+    if (!this.localHistorySupported) return;
     if (this.isImageSynced(image.UUID)) {
       const confirmed = confirm(
         'This image is synced to the cloud. Deleting it will remove it from ALL your devices. Are you sure?'
@@ -1729,6 +1745,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async getImageBlob(uuid: string): Promise<Blob | undefined> {
+    if (!this.localHistorySupported) return undefined;
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction(this.blobStoreName, 'readonly');
@@ -1747,9 +1764,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   async openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        console.error('IndexedDB is not supported in this browser.');
-        reject(new Error('IndexedDB is not supported'));
+      if (!this.localHistorySupported) {
+        const error = unsupportedHistoryError();
+        this.reportHistoryError('db.open', error, { dbState: 'unavailable' });
+        reject(error);
         return;
       }
 
@@ -1936,6 +1954,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private reportHistoryError(operation: string, error: unknown, context: Record<string, unknown> = {}): void {
+    if ((error as { name?: string })?.name === 'NotSupportedError') {
+      if (this.unsupportedStorageReported) return;
+      this.unsupportedStorageReported = true;
+    }
     this.diagnostics.report(operation, error, {
       dbState: this.db ? 'open' : this.databaseOpening ? 'opening' : 'closed',
       dbVersion: this.db?.version,
@@ -2106,7 +2128,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (!blob && this.authService.isLoggedIn() && this.cloudImages.has(uuid)) {
         const cloudBlobs = await this.imageSyncService.downloadImageBlobs([uuid]);
         blob = cloudBlobs.get(uuid);
-        if (blob) {
+        if (blob && this.localHistorySupported) {
           // Rendering a cloud favorite must also work when local storage is full.
           const downloadedBlob = blob;
           void this.getDatabase().then(db => this.storeCloudImage(db, image, downloadedBlob))
@@ -2260,6 +2282,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async searchImages(preservePage: boolean = false) {
+    if (!this.localHistorySupported) {
+      await this.updateFavoriteImages();
+      return;
+    }
     this.isSearching = true;
     const previousPage = this.currentPageNumber;
     try {
@@ -2574,6 +2600,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async loadTags() {
+    if (!this.localHistorySupported) return;
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction('TagStore', 'readonly');
@@ -2797,6 +2824,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async getAllImagesFromDb(throwOnError = false): Promise<MobiansImage[]> {
+    if (!this.localHistorySupported) return [];
     try {
       const db = await this.getDatabase();
       const transaction = db.transaction([this.storeName], 'readonly');
@@ -2898,6 +2926,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async syncTagsFromCloud(): Promise<void> {
+    if (!this.localHistorySupported) return;
     if (!this.authService.isLoggedIn() || this.tagsSyncInProgress) return;
     this.tagsSyncInProgress = true;
     try {
@@ -3180,7 +3209,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       try {
         await this.imageSyncService.fetchSyncStatus();
         try {
-          await this.retryFavoriteChanges();
+          if (this.localHistorySupported) await this.retryFavoriteChanges();
         } catch (error) {
           this.reportHistoryError('history.favorite', error);
         }
@@ -3210,7 +3239,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const images = Array.from(this.cloudImages.values());
       // Publish metadata before restoring files; generating cannot hide these entries.
       await this.updateFavoriteImages();
-      if (images.length === 0) return 0;
+      if (images.length === 0 || !this.localHistorySupported) return 0;
 
       const db = await this.getDatabase();
       let imagesAdded = 0;

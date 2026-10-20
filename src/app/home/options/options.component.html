@@ -1,4 +1,10 @@
 <p-toast [breakpoints]="{ '480px': { width: 'calc(100% - 24px)', right: '12px', left: '12px' } }"></p-toast>
+@if (!localHistorySupported && !historyRecoveryPending) {
+  <section class="history-recovery" role="note" aria-label="Local history unavailable">
+    <strong>Local history unavailable in this browser</strong>
+    <p>You can generate and download images, but this browser cannot save them to history or favorites. Use another browser for saving. Existing cloud favorites remain available when signed in.</p>
+  </section>
+}
 
 <!-- Queue Type Selector -->
 <div class="queue-selector-container d-flex align-items-center justify-content-center mb-2 flex-wrap gap-2">
@@ -80,6 +86,8 @@
         type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!canGenerate">
         {{ aprilFools.isAprilFools() ? aprilFools.getGenerateButtonText(!!referenceImage) : (referenceImage ? 'Generate w/Ref' : 'Generate!') }}
       </button>
+    } @else if (historyRecoveryPending && !localHistorySupported) {
+      <button class="btn btn-primary" type="button" id="generate-button" (click)="downloadGeneratedPrompts()">Download prompts</button>
     } @else if (historyRecoveryPending) {
       <button class="btn btn-primary d-flex align-items-center" type="button" id="generate-button"
         (click)="retryHistorySave()" [disabled]="historyRecoveryInProgress">
@@ -98,15 +106,23 @@
 
   @if (historyRecoveryPending) {
     <section class="history-recovery" aria-live="polite" aria-label="Image history recovery">
-      <strong><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> Images need saving</strong>
+      <strong><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> {{ localHistorySupported ? 'Images need saving' : 'Download before continuing' }}</strong>
+      @if (localHistorySupported) {
       <p>{{ historyRecoveryUnsavedCount }} {{ historyRecoveryUnsavedCount === 1 ? 'image has' : 'images have' }} not been saved to history yet.
         Keep this page open and retry saving. You can still download the available previews.</p>
       <p class="history-recovery-note">New generation is paused so these images are not replaced. If browser storage is full, download older images before removing them from history.</p>
+      } @else {
+        <p>This browser cannot save local image history. Download the available image previews and their prompts before continuing or closing this page. Retrying cannot add storage support.</p>
+      }
       <div class="history-recovery-actions">
+        @if (localHistorySupported) {
         <button type="button" class="btn btn-primary" (click)="retryHistorySave()" [disabled]="historyRecoveryInProgress">
           {{ historyRecoveryInProgress ? 'Saving...' : 'Retry saving' }}
         </button>
-        <button type="button" class="btn btn-outline-secondary" (click)="stopHistoryRecovery()" [disabled]="historyRecoveryInProgress">Stop retrying</button>
+        } @else {
+          <button type="button" class="btn btn-primary" (click)="downloadGeneratedPrompts()">Download prompts</button>
+        }
+        <button type="button" class="btn btn-outline-secondary" (click)="stopHistoryRecovery()" [disabled]="historyRecoveryInProgress">{{ localHistorySupported ? 'Stop retrying' : 'Continue after downloading' }}</button>
       </div>
     </section>
   }

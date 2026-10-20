@@ -672,3 +672,13 @@
     padding: 0.25rem 0.5rem;
   }
 }
+.history-storage-notice {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: var(--theme-surface-text);
+  overflow-wrap: anywhere;
+}
+.history-storage-notice p { margin: 6px 0 0; font-size: .9rem; }
+.history-icon-btn:disabled { opacity: .45; cursor: not-allowed; }
