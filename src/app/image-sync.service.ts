@@ -1,9 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Optional } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 import { MobiansImage, MobiansImageMetadata, ImageTag } from '../_shared/mobians-image.interface';
 import { AuthService } from './auth/auth.service';
 import { environment } from '../environments/environment';
+import { HistoryDiagnosticsService } from './history-diagnostics.service';
 
 export const CLOUD_IMAGE_LIMIT = 1500;
 
@@ -50,10 +51,13 @@ export class ImageSyncService {
   // Track which images are synced (cached locally)
   private syncedImageUUIDs = new Set<string>();
   private syncedUserId: string | null = null;
+  private syncStateRevision = 0;
+  private statusRequestId = 0;
 
   constructor(
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    @Optional() private diagnostics?: HistoryDiagnosticsService
   ) {
     // Load synced UUIDs from localStorage on init
     this.loadSyncedUUIDsFromStorage();
@@ -111,6 +115,8 @@ export class ImageSyncService {
       return this.syncStatusSubject.value;
     }
 
+    const revision = this.syncStateRevision;
+    const requestId = ++this.statusRequestId;
     try {
       const response = await firstValueFrom(
         this.http.get<any>(`${this.API_URL}/history/sync/status`, {
@@ -123,6 +129,12 @@ export class ImageSyncService {
         return this.syncStatusSubject.value;
       }
 
+      // A status response describes the library before any uploads/removals that
+      // finished while it was in flight. Keep those committed changes intact.
+      if (requestId !== this.statusRequestId || revision !== this.syncStateRevision) {
+        return this.syncStatusSubject.value;
+      }
+
       const status: SyncStatus = {
         syncEnabled: true,
         imagesInCloud: response.images_in_cloud || 0,
@@ -131,7 +143,7 @@ export class ImageSyncService {
           limit: response.quota_limit > 0 ? response.quota_limit : this.SYNC_LIMIT
         },
         lastSyncTime: response.last_sync_time || null,
-        isSyncing: false
+        isSyncing: this.syncStatusSubject.value.isSyncing
       };
 
       // Update synced UUIDs cache
@@ -140,10 +152,12 @@ export class ImageSyncService {
         this.saveSyncedUUIDsToStorage();
       }
 
+      this.syncStateRevision++;
       this.syncStatusSubject.next(status);
       return status;
     } catch (error) {
       console.error('Failed to fetch sync status:', error);
+      this.reportSyncError('history.sync.status', error);
       return this.syncStatusSubject.value;
     }
   }
@@ -202,23 +216,24 @@ export class ImageSyncService {
 
       // Mark as synced locally
       if (userId !== this.authService.getUserId()) return false;
-      this.syncedImageUUIDs.add(image.UUID);
+      const addedToCloud = this.markImageSynced(image.UUID);
       this.saveSyncedUUIDsToStorage();
 
       // Update status
       const currentStatus = this.syncStatusSubject.value;
       this.syncStatusSubject.next({
         ...currentStatus,
-        imagesInCloud: currentStatus.imagesInCloud + (wasSynced ? 0 : 1),
+        imagesInCloud: currentStatus.imagesInCloud + (addedToCloud ? 1 : 0),
         quota: {
           ...currentStatus.quota,
-          used: currentStatus.quota.used + (wasSynced ? 0 : 1)
+          used: currentStatus.quota.used + (addedToCloud ? 1 : 0)
         }
       });
 
       return true;
     } catch (error) {
       console.error('Failed to sync image:', error);
+      this.reportSyncError('history.sync.upload', error);
       return false;
     }
   }
@@ -231,6 +246,8 @@ export class ImageSyncService {
     getBlob: (uuid: string) => Promise<Blob | undefined>,
     progressCallback?: (current: number, total: number) => void
   ): Promise<SyncResult> {
+    this.ensureSyncAccount();
+    const userId = this.authService.getUserId();
     const result: SyncResult = {
       success: true,
       syncedCount: 0,
@@ -256,8 +273,14 @@ export class ImageSyncService {
 
     // Filter out already synced images
     const imagesToSync = sortedImages.filter(img => !this.isImageSynced(img.UUID));
+    const accountChanged = () => userId !== this.authService.getUserId() || !this.authService.isLoggedIn();
+    const accountChangedMessage = 'Backup stopped because the signed-in account changed. Your images remain on this device.';
 
     for (let i = 0; i < imagesToSync.length; i++) {
+      if (accountChanged()) {
+        result.errors.push(accountChangedMessage);
+        break;
+      }
       const image = imagesToSync[i];
       const quota = this.syncStatusSubject.value.quota;
       if (quota.used >= quota.limit) {
@@ -271,8 +294,18 @@ export class ImageSyncService {
 
       try {
         const blob = await getBlob(image.UUID);
+        // Getting a local blob can yield while a user signs out or switches accounts.
+        // syncImage would otherwise use the new account for the old batch.
+        if (accountChanged()) {
+          result.errors.push(accountChangedMessage);
+          break;
+        }
         if (blob) {
           const success = await this.syncImage(image, blob);
+          if (accountChanged()) {
+            result.errors.push(accountChangedMessage);
+            break;
+          }
           if (success) {
             result.uploadedCount++;
             result.syncedCount++;
@@ -288,11 +321,15 @@ export class ImageSyncService {
     }
 
     // Update syncing status
-    this.syncStatusSubject.next({ 
-      ...this.syncStatusSubject.value, 
-      isSyncing: false,
-      lastSyncTime: new Date().toISOString()
-    });
+    if (!accountChanged()) {
+      this.syncStatusSubject.next({
+        ...this.syncStatusSubject.value,
+        isSyncing: false,
+        lastSyncTime: new Date().toISOString()
+      });
+    } else {
+      this.ensureSyncAccount();
+    }
 
     result.success = result.errors.length === 0;
     return result;
@@ -351,13 +388,14 @@ export class ImageSyncService {
         }
 
         // Mark as synced
-        this.syncedImageUUIDs.add(item.image_uuid);
+        this.markImageSynced(item.image_uuid);
       }
 
       this.saveSyncedUUIDsToStorage();
       return { images, blobs };
     } catch (error) {
       console.error('Failed to download from cloud:', error);
+      this.reportSyncError('history.sync.metadata', error);
       // A failed request must not be mistaken for an empty cloud library.
       throw error;
     }
@@ -406,10 +444,11 @@ export class ImageSyncService {
           }
 
           blobs.set(item.image_uuid, this.base64ToBlob(item.image_blob, 'image/webp'));
-          this.syncedImageUUIDs.add(item.image_uuid);
+          this.markImageSynced(item.image_uuid);
         }
       } catch (error) {
         console.error('Failed to download cloud image blobs:', error);
+        this.reportSyncError('history.sync.blobs', error, chunk.length);
       }
     }
 
@@ -496,6 +535,8 @@ export class ImageSyncService {
     imageUUID: string, 
     updates: { tags?: string[]; is_favorite?: boolean }
   ): Promise<boolean> {
+    this.ensureSyncAccount();
+    const userId = this.authService.getUserId();
     if (!this.authService.isLoggedIn()) {
       return false;
     }
@@ -511,13 +552,19 @@ export class ImageSyncService {
           headers: this.getAuthHeaders()
         })
       );
-      return true;
+      return userId === this.authService.getUserId();
     } catch (error) {
+      // A late response belongs only to the account that made the request.
+      if (userId !== this.authService.getUserId()) {
+        this.ensureSyncAccount();
+        return false;
+      }
       if ((error as any)?.status === 404) {
-        this.syncedImageUUIDs.delete(imageUUID);
+        this.unmarkImageSynced(imageUUID);
         this.saveSyncedUUIDsToStorage();
       }
       console.error('Failed to update image metadata:', error);
+      this.reportSyncError('history.sync.favorite', error);
       return false;
     }
   }
@@ -543,22 +590,46 @@ export class ImageSyncService {
     } catch (error) {
       if ((error as any)?.status !== 404) {
         console.error('Failed to unsync image:', error);
+        this.reportSyncError('history.sync.remove', error);
         return false;
       }
       // A previous request may have succeeded before its response was lost.
       alreadyMissing = true;
     }
     if (userId !== this.authService.getUserId()) return false;
-    const wasSynced = this.syncedImageUUIDs.delete(imageUUID);
+    const wasSynced = this.unmarkImageSynced(imageUUID);
     this.saveSyncedUUIDsToStorage();
     const removedCount = !alreadyMissing || wasSynced ? 1 : 0;
     const currentStatus = this.syncStatusSubject.value;
+    this.syncStateRevision++;
     this.syncStatusSubject.next({
       ...currentStatus,
       imagesInCloud: Math.max(0, currentStatus.imagesInCloud - removedCount),
       quota: { ...currentStatus.quota, used: Math.max(0, currentStatus.quota.used - removedCount) }
     });
     return true;
+  }
+
+  private markImageSynced(imageUUID: string): boolean {
+    if (this.syncedImageUUIDs.has(imageUUID)) return false;
+    this.syncedImageUUIDs.add(imageUUID);
+    this.syncStateRevision++;
+    return true;
+  }
+
+  private unmarkImageSynced(imageUUID: string): boolean {
+    const removed = this.syncedImageUUIDs.delete(imageUUID);
+    if (removed) this.syncStateRevision++;
+    return removed;
+  }
+
+  private reportSyncError(operation: string, error: unknown, requestedCount?: number): void {
+    this.diagnostics?.report(operation, error, {
+      cloudCount: this.syncStatusSubject.value.imagesInCloud,
+      syncEnabled: this.syncStatusSubject.value.syncEnabled,
+      requestedCount,
+      httpStatus: (error as { status?: number } | null)?.status
+    });
   }
 
   // Helper: Convert Blob to base64
@@ -589,6 +660,7 @@ export class ImageSyncService {
 
   // Load synced UUIDs from localStorage
   private loadSyncedUUIDsFromStorage(): void {
+    this.syncStateRevision++;
     this.syncedUserId = this.authService.getUserId();
     this.syncedImageUUIDs.clear();
     if (!this.syncedUserId) return;

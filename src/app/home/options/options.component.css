@@ -343,6 +343,34 @@
 .prompt-header label { margin: 0; flex-shrink: 0; font-size: .85rem; font-weight: 700; }
 .prompt-header app-character-picker { min-width: 0; }
 
+.history-recovery {
+  width: 100%;
+  margin: .75rem 0;
+  padding: .9rem;
+  border: 1px solid #d69b2c;
+  border-radius: .6rem;
+  background: var(--theme-surface-bg, #fff);
+  color: var(--theme-surface-text, #172033);
+  overflow-wrap: anywhere;
+}
+.history-recovery strong { display: flex; align-items: center; gap: .5rem; }
+.history-recovery p { margin: .5rem 0; font-size: .9rem; }
+.history-recovery .history-recovery-note { font-size: .82rem; }
+.history-recovery-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.history-recovery-actions .btn { min-height: 42px; }
+.history-recovery .btn-outline-secondary {
+  color: var(--theme-surface-text, #172033);
+  border-color: currentColor;
+  background: transparent;
+}
+.history-recovery .btn-outline-secondary:hover:not(:disabled) {
+  background: var(--theme-surface-alt-bg, #e8edf5);
+}
+.history-recovery-actions .btn:focus-visible {
+  outline: 2px solid var(--theme-surface-text, #172033);
+  outline-offset: 3px;
+}
+
 /* Match the stacked tablet layout in Home. Center the prompt itself, rather
    than leaving its desktop inset inside the wider settings column. */
 @media (min-width: 601px) and (max-width: 1023px) and (hover: none) and (pointer: coarse) {

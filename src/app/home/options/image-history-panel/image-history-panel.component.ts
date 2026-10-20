@@ -20,6 +20,7 @@ import { CharactersService } from 'src/app/characters/characters.service';
 import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { TabsModule } from 'primeng/tabs';
+import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 
 @Component({
     selector: 'app-image-history-panel',
@@ -46,6 +47,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
   private readonly destroyRef = inject(DestroyRef);
   private readonly historyEvents = inject(ImageHistoryEventsService);
+  private readonly diagnostics = inject(HistoryDiagnosticsService);
 
   // Large downloads can fail (or appear to “never start”) on slower devices if we revoke
   // object URLs too quickly or try to build a massive single ZIP in memory.
@@ -62,6 +64,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private storeName = 'ImageStore';
   private blobStoreName = 'blobStore';
   private db: IDBDatabase | null = null;
+  private databaseOpening?: Promise<IDBDatabase>;
+  private historyDestroyed = false;
+  private lastSaveErrorName = '';
   private readonly imageUrlCache = new Map<string, string>();
   private readonly imageLoadRetries = new Map<string, number>();
   private readonly imageLoadInFlight = new Map<string, Promise<void>>();
@@ -150,6 +155,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private cloudMetadataLoaded = false;
   private cloudMetadataRequest?: Promise<void>;
   private cloudMetadataUserId: string | null = null;
+  private cloudMetadataFavoriteRevision: string | null = null;
   private cloudSyncTask?: Promise<void>;
   private localHistoryCache: MobiansImage[] = [];
   private favoriteMutationRevision = 0;
@@ -226,6 +232,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.historyDestroyed = true;
+    this.invalidateDatabase();
     this.favoritePageLoadToken++;
     this.pageLoadToken++;
     if (this.promptCopyResetTimer) clearTimeout(this.promptCopyResetTimer);
@@ -241,11 +249,18 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async initializeHistory() {
-    await this.getDatabase();
-    await this.migrateBase64ToBlobStore();
-    await this.loadTags();
-    await this.searchImages();
-    await this.updateTagCounts();
+    try {
+      await this.getDatabase();
+      await this.migrateBase64ToBlobStore();
+      await this.loadTags();
+      await this.searchImages();
+      await this.updateTagCounts();
+    } catch (error) {
+      this.reportHistoryError('history.load', error);
+      // Cloud favorites are usable even when the browser cannot open local storage.
+      await this.updateFavoriteImages();
+    }
+    if (this.historyDestroyed) return;
     this.historyInitialized = true;
 
     if (this.authService.isLoggedIn()) {
@@ -255,7 +270,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.startCloudTagSync();
   }
 
-  async ingestGeneratedImages(generatedImages: MobiansImage[]): Promise<boolean> {
+  async ingestGeneratedImages(generatedImages: MobiansImage[], options: { notifyFailure?: boolean } = {}): Promise<boolean> {
     if (!generatedImages || generatedImages.length === 0) return false;
 
     generatedImages.forEach((img: MobiansImage) => {
@@ -275,10 +290,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     }
 
     if (storedImages.length === 0) {
-      this.messageService.add({
+      if (options.notifyFailure !== false) this.messageService.add({
         severity: 'error',
         summary: 'Save Failed',
-        detail: 'Could not save generated images to history. Please download them or retry.',
+        detail: this.lastSaveErrorName === 'QuotaExceededError'
+          ? 'Browser storage is full. Download these images, free device space, then retry saving. Keep this page open.'
+          : 'Could not save generated images to history. Keep this page open and retry saving, or download them.',
         life: 5000
       });
       return false;
@@ -302,21 +319,26 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         aspectRatio: image.aspectRatio,
         width: image.width,
         height: image.height,
-        favorite: false,
+        favorite: image.favorite ?? false,
         model: image.model,
         seed: image.seed,
         negativePrompt: image.negativePrompt,
         cfg: image.cfg,
-        tags: [],
-        syncPriority: 0,
+        tags: image.tags || [],
+        syncPriority: image.syncPriority ?? 0,
         lastModified: image.lastModified
       } as MobiansImageMetadata;
     });
     this.runInAngularZone(() => {
-      this.imageHistoryMetadata.unshift(...newMetadata);
+      const committed = new Map(newMetadata.map(image => [image.UUID, image]));
+      const existing = new Set(this.imageHistoryMetadata.map(image => image.UUID));
+      this.imageHistoryMetadata = [
+        ...newMetadata.filter(image => !existing.has(image.UUID)),
+        ...this.imageHistoryMetadata.map(image => committed.get(image.UUID) || image),
+      ];
     });
 
-    if (failedImages.length > 0) {
+    if (failedImages.length > 0 && options.notifyFailure !== false) {
       this.messageService.add({
         severity: 'warn',
         summary: 'Partial Save',
@@ -332,22 +354,29 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       }
       this.editPageNumber = this.currentPageNumber;
     });
-    const nextImages = await this.paginateImages(this.currentPageNumber);
-    this.runInAngularZone(() => {
-      this.currentPageImages = nextImages;
+    const refreshToken = ++this.pageLoadToken;
+    // An older visible history image may still need a cloud download. The new
+    // generated images are already durable, so recovery must not wait for it.
+    void this.paginateImages(this.currentPageNumber).then(nextImages => {
+      if (!this.historyDestroyed && refreshToken === this.pageLoadToken) {
+        this.runInAngularZone(() => { this.currentPageImages = nextImages; });
+        this.cdr.detectChanges();
+      }
+    }).catch(error => {
+      // A display refresh failure must never turn a committed write into a failed save.
+      this.reportHistoryError('history.load', error);
     });
-    this.cdr.detectChanges();
     // The generated images are committed locally. Cloud-only favorites may need
     // network downloads, which must not keep a completed edit locked in its modal.
     void this.updateFavoriteImages().catch(error => {
-      console.error('Failed to refresh favorites after saving generated images:', error);
+      this.reportHistoryError('history.favorite', error);
     });
     return failedImages.length === 0;
   }
 
   private async persistGeneratedImage(image: MobiansImage): Promise<boolean> {
     if (!image?.UUID || !image.blob) {
-      console.warn('Generated image missing blob or UUID. Skipping history save.', image);
+      this.reportHistoryError('history.save', new DOMException('Required image data unavailable', 'DataError'));
       return false;
     }
 
@@ -358,32 +387,56 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     // The grid shares this image object. Compress only the stored copy so expanding
     // a freshly generated PNG does not silently switch its browser-save format.
 
-    try {
-      const db = await this.getDatabase();
-      return await new Promise<boolean>((resolve) => {
-        const transaction = db.transaction([this.storeName, 'blobStore'], 'readwrite');
-        const store = transaction.objectStore(this.storeName);
-        const blobStore = transaction.objectStore('blobStore');
-
-        let failed = false;
-        transaction.oncomplete = () => resolve(!failed);
-        transaction.onerror = () => resolve(false);
-        transaction.onabort = () => resolve(false);
-
-        const imageMetadata: any = { ...image };
-        delete imageMetadata.blob;
-        delete imageMetadata.url;
-
-        const metaRequest = store.put(imageMetadata);
-        metaRequest.onerror = () => { failed = true; };
-
-        const blobRequest = blobStore.put({ UUID: image.UUID, blob: blobToStore });
-        blobRequest.onerror = () => { failed = true; };
-      });
-    } catch (error) {
-      console.error('Failed to store generated image data', error);
-      return false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const db = await this.getDatabase();
+        await this.writeGeneratedImage(db, image, blobToStore);
+        return true;
+      } catch (error) {
+        this.lastSaveErrorName = (error as { name?: string })?.name || 'Error';
+        this.reportHistoryError('history.save', error, { attempt, requestedCount: 1, savedCount: 0 });
+        if (attempt === 0 && ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes(this.lastSaveErrorName)) {
+          this.invalidateDatabase();
+          continue;
+        }
+        return false;
+      }
     }
+    return false;
+  }
+
+  private writeGeneratedImage(db: IDBDatabase, image: MobiansImage, blob: Blob): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([this.storeName, this.blobStoreName], 'readwrite');
+      const metadata = tx.objectStore(this.storeName);
+      const blobs = tx.objectStore(this.blobStoreName);
+      let failure: unknown;
+      tx.oncomplete = () => resolve();
+      tx.onerror = event => { failure ??= (event.target as IDBRequest)?.error || tx.error; };
+      tx.onabort = () => reject(failure || tx.error || new DOMException('History write aborted', 'AbortError'));
+      const guard = (write: () => void) => {
+        try { write(); } catch (error) { failure = error; tx.abort(); }
+      };
+      const existing = metadata.get(image.UUID);
+      existing.onsuccess = () => guard(() => {
+        // A resumed download must not overwrite a favorite, tags, or pending sync.
+        if (!existing.result) {
+          const record = { ...image };
+          delete record.blob;
+          delete record.url;
+          metadata.add(record);
+        } else {
+          // Keep the preview's original file while reflecting its durable metadata.
+          const originalBlob = image.blob;
+          const originalUrl = image.url;
+          Object.assign(image, existing.result, { blob: originalBlob, url: originalUrl });
+        }
+      });
+      const storedBlob = blobs.get(image.UUID);
+      storedBlob.onsuccess = () => guard(() => {
+        if (!storedBlob.result?.blob?.size) blobs.put({ UUID: image.UUID, blob });
+      });
+    });
   }
 
   async deleteAllImages() {
@@ -1213,7 +1266,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     try {
       return await this.persistFavoriteChange(image);
     } catch (error) {
-      console.error('Favorite change is still pending:', error);
+      this.reportHistoryError('history.favorite', error);
       return false;
     }
   }
@@ -1377,7 +1430,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       await transactionDone;
       return true;
     } catch (error) {
-      console.error('Failed to update image in IndexedDB', error);
+      this.reportHistoryError('history.favorite', error);
       return false;
     }
   }
@@ -1701,18 +1754,45 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       }
 
       const request = indexedDB.open(this.dbName, 38);
+      let settled = false;
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(openTimeout);
+        this.reportHistoryError('db.open', error);
+        reject(error);
+      };
+      const openTimeout = setTimeout(() => fail(new DOMException('Opening history timed out', 'TimeoutError')), 10_000);
 
-      request.onerror = (event) => {
-        console.error('Failed to open database:', event);
-        reject(new Error('Failed to open database'));
+      request.onerror = () => {
+        fail(request.error || new DOMException('History unavailable', 'UnknownError'));
       };
 
-      request.onsuccess = (event) => {
+      request.onsuccess = () => {
         const db = request.result;
+        if (settled || this.historyDestroyed) {
+          db.close();
+          fail(new DOMException('History panel closed', 'AbortError'));
+          return;
+        }
+        settled = true;
+        clearTimeout(openTimeout);
+        db.onclose = () => {
+          this.invalidateDatabase(db);
+          this.reportHistoryError('db.closed', new DOMException('History connection closed unexpectedly', 'InvalidStateError'));
+        };
+        db.onversionchange = () => {
+          this.invalidateDatabase(db);
+          this.reportHistoryError('db.versionchange', new DOMException('History version changed', 'InvalidStateError'));
+        };
         resolve(db);
       };
 
       request.onupgradeneeded = (event) => {
+        if (settled || this.historyDestroyed) {
+          request.transaction?.abort();
+          return;
+        }
         const db = request.result;
 
         const upgradeTransaction = request.transaction;
@@ -1723,7 +1803,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
         upgradeTransaction!.onerror = (event) => {
           console.error('Upgrade transaction failed:', event);
-          reject(new Error('Upgrade transaction failed'));
+          fail(upgradeTransaction?.error || new DOMException('History upgrade failed', 'AbortError'));
         };
 
         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -1813,18 +1893,57 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         }
       };
 
-      request.onblocked = (event) => {
-        console.error('Database access blocked:', event);
-        reject(new Error('Database access blocked'));
+      request.onblocked = () => {
+        fail(new DOMException('Another tab is blocking the history upgrade', 'BlockedError'));
       };
     });
   }
 
   async getDatabase(): Promise<IDBDatabase> {
-    if (!this.db) {
-      this.db = await this.openDatabase();
+    if (this.historyDestroyed) throw new DOMException('History panel closed', 'AbortError');
+    if (this.db) {
+      try {
+        // close() itself emits no close event; probe before reusing a cached handle.
+        this.db.transaction(this.storeName, 'readonly');
+        return this.db;
+      } catch (error) {
+        if ((error as DOMException)?.name !== 'InvalidStateError') throw error;
+        this.reportHistoryError('db.reopen', error);
+        this.invalidateDatabase();
+      }
     }
-    return this.db;
+    if (!this.databaseOpening) {
+      const opening = this.openDatabase().then(db => {
+        if (this.historyDestroyed) {
+          db.close();
+          throw new DOMException('History panel closed', 'AbortError');
+        }
+        this.db = db;
+        return db;
+      });
+      this.databaseOpening = opening;
+      void opening.finally(() => {
+        if (this.databaseOpening === opening) this.databaseOpening = undefined;
+      }).catch(() => {});
+    }
+    return this.databaseOpening;
+  }
+
+  private invalidateDatabase(db = this.db): void {
+    if (!db) return;
+    if (this.db === db) this.db = null;
+    db.close();
+  }
+
+  private reportHistoryError(operation: string, error: unknown, context: Record<string, unknown> = {}): void {
+    this.diagnostics.report(operation, error, {
+      dbState: this.db ? 'open' : this.databaseOpening ? 'opening' : 'closed',
+      dbVersion: this.db?.version,
+      imageCount: this.imageHistoryMetadata.length,
+      favoriteCount: this.favoriteImageHistoryMetadata.length,
+      cloudCount: this.cloudImages.size,
+      ...context,
+    });
   }
 
   async migrateBase64ToBlobStore() {
@@ -1989,8 +2108,9 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         blob = cloudBlobs.get(uuid);
         if (blob) {
           // Rendering a cloud favorite must also work when local storage is full.
-          const db = await this.getDatabase();
-          await this.storeCloudImage(db, image, blob);
+          const downloadedBlob = blob;
+          void this.getDatabase().then(db => this.storeCloudImage(db, image, downloadedBlob))
+            .catch(error => this.reportHistoryError('db.write', error));
         }
       }
       if (!blob) return;
@@ -2011,7 +2131,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         this.safeRevoke(previousUrl);
       }
     } catch (error) {
-      console.error('Failed to load image data', error);
+      this.reportHistoryError('history.load', error);
     }
   }
 
@@ -2039,15 +2159,18 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         blob = await this.blobMigrationService.convertToWebP(blob);
       }
 
-      const db = await this.getDatabase();
-      await new Promise<void>((resolve) => {
-        const tx = db.transaction(this.blobStoreName, 'readwrite');
-        const store = tx.objectStore(this.blobStoreName);
-        store.put({ UUID: image.UUID, blob });
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-        tx.onabort = () => resolve();
-      });
+      try {
+        const db = await this.getDatabase();
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(this.blobStoreName, 'readwrite');
+          const store = tx.objectStore(this.blobStoreName);
+          store.put({ UUID: image.UUID, blob });
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(tx.error || new DOMException('History cache write aborted', 'AbortError'));
+        });
+      } catch (error) {
+        this.reportHistoryError('db.write', error);
+      }
 
       return blob;
     } catch {
@@ -2214,7 +2337,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       await this.updateFavoriteImages();
     } catch (error) {
-      console.error('Error searching images:', error);
+      this.reportHistoryError('history.load', error);
+      await this.updateFavoriteImages();
     } finally {
       this.runInAngularZone(() => {
         this.isSearching = false;
@@ -2394,7 +2518,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     try {
       this.localHistoryCache = await this.getAllImagesFromDb(true);
     } catch (error) {
-      console.warn('Keeping the previous history after a storage read failed:', error);
+      this.reportHistoryError('db.read', error);
     }
     this.ensureCloudAccount();
     if (!this.authService.isLoggedIn()) return this.localHistoryCache;
@@ -2402,12 +2526,18 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       try {
         await this.loadCloudMetadata();
       } catch (error) {
-        console.warn('Keeping the previous cloud favorites after a sync failed:', error);
+        this.reportHistoryError('history.sync', error);
       }
     }
-    // Local metadata wins for duplicate UUIDs, including changes awaiting upload.
+    // Pending/recent star clicks win over an older cloud response. Otherwise,
+    // cloud favorite state is usable without a successful local cache write.
     const images = new Map(this.cloudImages);
-    for (const image of this.localHistoryCache) images.set(image.UUID, image);
+    for (const image of this.localHistoryCache) {
+      const cloud = images.get(image.UUID);
+      const useCloudFavorite = cloud && !image.favoriteSyncPending
+        && this.cloudMetadataFavoriteRevision === this.getFavoriteRevision();
+      images.set(image.UUID, useCloudFavorite ? { ...image, favorite: cloud.favorite } : image);
+    }
     return Array.from(images.values());
   }
 
@@ -2418,6 +2548,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.cloudImages.clear();
     this.deletedCloudImages.clear();
     this.cloudMetadataLoaded = false;
+    this.cloudMetadataFavoriteRevision = null;
     this.cloudMetadataRequest = undefined;
   }
 
@@ -2426,10 +2557,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (this.cloudMetadataRequest) return this.cloudMetadataRequest;
     if (this.cloudMetadataLoaded && !refresh) return;
     const userId = this.cloudMetadataUserId;
+    const favoriteRevision = this.getFavoriteRevision();
     const request = (async () => {
       const { images } = await this.imageSyncService.downloadFromCloud(false);
       if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return;
       this.cloudImages = new Map(images.filter(image => !this.deletedCloudImages.has(image.UUID)).map(image => [image.UUID, image]));
+      this.cloudMetadataFavoriteRevision = favoriteRevision;
       this.cloudMetadataLoaded = true;
     })();
     this.cloudMetadataRequest = request;
@@ -2674,7 +2807,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to load images from IndexedDB', error);
+      this.reportHistoryError('db.read', error);
       if (throwOnError) throw error;
       return [];
     }
@@ -2958,8 +3091,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         let failed = false;
 
         transaction.oncomplete = () => resolve(!failed);
-        transaction.onerror = () => resolve(false);
-        transaction.onabort = () => resolve(false);
+        transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
+        transaction.onabort = () => {
+          this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
+          resolve(false);
+        };
 
         const currentRequest = imageStore.get(cloudImage.UUID);
         currentRequest.onsuccess = () => {
@@ -2975,7 +3111,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         blobRequest.onerror = () => { failed = true; };
       });
     } catch (error) {
-      console.error('Failed to store cloud image:', error);
+      this.reportHistoryError('db.write', error);
       return false;
     }
   }
@@ -2987,13 +3123,16 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         const blobStore = transaction.objectStore(this.blobStoreName);
 
         transaction.oncomplete = () => resolve(true);
-        transaction.onerror = () => resolve(false);
-        transaction.onabort = () => resolve(false);
+        transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
+        transaction.onabort = () => {
+          this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
+          resolve(false);
+        };
 
         blobStore.put({ UUID: uuid, blob });
       });
     } catch (error) {
-      console.error('Failed to store cloud image blob:', error);
+      this.reportHistoryError('db.write', error);
       return false;
     }
   }
@@ -3026,8 +3165,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         }
         resolve(!!updated);
       };
-      transaction.onerror = () => resolve(false);
-      transaction.onabort = () => resolve(false);
+      transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
+      transaction.onabort = () => {
+        this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud metadata write aborted', 'AbortError'));
+        resolve(false);
+      };
     });
   }
 
@@ -3037,14 +3179,18 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const task = (async () => {
       try {
         await this.imageSyncService.fetchSyncStatus();
-        await this.retryFavoriteChanges();
+        try {
+          await this.retryFavoriteChanges();
+        } catch (error) {
+          this.reportHistoryError('history.favorite', error);
+        }
         const mergedCount = await this.mergeCloudImages();
         if (notify && mergedCount > 0 && !this.destroyRef.destroyed) {
           this.messageService.add({ severity: 'success', summary: 'Synced from Cloud',
             detail: `${mergedCount} image(s) restored from cloud.` });
         }
       } catch (error) {
-        console.error('Failed to sync from cloud; will retry:', error);
+        this.reportHistoryError('history.sync', error);
       }
     })();
     this.cloudSyncTask = task;
@@ -3141,7 +3287,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
       return imagesAdded + imagesUpdated + blobsRestored;
     } catch (error) {
-      console.error('Failed to merge cloud images:', error);
+      this.reportHistoryError('history.sync', error);
       return 0;
     }
   }

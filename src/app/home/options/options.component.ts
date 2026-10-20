@@ -38,7 +38,16 @@ import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { IMAGE_EDIT_MODELS, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
 import { imageDownloadConcurrency, runImageDownloadPool } from './image-download-pool';
+import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 
+interface PendingGenerationJob {
+  job_id: string;
+  request?: any;
+  createdAt?: number;
+  savedGeneratedImages?: string[];
+  phase?: 'saving';
+  expectedImageCount?: number;
+}
 
 @Component({
     selector: 'app-options',
@@ -64,6 +73,7 @@ import { imageDownloadConcurrency, runImageDownloadPool } from './image-download
 export class OptionsComponent implements OnInit {
   readonly imageEditor = inject(ImageEditorService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly historyDiagnostics = inject(HistoryDiagnosticsService);
   private readonly characters = inject(CharactersService);
   private readonly characterMask = inject(InpaintingMaskService);
   get loadedCharacterName(): string { return this.characters.activeCharacter()?.name || ''; }
@@ -289,6 +299,14 @@ export class OptionsComponent implements OnInit {
   jobID: string = "";
   // Add a simple flag to indicate a pending job
   hasPendingJob: boolean = false;
+  historyRecoveryPending = false;
+  historyRecoveryInProgress = false;
+  historyRecoveryUnsavedCount = 0;
+  private pendingJobInMemory: PendingGenerationJob | null = null;
+  private pendingJobPersistenceFailed = false;
+  private recoveryAttempts = 0;
+  private lastAutomaticRecoveryAt = 0;
+  private deliveryInProgress = false;
   // Track active polling subscription and cancel state
   private jobPollSub?: Subscription;
   private submissionInProgress = false;
@@ -374,7 +392,18 @@ export class OptionsComponent implements OnInit {
     );
 
     window.addEventListener('storage', this.onJobStorageChange);
+    window.addEventListener('online', this.onRecoveryOpportunity);
+    document.addEventListener('visibilitychange', this.onRecoveryOpportunity);
   }
+
+  private readonly onRecoveryOpportunity = (): void => {
+    if (this.componentDestroyed || !this.historyRecoveryPending || this.deliveryInProgress
+      || this.historyRecoveryInProgress || !navigator.onLine || document.visibilityState !== 'visible'
+      || this.recoveryAttempts >= 2 || Date.now() - this.lastAutomaticRecoveryAt < 30000) return;
+    this.recoveryAttempts++;
+    this.lastAutomaticRecoveryAt = Date.now();
+    void this.retryHistorySave();
+  };
 
   private readonly onJobStorageChange = (e: StorageEvent): void => {
     if (this.componentDestroyed || this.submissionInProgress || this.cancelInProgress) return;
@@ -387,6 +416,8 @@ export class OptionsComponent implements OnInit {
       } catch {}
     }
     if (e.key === this.pendingJobKey) {
+      this.pendingJobInMemory = null;
+      this.pendingJobPersistenceFailed = false;
       const pending = this.getPendingJob();
       if (!pending) {
         this.resetCancelledJob();
@@ -394,7 +425,14 @@ export class OptionsComponent implements OnInit {
         this.enableGenerationButton = false;
         this.hasPendingJob = true;
         this.loadingChange.emit(true);
-        if (this.jobID !== pending.job_id) this.getJob(pending.job_id);
+        if (pending.phase === 'saving') {
+          if (!this.deliveryInProgress && !this.historyRecoveryInProgress) {
+            // Another tab has already completed generation. Invalidate this
+            // tab's old status callbacks before they can erase its save record.
+            this.stopJobMonitoring();
+            this.showHistoryRecovery(pending.job_id);
+          }
+        } else if (this.jobID !== pending.job_id) this.getJob(pending.job_id);
       }
     }
   };
@@ -517,7 +555,7 @@ export class OptionsComponent implements OnInit {
     if (pending) {
       this.jobID = pending.job_id;
       this.hasPendingJob = true;
-      if (pending.createdAt && (Date.now() - pending.createdAt > this.pendingMaxAgeMs)) {
+      if (pending.phase !== 'saving' && pending.createdAt && (Date.now() - pending.createdAt > this.pendingMaxAgeMs)) {
         // Too old to resume; restore settings and clear pending
         this.handleExpiredPendingJob(pending);
       } else {
@@ -550,7 +588,13 @@ export class OptionsComponent implements OnInit {
         this.ensureValidModelSelected(true);
         this.sharedService.setGenerationRequest(this.generationRequest);
 
-        this.getJob(pending.job_id);
+        if (pending.phase === 'saving') {
+          this.showHistoryRecovery(pending.job_id);
+          // Let Angular create the history panel before retrying its local save.
+          setTimeout(() => { if (!this.componentDestroyed) void this.retryHistorySave(); });
+        } else {
+          this.getJob(pending.job_id);
+        }
       }
     }
     this.connectCharacterHandoffs();
@@ -641,6 +685,8 @@ export class OptionsComponent implements OnInit {
     // the persisted pending-job record.
     this.componentDestroyed = true;
     window.removeEventListener('storage', this.onJobStorageChange);
+    window.removeEventListener('online', this.onRecoveryOpportunity);
+    document.removeEventListener('visibilitychange', this.onRecoveryOpportunity);
     this.stopJobMonitoring();
 
     if (this.subscription) {
@@ -1552,6 +1598,10 @@ export class OptionsComponent implements OnInit {
             promptTemplate: response.prompt_template,
             width: requestToSend.width,
             height: requestToSend.height,
+            seed: requestToSend.seed,
+            negative_prompt: requestToSend.negative_prompt,
+            guidance_scale: requestToSend.guidance_scale,
+            batch_size: requestToSend.batch_size,
             job_type: requestToSend.job_type,
             model: requestToSend.model,
             client_id: requestToSend.client_id,
@@ -1609,6 +1659,8 @@ export class OptionsComponent implements OnInit {
 
   private resetCancelledJob(): void {
     this.stopJobMonitoring();
+    this.historyRecoveryPending = false;
+    this.historyRecoveryUnsavedCount = 0;
     this.aprilFools.discardRingGameProgress();
     this.hasPendingJob = false;
     this.jobID = '';
@@ -1849,12 +1901,17 @@ export class OptionsComponent implements OnInit {
   private async downloadJobImages(job_id: string) {
     const session = this.jobSession;
     if (!this.isCurrentJobSession(session)) return;
-    const imageCount = 4;
-    const maxRetries = 10;
-    const slots: (MobiansImage | null)[] = new Array(imageCount).fill(null);
-    const request = { ...this.generationRequest };
+    const pending = this.beginCompletedJobRecovery(job_id);
+    const imageCount = pending.expectedImageCount!;
+    const maxRetries = this.historyRecoveryInProgress ? 2 : 10;
+    const previousImages = new Map(this.sharedService.getImagesValue().map(image => [image.UUID, image]));
+    const slots: (MobiansImage | null)[] = Array.from({ length: imageCount }, (_, index) =>
+      previousImages.get(this.generatedImageId(job_id, index)) || null);
+    const saves: Promise<void>[] = [];
+    let verifyOutputCount = false;
+    const request = { ...this.generationRequest, ...pending.request };
     const ratio = { ...this.aspectRatio };
-    const seed = this.currentSeed;
+    const seed = pending.request?.seed ?? this.currentSeed;
     const attribution = this.getCharacterAttributionSnapshot();
     const historyLoras = this.getHistoryLorasSnapshot();
     const historyRegionalPrompting = this.getHistoryRegionalPromptingSnapshot();
@@ -1880,59 +1937,68 @@ export class OptionsComponent implements OnInit {
       this.queueStatusMessageChange.emit(`Downloading images... (${ready.length} of ${imageCount} ready)`);
     };
 
-    await runImageDownloadPool(imageCount, imageDownloadConcurrency((navigator as any).connection), async index => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        if (!this.isCurrentJobSession(session)) return;
-        try {
-          const blob = await firstValueFrom(this.stableDiffusionService.getJobImage(job_id, index).pipe(
-            timeout(120000), takeUntil(this.stopJobRequests)));
-          if (!this.isCurrentJobSession(session)) return;
-          const url = URL.createObjectURL(blob);
-          this.blobUrls.push(url);
-          slots[index] = {
-            ...attribution, blob, url, UUID: uuidv5(`mobians.ai/generation/${job_id}/image/${index}`, uuidv5.URL), width: request.width, height: request.height,
-            aspectRatio: ratio.aspectRatio, timestamp, prompt: historyPrompt,
-            promptTemplate: historyPromptTemplate, loras: historyLoras,
-            regional_prompting: historyRegionalPrompting, promptSummary: historyPromptSummary,
-            model: request.model, seed, negativePrompt: request.negative_prompt,
-            cfg: request.guidance_scale, tags: [], syncPriority: 0, lastModified: timestamp,
-          } as MobiansImage;
+    this.deliveryInProgress = true;
+    try {
+      await runImageDownloadPool(imageCount, imageDownloadConcurrency((navigator as any).connection), async index => {
+        if (!slots[index] && pending.savedGeneratedImages?.includes(this.generatedImageId(job_id, index))) return;
+        if (slots[index]?.blob) {
+          saves.push(this.ingestDeliveredImages(job_id, [slots[index]!]));
           publish();
-          // Persist only this newly delivered image, with its stable identity.
-          const delivered = slots[index]!;
-          void this.ingestDeliveredImages(job_id, [delivered])
-            .catch(error => console.error('Failed to store a delivered image in history', error));
           return;
-        } catch (error: any) {
-          if (!this.isCurrentJobSession(session)) return;
-          const retryable = error?.status == null || [0, 408, 500, 502, 503, 504].includes(error.status)
-            || error?.name === 'TimeoutError';
-          if (!retryable || attempt >= maxRetries - 1) {
-            console.error(`Failed to download image ${index} after ${attempt + 1} attempts`, error);
-            return;
-          }
-          this.queueStatusMessageChange.emit(`Downloading image ${index + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`);
-          await firstValueFrom(timer(Math.min(3000 * Math.pow(2, attempt), 30000))
-            .pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
         }
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          if (!this.isCurrentJobSession(session)) return;
+          try {
+            const blob = await firstValueFrom(this.stableDiffusionService.getJobImage(job_id, index).pipe(
+              timeout(this.historyRecoveryInProgress ? 30000 : 120000), takeUntil(this.stopJobRequests)));
+            if (!this.isCurrentJobSession(session)) return;
+            const url = URL.createObjectURL(blob);
+            this.blobUrls.push(url);
+            slots[index] = {
+              ...attribution, blob, url, UUID: this.generatedImageId(job_id, index), width: request.width, height: request.height,
+              aspectRatio: ratio.aspectRatio, timestamp, prompt: historyPrompt,
+              promptTemplate: historyPromptTemplate, loras: historyLoras,
+              regional_prompting: historyRegionalPrompting, promptSummary: historyPromptSummary,
+              model: request.model, seed, negativePrompt: request.negative_prompt,
+              cfg: request.guidance_scale, tags: [], syncPriority: 0, lastModified: timestamp,
+            } as MobiansImage;
+            publish();
+            // Persist only this newly delivered image, with its stable identity.
+            const delivered = slots[index]!;
+            saves.push(this.ingestDeliveredImages(job_id, [delivered]));
+            return;
+          } catch (error: any) {
+            if (!this.isCurrentJobSession(session)) return;
+            const retryable = error?.status == null || [0, 408, 500, 502, 503, 504].includes(error.status)
+              || error?.name === 'TimeoutError';
+            if (!retryable || attempt >= maxRetries - 1) {
+              if (error?.status === 404) verifyOutputCount = true;
+              console.error(`Failed to download image ${index} after ${attempt + 1} attempts`, error);
+              this.historyDiagnostics.report('generation.recover', error, { requestedCount: imageCount, attempt: attempt + 1, httpStatus: error?.status });
+              return;
+            }
+            this.queueStatusMessageChange.emit(`Downloading image ${index + 1} of ${imageCount}... (retry ${attempt + 1} of ${maxRetries})`);
+            await firstValueFrom(timer(Math.min(3000 * Math.pow(2, attempt), 30000))
+              .pipe(takeUntil(this.stopJobRequests)), { defaultValue: 0 });
+          }
+        }
+      });
+      // Downloads may finish before IndexedDB commits. Never release the pending
+      // recovery record until every expected image has a confirmed local save.
+      await Promise.all(saves);
+      if (!this.isCurrentJobSession(session)) return;
+      this.sharedService.setDownloadSlots(null);
+      this.queueStatusMessageChange.emit(undefined);
+      if (verifyOutputCount || !slots.some(image => image !== null)) {
+        this.loadingChange.emit(true);
+        await this.downloadJobImagesFallback(job_id);
+        return;
       }
-    });
-    if (!this.isCurrentJobSession(session)) return;
-    this.sharedService.setDownloadSlots(null);
-    this.queueStatusMessageChange.emit(undefined);
-    if (!slots.some(image => image !== null)) {
-      this.loadingChange.emit(true);
-      await this.downloadJobImagesFallback(job_id);
-      return;
+      this.finishCompletedJobRecovery(job_id);
+    } finally {
+      this.deliveryInProgress = false;
+      if (!this.componentDestroyed) this.cdr.markForCheck();
     }
-    this.loadingChange.emit(false);
-    this.enableGenerationButton = true;
-    this.hasPendingJob = false;
-    this.jobID = '';
-    this.queuePositionChange.emit(0);
-    this.etaChange.emit(undefined);
-    this.removePendingJob();
-    this.lockService.release();
   }
 
   /**
@@ -1941,8 +2007,10 @@ export class OptionsComponent implements OnInit {
   private async downloadJobImagesFallback(job_id: string) {
     const session = this.jobSession;
     if (!this.isCurrentJobSession(session)) return;
+    const pending = this.beginCompletedJobRecovery(job_id);
+    const request = { ...this.generationRequest, ...pending.request };
 
-    const maxRetries = 5;
+    const maxRetries = this.historyRecoveryInProgress ? 2 : 5;
     const getJobInfo = { job_id };
 
     this.queueStatusMessageChange.emit('Downloading images (fallback)...');
@@ -1952,7 +2020,7 @@ export class OptionsComponent implements OnInit {
       try {
         const response = await firstValueFrom(
           this.stableDiffusionService.getJob(getJobInfo).pipe(
-            timeout(180000), // 3 minute timeout for full payload
+            timeout(this.historyRecoveryInProgress ? 60000 : 180000),
             takeUntil(this.stopJobRequests)
           )
         );
@@ -1960,15 +2028,18 @@ export class OptionsComponent implements OnInit {
 
         this.queueStatusMessageChange.emit(undefined);
 
-        if (response?.status !== 'completed' || !response.result) {
-          this.handleFailedJob(response);
-          this.hasPendingJob = false;
-          this.jobID = "";
-          this.queuePositionChange.emit(0);
-          this.etaChange.emit(undefined);
-          this.removePendingJob();
-          this.lockService.release();
+        if (response?.status !== 'completed' || !Array.isArray(response.result) || !response.result.length) {
+          this.historyDiagnostics.report('generation.recover', new Error('Completed job result unavailable'), { requestedCount: pending.expectedImageCount });
+          this.showHistoryRecovery(job_id);
           return;
+        }
+
+        // The bulk endpoint is authoritative for jobs that return fewer images
+        // than the regular four-image batch (for example, an upscale).
+        const current = this.getPendingJob();
+        if (current?.job_id === job_id) {
+          current.expectedImageCount = response.result.length;
+          this.persistPendingJob(current);
         }
 
         const historyLoras = this.getHistoryLorasSnapshot();
@@ -1980,13 +2051,13 @@ export class OptionsComponent implements OnInit {
           const blob = this.blobMigrationService.base64ToBlob(base64String);
           const blobUrl = URL.createObjectURL(blob);
           return {
-            blob, width: this.generationRequest.width, height: this.generationRequest.height,
-            aspectRatio: this.aspectRatio.aspectRatio, UUID: uuidv5(`mobians.ai/generation/${job_id}/image/${index}`, uuidv5.URL), rated: false, timestamp: new Date(),
+            blob, width: request.width, height: request.height,
+            aspectRatio: this.aspectRatio.aspectRatio, UUID: this.generatedImageId(job_id, index), rated: false, timestamp: new Date(),
             ...this.getCharacterAttributionSnapshot(),
             prompt: historyPrompt, promptTemplate: historyPromptTemplate, loras: historyLoras, regional_prompting: historyRegionalPrompting,
             promptSummary: historyPromptSummary, url: blobUrl,
-            model: this.generationRequest.model, seed: this.currentSeed,
-            negativePrompt: this.generationRequest.negative_prompt, cfg: this.generationRequest.guidance_scale,
+            model: request.model, seed: request.seed ?? this.currentSeed,
+            negativePrompt: request.negative_prompt, cfg: request.guidance_scale,
             tags: [], syncPriority: 0, lastModified: new Date()
           } as MobiansImage;
         });
@@ -1997,16 +2068,11 @@ export class OptionsComponent implements OnInit {
         this.sharedService.disableInstructions();
         this.sharedService.setImages(this.images);
         this.loadingChange.emit(false);
-        this.enableGenerationButton = true;
-        this.hasPendingJob = false;
-        this.jobID = "";
-        this.queuePositionChange.emit(0);
-        this.etaChange.emit(undefined);
-        this.removePendingJob();
-        this.lockService.release();
 
         // Preserve the original here too, including when the bulk-download fallback is used.
         await this.ingestDeliveredImages(job_id, generatedImages);
+        if (!this.isCurrentJobSession(session)) return;
+        this.finishCompletedJobRecovery(job_id);
         return; // success
       } catch (err: any) {
         if (!this.isCurrentJobSession(session)) return;
@@ -2015,15 +2081,8 @@ export class OptionsComponent implements OnInit {
         if (!retryable || attempt >= maxRetries - 1) {
           this.queueStatusMessageChange.emit(undefined);
           console.error('Fallback image download failed', err);
-          this.showError(err);
-          this.enableGenerationButton = true;
-          this.loadingChange.emit(false);
-          this.hasPendingJob = false;
-          this.jobID = "";
-          this.queuePositionChange.emit(0);
-          this.etaChange.emit(undefined);
-          this.removePendingJob();
-          this.lockService.release();
+          this.historyDiagnostics.report('generation.recover', err, { requestedCount: pending.expectedImageCount, attempt: attempt + 1, httpStatus: err?.status });
+          this.showHistoryRecovery(job_id);
           return;
         }
         const delay = Math.min(5000 * Math.pow(2, attempt), 30000);
@@ -2278,29 +2337,162 @@ export class OptionsComponent implements OnInit {
     const fresh = images.filter(image => !saved.has(image.UUID));
     if (!fresh.length || !this.historyPanel) return;
     for (const image of fresh) {
-      if (await this.historyPanel.ingestGeneratedImages([image]) !== true) continue;
+      try {
+        if (await this.historyPanel.ingestGeneratedImages([image], { notifyFailure: false }) !== true) continue;
+      } catch (error) {
+        this.historyDiagnostics.report('generation.save', error, { imageCount: 1 });
+        continue;
+      }
       const current = this.getPendingJob();
       if (current?.job_id !== job_id) continue;
       current.savedGeneratedImages = [...new Set([...(current.savedGeneratedImages ?? []), image.UUID])];
-      try { localStorage.setItem(this.pendingJobKey, JSON.stringify(current)); } catch {}
+      this.persistPendingJob(current);
     }
   }
 
-  private getPendingJob(): { job_id: string; request?: any; createdAt?: number; savedGeneratedImages?: string[] } | null {
-    const raw = localStorage.getItem(this.pendingJobKey);
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
+  private generatedImageId(job_id: string, index: number): string {
+    return uuidv5(`mobians.ai/generation/${job_id}/image/${index}`, uuidv5.URL);
+  }
+
+  private beginCompletedJobRecovery(job_id: string): PendingGenerationJob {
+    const previous = this.getPendingJob();
+    const pending: PendingGenerationJob = previous?.job_id === job_id ? previous : {
+      job_id, createdAt: Date.now(), request: { ...this.generationRequest },
+    };
+    pending.phase = 'saving';
+    const requestedCount = Number(pending.request?.batch_size);
+    pending.expectedImageCount ??= pending.request?.job_type === 'upscale' ? 1
+      : Number.isInteger(requestedCount) && requestedCount >= 1 && requestedCount <= 4 ? requestedCount : 4;
+    this.persistPendingJob(pending);
+    this.hasPendingJob = true;
+    this.enableGenerationButton = false;
+    this.jobID = job_id;
+    return pending;
+  }
+
+  private finishCompletedJobRecovery(job_id: string): void {
+    const pending = this.getPendingJob();
+    if (pending?.job_id !== job_id) return;
+    const saved = new Set(pending.savedGeneratedImages ?? []);
+    const complete = Array.from({ length: pending.expectedImageCount ?? 4 }, (_, index) =>
+      this.generatedImageId(job_id, index)).every(id => saved.has(id));
+    if (!complete) {
+      this.historyDiagnostics.report('generation.save', new Error('Generated images not fully saved'), {
+        requestedCount: pending.expectedImageCount ?? 4, savedCount: saved.size,
+        unsavedCount: Math.max(0, (pending.expectedImageCount ?? 4) - saved.size),
+      });
+      this.showHistoryRecovery(job_id);
+      return;
+    }
+    this.historyRecoveryPending = false;
+    this.historyRecoveryUnsavedCount = 0;
+    this.enableGenerationButton = true;
+    this.hasPendingJob = false;
+    this.jobID = '';
+    this.loadingChange.emit(false);
+    this.queuePositionChange.emit(0);
+    this.queueStatusMessageChange.emit(undefined);
+    this.etaChange.emit(undefined);
+    this.removePendingJob();
+    this.lockService.release();
+  }
+
+  private showHistoryRecovery(job_id: string): void {
+    const pending = this.getPendingJob();
+    if (pending?.job_id !== job_id || this.componentDestroyed) return;
+    this.historyRecoveryPending = true;
+    this.historyRecoveryUnsavedCount = Math.max(0,
+      (pending.expectedImageCount ?? 4) - new Set(pending.savedGeneratedImages ?? []).size);
+    this.hasPendingJob = true;
+    this.enableGenerationButton = false;
+    this.jobID = job_id;
+    this.loadingChange.emit(false);
+    this.queuePositionChange.emit(0);
+    this.queueStatusMessageChange.emit(undefined);
+    this.etaChange.emit(undefined);
+    // Generation has ended. The persisted recovery record protects it from
+    // replacement across tabs without keeping a generation lease alive.
+    this.lockService.release();
+    this.cdr.markForCheck();
+  }
+
+  async retryHistorySave(): Promise<void> {
+    const pending = this.getPendingJob();
+    if (this.componentDestroyed || this.historyRecoveryInProgress || this.deliveryInProgress || pending?.phase !== 'saving') return;
+    this.historyRecoveryInProgress = true;
+    this.cdr.markForCheck();
+    try {
+      const expected = pending.expectedImageCount ?? 4;
+      if (Array.from({ length: expected }, (_, index) => this.generatedImageId(pending.job_id, index))
+        .every(id => pending.savedGeneratedImages?.includes(id))) {
+        this.finishCompletedJobRecovery(pending.job_id);
+      } else {
+        await this.downloadJobImages(pending.job_id);
+      }
+    } catch (error) {
+      this.historyDiagnostics.report('generation.recover', error, { attempt: this.recoveryAttempts });
+      this.showHistoryRecovery(pending.job_id);
+    } finally {
+      this.historyRecoveryInProgress = false;
+      if (!this.componentDestroyed) this.cdr.markForCheck();
+    }
+  }
+
+  stopHistoryRecovery(): void {
+    if (this.historyRecoveryInProgress || this.deliveryInProgress || !this.historyRecoveryPending) return;
+    if (!window.confirm('Stop retrying these images? Download the previews first. Any images not saved to history may be lost when you leave this page.')) return;
+    this.resetCancelledJob();
+  }
+
+  private getPendingJob(): PendingGenerationJob | null {
+    if (this.pendingJobPersistenceFailed) return this.pendingJobInMemory;
+    try {
+      const raw = localStorage.getItem(this.pendingJobKey);
+      if (!raw) return this.pendingJobInMemory;
+      const pending = JSON.parse(raw);
+      if (typeof pending?.job_id !== 'string') return this.pendingJobInMemory;
+      // Preserve in-memory progress if localStorage failed to accept an update.
+      const memory = this.pendingJobInMemory;
+      if (memory && memory.job_id === pending.job_id) {
+        pending.savedGeneratedImages = [...new Set([...(pending.savedGeneratedImages ?? []), ...(memory.savedGeneratedImages ?? [])])];
+        pending.phase ??= memory.phase;
+        pending.expectedImageCount ??= memory.expectedImageCount;
+      }
+      this.pendingJobInMemory = pending;
+      return pending;
+    } catch (error) {
+      this.historyDiagnostics.report('generation.recover', error);
+      return this.pendingJobInMemory;
+    }
+  }
+
+  private persistPendingJob(pending: PendingGenerationJob): void {
+    this.pendingJobInMemory = pending;
+    try {
+      localStorage.setItem(this.pendingJobKey, JSON.stringify(pending));
+      this.pendingJobPersistenceFailed = false;
+    } catch (error) {
+      this.pendingJobPersistenceFailed = true;
+      this.historyDiagnostics.report('generation.save', error, { savedCount: pending.savedGeneratedImages?.length ?? 0 });
+    }
   }
 
   private savePendingJob(job_id: string, request?: any) {
-    try {
-      localStorage.setItem(this.pendingJobKey, JSON.stringify({ job_id, request, createdAt: Date.now() }));
-    } catch {}
+    this.recoveryAttempts = 0;
+    this.lastAutomaticRecoveryAt = 0;
+    this.persistPendingJob({ job_id, request, createdAt: Date.now() });
   }
 
   private removePendingJob() {
-    localStorage.removeItem(this.pendingJobKey);
-    localStorage.removeItem(this.queueEtaKey);
+    this.pendingJobInMemory = null;
+    this.pendingJobPersistenceFailed = false;
+    try {
+      localStorage.removeItem(this.pendingJobKey);
+      localStorage.removeItem(this.queueEtaKey);
+    } catch (error) {
+      this.pendingJobPersistenceFailed = true;
+      this.historyDiagnostics.report('generation.recover', error);
+    }
   }
 
   private saveQueueEta(queue_position?: number, eta?: number) {

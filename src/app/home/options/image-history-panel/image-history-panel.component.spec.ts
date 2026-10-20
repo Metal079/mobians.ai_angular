@@ -1,4 +1,5 @@
 import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
+import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, of } from 'rxjs';
@@ -100,6 +101,7 @@ describe('ImageHistoryPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ImageHistoryPanelComponent],
       providers: [
+        { provide: HistoryDiagnosticsService, useValue: { report: jasmine.createSpy('report') } },
         { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { requestSave: () => {} } },
         { provide: MessageService, useClass: MessageServiceStub },
@@ -124,6 +126,144 @@ describe('ImageHistoryPanelComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('native database recovery', () => {
+    let databaseName: string;
+    const savedImage = (UUID: string): MobiansImage => ({
+      UUID, prompt: 'test fixture', favorite: false, tags: [], timestamp: new Date(),
+      width: 48, height: 48, aspectRatio: '1:1',
+      blob: new Blob(['pixels'], { type: 'image/webp' }),
+    });
+    beforeEach(() => {
+      databaseName = 'history-recovery-' + crypto.randomUUID();
+      (component as any).dbName = databaseName;
+      spyOn<any>(component, 'hydrateImageUrls').and.resolveTo();
+      spyOn(component, 'updateFavoriteImages').and.resolveTo();
+    });
+    afterEach(async () => {
+      fixture.destroy();
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(databaseName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+
+    it('reopens a closed native connection once for concurrent callers and preserves existing images', async () => {
+      expect(await component.ingestGeneratedImages([savedImage('before')])).toBeTrue();
+      const closed = await component.getDatabase();
+      closed.close();
+      const open = spyOn(component, 'openDatabase').and.callThrough();
+      const handles = await Promise.all([component.getDatabase(), component.getDatabase()]);
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(handles[0]).toBe(handles[1]);
+      expect(handles[0]).not.toBe(closed);
+      expect(await component.ingestGeneratedImages([savedImage('after')])).toBeTrue();
+      expect((await (component as any).getAllImagesFromDb(true)).map((i: MobiansImage) => i.UUID)).toEqual(['after', 'before']);
+    });
+
+    it('retries a native aborted write once without leaving a partial image', async () => {
+      const db = await component.getDatabase();
+      const transaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake(((stores: string | string[], mode?: IDBTransactionMode) => {
+        const tx = transaction(stores, mode);
+        if (mode === 'readwrite') queueMicrotask(() => tx.abort());
+        return tx;
+      }) as typeof db.transaction);
+      expect(await component.ingestGeneratedImages([savedImage('retry-aborted')])).toBeTrue();
+      expect((await (component as any).getAllImagesFromDb(true)).length).toBe(1);
+      expect((await component.getImageBlob('retry-aborted'))?.size).toBeGreaterThan(0);
+      expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
+        jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ attempt: 0 }));
+    });
+
+    it('reports quota failure precisely and rolls back both stores without retrying', async () => {
+      await component.getDatabase();
+      const write = spyOn<any>(component, 'writeGeneratedImage').and.callThrough();
+      spyOn(IDBObjectStore.prototype, 'add').and.throwError(new DOMException('quota fixture', 'QuotaExceededError'));
+      expect(await component.ingestGeneratedImages([savedImage('quota')], { notifyFailure: false })).toBeFalse();
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(await (component as any).getAllImagesFromDb(true)).toEqual([]);
+      expect(await component.getImageBlob('quota')).toBeUndefined();
+      expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
+        jasmine.objectContaining({ name: 'QuotaExceededError' }), jasmine.objectContaining({ savedCount: 0 }));
+    });
+
+    it('makes replayed generations idempotent without losing stars, tags, or pending changes', async () => {
+      const image = savedImage('stable-identity');
+      expect(await component.ingestGeneratedImages([image])).toBeTrue();
+      expect(await component.updateImageInDB({ ...image, favorite: true, tags: ['keep'],
+        favoriteSyncPending: true, favoriteSyncUserId: 'user-1', favoriteSyncRevision: 'pending-revision' })).toBeTrue();
+      expect(await component.ingestGeneratedImages([{ ...image, blob: new Blob(['different pixels']) }])).toBeTrue();
+      const stored = (await (component as any).getAllImagesFromDb(true))[0];
+      expect(stored.favorite).toBeTrue();
+      expect(stored.tags).toEqual(['keep']);
+      expect(stored.favoriteSyncRevision).toBe('pending-revision');
+      expect(await (await component.getImageBlob(image.UUID))!.text()).toBe('pixels');
+      expect(component.imageHistoryMetadata.filter(i => i.UUID === image.UUID).length).toBe(1);
+    });
+
+    it('still acknowledges a committed save when its display refresh fails', async () => {
+      spyOn(component, 'paginateImages').and.rejectWith(new DOMException('read fixture', 'UnknownError'));
+      expect(await component.ingestGeneratedImages([savedImage('committed')])).toBeTrue();
+      expect((await (component as any).getAllImagesFromDb(true)).length).toBe(1);
+    });
+
+    it('acknowledges a committed generation without awaiting an unrelated history thumbnail', async () => {
+      let release!: (images: MobiansImage[]) => void;
+      spyOn(component, 'paginateImages').and.returnValue(new Promise(resolve => { release = resolve; }));
+      try {
+        expect(await component.ingestGeneratedImages([savedImage('committed-before-hydration')])).toBeTrue();
+        expect((await (component as any).getAllImagesFromDb(true)).length).toBe(1);
+      } finally {
+        release([]);
+        await Promise.resolve();
+      }
+    });
+
+    it('releases its native connection when the panel is destroyed', async () => {
+      const db = await component.getDatabase();
+      fixture.destroy();
+      expect(() => db.transaction('ImageStore')).toThrow();
+      await expectAsync(component.getDatabase()).toBeRejectedWith(jasmine.objectContaining({ name: 'AbortError' }));
+    });
+  });
+
+  it('initializes cloud recovery even if the local database cannot open', async () => {
+    spyOn(component, 'getDatabase').and.rejectWith(new DOMException('unavailable', 'UnknownError'));
+    const favorites = spyOn(component, 'updateFavoriteImages').and.resolveTo();
+    const sync = spyOn<any>(component, 'syncFromCloud').and.resolveTo();
+    const interval = spyOn<any>(component, 'startCloudTagSync');
+    authService.isLoggedIn.and.returnValue(true);
+    await component.initializeHistory();
+    expect(favorites).toHaveBeenCalled();
+    expect(sync).toHaveBeenCalledWith(true);
+    expect(interval).toHaveBeenCalled();
+    expect((component as any).historyInitialized).toBeTrue();
+  });
+
+  it('displays a downloaded cloud thumbnail even when local database opening fails', async () => {
+    const image = createImage({ UUID: 'cloud-open-failure', favorite: true });
+    const blob = new Blob(['fixture'], { type: 'image/webp' });
+    authService.isLoggedIn.and.returnValue(true);
+    (component as any).cloudImages.set(image.UUID, image);
+    spyOn(component, 'getDatabase').and.rejectWith(new DOMException('unavailable', 'UnknownError'));
+    spyOn<any>(component, 'preloadImageUrl').and.resolveTo();
+    imageSyncService.downloadImageBlobs.and.resolveTo(new Map([[image.UUID, blob]]));
+    await component.loadImageData(image);
+    expect(image.blob).toBe(blob);
+    expect(image.url).toMatch(/^blob:/);
+  });
+
+  it('shows current cloud favorite state despite stale local cache metadata', async () => {
+    const local = createImage({ UUID: 'stale-local', favorite: false });
+    authService.isLoggedIn.and.returnValue(true);
+    spyOn<any>(component, 'getAllImagesFromDb').and.resolveTo([local]);
+    imageSyncService.downloadFromCloud.and.resolveTo({ images: [{ ...local, favorite: true }], blobs: new Map() });
+    const images = await (component as any).getHistorySourceImages();
+    expect(images[0].favorite).toBeTrue();
+    expect(local.favorite).toBeFalse();
   });
 
   describe('history shared by the generator and editor picker', () => {
@@ -442,6 +582,7 @@ describe('ImageHistoryPanelComponent', () => {
 
   it('merges local and cloud history by UUID and keeps local changes', async () => {
     const localImage = createImage({ UUID: 'local-1', favorite: true });
+    localImage.favoriteSyncPending = true;
     authService.isLoggedIn.and.returnValue(true);
     spyOn(component as any, 'getAllImagesFromDb').and.resolveTo([localImage]);
     const cloudOnly = createImage({ UUID: 'cloud-only', favorite: true });

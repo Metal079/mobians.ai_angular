@@ -168,4 +168,131 @@ describe('ImageSyncService', () => {
     expect((await download).images).toEqual([]);
     expect(service.isImageSynced('first-user-image')).toBeFalse();
   });
+
+  it('keeps an upload committed while an older sync-status response was in flight', async () => {
+    const statusResponse = new Subject<any>();
+    http.get.and.returnValue(statusResponse);
+    const status = service.fetchSyncStatus();
+    http.post.and.returnValue(of({ success: true }));
+    expect(await service.syncImage({ UUID: 'new-favorite' } as any, new Blob(['pixels']))).toBeTrue();
+
+    statusResponse.next({ images_in_cloud: 0, quota_limit: 1500, synced_uuids: [] });
+    await status;
+
+    expect(service.isImageSynced('new-favorite')).toBeTrue();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(1);
+  });
+
+  it('does not restore removed membership from an older sync-status response', async () => {
+    http.get.and.returnValue(of({ images_in_cloud: 1, quota_limit: 1500, synced_uuids: ['removed'] }));
+    await service.fetchSyncStatus();
+    const statusResponse = new Subject<any>();
+    http.get.and.returnValue(statusResponse);
+    const status = service.fetchSyncStatus();
+    http.delete.and.returnValue(of({ success: true }));
+    await service.unsyncImage('removed');
+
+    statusResponse.next({ images_in_cloud: 1, quota_limit: 1500, synced_uuids: ['removed'] });
+    await status;
+
+    expect(service.isImageSynced('removed')).toBeFalse();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(0);
+  });
+
+  it('ignores an older status response that arrives after a newer request', async () => {
+    const olderResponse = new Subject<any>();
+    const newerResponse = new Subject<any>();
+    http.get.and.returnValues(olderResponse, newerResponse);
+    const older = service.fetchSyncStatus();
+    const newer = service.fetchSyncStatus();
+    newerResponse.next({ images_in_cloud: 2, quota_limit: 1500, synced_uuids: ['a', 'b'] });
+    await newer;
+    olderResponse.next({ images_in_cloud: 1, quota_limit: 1500, synced_uuids: ['a'] });
+    await older;
+
+    expect(service.isImageSynced('b')).toBeTrue();
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(2);
+  });
+
+  it('counts concurrent successful uploads of the same UUID only once', async () => {
+    spyOn<any>(service, 'blobToBase64').and.resolveTo('cGl4ZWxz');
+    http.post.and.returnValue(of({ success: true }));
+    const image = { UUID: 'same-image' } as any;
+    const results = await Promise.all([
+      service.syncImage(image, new Blob(['pixels'])),
+      service.syncImage(image, new Blob(['pixels']))
+    ]);
+
+    expect(results).toEqual([true, true]);
+    expect((service as any).syncStatusSubject.value.quota.used).toBe(1);
+  });
+
+  it('stops a backup if the account changes while a local blob is loading', async () => {
+    const upload = spyOn(service, 'syncImage').and.resolveTo(true);
+    const result = await service.syncBatchImages([{ UUID: 'old-account-image' } as any], async () => {
+      authService.getUserId.and.returnValue('user-2');
+      service.isImageSynced('new-account-image');
+      const subject = (service as any).syncStatusSubject;
+      subject.next({ ...subject.value, isSyncing: true, lastSyncTime: 'new-account-sync' });
+      return new Blob(['pixels']);
+    });
+
+    expect(upload).not.toHaveBeenCalled();
+    expect(result.success).toBeFalse();
+    expect(result.errors[0]).toContain('account changed');
+    expect((service as any).syncStatusSubject.value.isSyncing).toBeTrue();
+    expect((service as any).syncStatusSubject.value.lastSyncTime).toBe('new-account-sync');
+  });
+
+  it('does not continue a backup into a different account after an upload finishes', async () => {
+    const upload = spyOn(service, 'syncImage').and.callFake(async () => {
+      authService.getUserId.and.returnValue('user-2');
+      return false;
+    });
+    const getBlob = jasmine.createSpy('getBlob').and.resolveTo(new Blob(['pixels']));
+    const result = await service.syncBatchImages(['first', 'second'].map(UUID => ({ UUID } as any)), getBlob);
+
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(getBlob).toHaveBeenCalledTimes(1);
+    expect(result.success).toBeFalse();
+    expect(result.errors[0]).toContain('account changed');
+  });
+
+  it('does not remove new-account membership after an old-account metadata request returns 404', async () => {
+    (service as any).syncedImageUUIDs.add('shared-uuid');
+    const response = new Subject<any>();
+    http.patch.and.returnValue(response);
+    const update = service.updateImageMetadata('shared-uuid', { is_favorite: true });
+    authService.getUserId.and.returnValue('user-2');
+    service.isImageSynced('shared-uuid');
+    (service as any).syncedImageUUIDs.add('shared-uuid');
+    response.error({ status: 404 });
+
+    expect(await update).toBeFalse();
+    expect(service.isImageSynced('shared-uuid')).toBeTrue();
+  });
+
+  it('does not report an old-account metadata response as success in a new account', async () => {
+    (service as any).syncedImageUUIDs.add('shared-uuid');
+    const response = new Subject<any>();
+    http.patch.and.returnValue(response);
+    const update = service.updateImageMetadata('shared-uuid', { is_favorite: true });
+    authService.getUserId.and.returnValue('user-2');
+    response.next({ success: true });
+
+    expect(await update).toBeFalse();
+  });
+
+  it('reports a failed cloud metadata request with bounded sync context', async () => {
+    const diagnostics = { report: jasmine.createSpy('report') };
+    service = new ImageSyncService(http, authService, diagnostics as any);
+    const failure = { name: 'HttpErrorResponse', status: 503 };
+    http.get.and.returnValue(throwError(() => failure));
+
+    await expectAsync(service.downloadFromCloud(false)).toBeRejectedWith(failure);
+
+    expect(diagnostics.report).toHaveBeenCalledOnceWith('history.sync.metadata', failure, {
+      cloudCount: 0, syncEnabled: false, requestedCount: undefined, httpStatus: 503
+    });
+  });
 });

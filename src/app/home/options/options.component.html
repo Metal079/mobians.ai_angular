@@ -80,6 +80,11 @@
         type="button" id="generate-button" (click)="this.submitJob()" [disabled]="!canGenerate">
         {{ aprilFools.isAprilFools() ? aprilFools.getGenerateButtonText(!!referenceImage) : (referenceImage ? 'Generate w/Ref' : 'Generate!') }}
       </button>
+    } @else if (historyRecoveryPending) {
+      <button class="btn btn-primary d-flex align-items-center" type="button" id="generate-button"
+        (click)="retryHistorySave()" [disabled]="historyRecoveryInProgress">
+        {{ historyRecoveryInProgress ? 'Saving...' : 'Retry saving' }}
+      </button>
     } @else {
       <!-- Updated to solid red to match style, same sizing/layout classes -->
       <button class="btn btn-danger d-flex align-items-center" type="button" id="generate-button"
@@ -90,6 +95,21 @@
   </div>
 
   </div>
+
+  @if (historyRecoveryPending) {
+    <section class="history-recovery" aria-live="polite" aria-label="Image history recovery">
+      <strong><i class="pi pi-exclamation-triangle" aria-hidden="true"></i> Images need saving</strong>
+      <p>{{ historyRecoveryUnsavedCount }} {{ historyRecoveryUnsavedCount === 1 ? 'image has' : 'images have' }} not been saved to history yet.
+        Keep this page open and retry saving. You can still download the available previews.</p>
+      <p class="history-recovery-note">New generation is paused so these images are not replaced. If browser storage is full, download older images before removing them from history.</p>
+      <div class="history-recovery-actions">
+        <button type="button" class="btn btn-primary" (click)="retryHistorySave()" [disabled]="historyRecoveryInProgress">
+          {{ historyRecoveryInProgress ? 'Saving...' : 'Retry saving' }}
+        </button>
+        <button type="button" class="btn btn-outline-secondary" (click)="stopHistoryRecovery()" [disabled]="historyRecoveryInProgress">Stop retrying</button>
+      </div>
+    </section>
+  }
 
   <!-- buttons that show with reference images expanded -->
   @if (referenceImage) {

@@ -13,6 +13,7 @@ import { NotificationService } from 'src/app/notification.service';
 import { SharedService } from 'src/app/shared.service';
 import { DynamicPromptLibraryResponse, StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
+import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 
 import { OptionsComponent } from './options.component';
 import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
@@ -178,6 +179,7 @@ describe('OptionsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OptionsComponent],
       providers: [
+        { provide: HistoryDiagnosticsService, useValue: { report: jasmine.createSpy('report') } },
         { provide: ImageEditorService, useValue: { available: signal(true), pending: signal(false), open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: jasmine.createSpy('clearActiveCharacter').and.callFake(function(this: any) { this.activeCharacter.set(null); }) } },
         { provide: StableDiffusionService, useClass: StableDiffusionServiceStub },
@@ -284,7 +286,7 @@ describe('OptionsComponent', () => {
     const responses = Array.from({ length: 4 }, () => new Subject<Blob>());
     const sd = TestBed.inject(StableDiffusionService) as any;
     sd.getJobImage = jasmine.createSpy().and.callFake((_job: string, index: number) => responses[index]);
-    const ingest = jasmine.createSpy().and.resolveTo(undefined);
+    const ingest = jasmine.createSpy().and.resolveTo(true);
     (component as any).historyPanel = { ingestGeneratedImages: ingest };
     component.enableGenerationButton = false;
     component.hasPendingJob = true;
@@ -353,6 +355,211 @@ describe('OptionsComponent', () => {
     expect(ingest.calls.allArgs().map((args: any[]) => args[0][0].UUID)).toEqual(['saved', 'retry', 'retry']);
     expect((component as any).getPendingJob().savedGeneratedImages).toEqual(['saved', 'retry']);
     (component as any).removePendingJob();
+  });
+
+  for (const fallback of [false, true]) {
+    it('keeps recovery until ' + (fallback ? 'fallback' : 'individual') + ' saves actually commit', fakeAsync(() => {
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      const blob = new Blob(['completed image'], { type: 'image/png' });
+      sd.getJobImage = () => of(blob);
+      sd.getJob = () => of({ status: 'completed', result: Array(4).fill('fixture') });
+      (TestBed.inject(BlobMigrationService) as any).base64ToBlob = () => blob;
+      let commit!: () => void;
+      const committed = new Promise<boolean>(resolve => commit = () => resolve(true));
+      (component as any).historyPanel = { ingestGeneratedImages: () => committed };
+      (component as any).savePendingJob('slow-commit', { prompt: 'preserved prompt' });
+
+      let finished = false;
+      (component as any)[fallback ? 'downloadJobImagesFallback' : 'downloadJobImages']('slow-commit')
+        .then(() => finished = true);
+      flushMicrotasks();
+      expect(component.images.length).toBe(4);
+      expect(finished).toBeFalse();
+      expect(component.canGenerate).toBeFalse();
+      expect((component as any).getPendingJob()).toEqual(jasmine.objectContaining({
+        job_id: 'slow-commit', phase: 'saving', request: { prompt: 'preserved prompt' },
+      }));
+
+      commit(); flushMicrotasks();
+      expect(finished).toBeTrue();
+      expect((component as any).getPendingJob()).toBeNull();
+      expect(component.hasPendingJob).toBeFalse();
+      expect(component.enableGenerationButton).toBeTrue();
+    }));
+  }
+
+  it('retains failed saves and retries only unsaved previews without downloading again', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
+    sd.submitJob = jasmine.createSpy();
+    const ingest = jasmine.createSpy().and.callFake(async (images: MobiansImage[]) =>
+      images[0].UUID !== (component as any).generatedImageId('quota-job', 2));
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('quota-job', { prompt: 'keep this prompt' });
+
+    await (component as any).downloadJobImages('quota-job');
+    const before = component.images.map(image => image.UUID);
+    expect(component.images.length).toBe(4);
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect(component.historyRecoveryUnsavedCount).toBe(1);
+    expect((component as any).getPendingJob().savedGeneratedImages.length).toBe(3);
+    await component.submitJob();
+    expect(sd.submitJob).not.toHaveBeenCalled();
+
+    ingest.and.resolveTo(true);
+    await component.retryHistorySave();
+    expect(sd.getJobImage).toHaveBeenCalledTimes(4);
+    expect(ingest).toHaveBeenCalledTimes(5);
+    expect(component.images.map(image => image.UUID)).toEqual(before);
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+  });
+
+  it('preserves partial downloads and retries the missing image with its original identity', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const image = new Blob(['image'], { type: 'image/png' });
+    sd.getJobImage = jasmine.createSpy().and.callFake((_id: string, index: number) =>
+      index === 3 ? throwError(() => ({ status: 404 })) : of(image));
+    sd.getJob = () => throwError(() => ({ status: 404 }));
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('partial-download');
+    await (component as any).downloadJobImages('partial-download');
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect(component.images.length).toBe(3);
+    expect((component as any).getPendingJob().savedGeneratedImages.length).toBe(3);
+
+    sd.getJobImage.and.returnValue(of(image));
+    await component.retryHistorySave();
+    expect(sd.getJobImage.calls.allArgs().map((args: any[]) => args[1])).toEqual([0, 1, 2, 3, 3]);
+    expect(ingest).toHaveBeenCalledTimes(4);
+    expect(component.images[3].UUID).toBe((component as any).generatedImageId('partial-download', 3));
+    expect(component.historyRecoveryPending).toBeFalse();
+  });
+
+  it('finishes a single-image upscale without waiting for three nonexistent images', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
+    (component as any).historyPanel = { ingestGeneratedImages: () => Promise.resolve(true) };
+    (component as any).savePendingJob('single-upscale', { job_type: 'upscale', batch_size: 4 });
+    await (component as any).downloadJobImages('single-upscale');
+    expect(sd.getJobImage).toHaveBeenCalledOnceWith('single-upscale', 0);
+    expect(component.hasPendingJob).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+  });
+
+  it('uses the full result count when an older pending job returns fewer images', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const blob = new Blob(['image'], { type: 'image/png' });
+    sd.getJobImage = (_id: string, index: number) => index === 0 ? of(blob) : throwError(() => ({ status: 404 }));
+    sd.getJob = () => of({ status: 'completed', result: ['single'] });
+    (TestBed.inject(BlobMigrationService) as any).base64ToBlob = () => blob;
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('older-upscale');
+    await (component as any).downloadJobImages('older-upscale');
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect(component.hasPendingJob).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+  });
+
+  it('retains an unsuccessful fallback save and retries it without losing the pending request', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJob = () => of({ status: 'completed', result: ['first', 'second'] });
+    sd.getJobImage = jasmine.createSpy();
+    (TestBed.inject(BlobMigrationService) as any).base64ToBlob = () => new Blob(['image'], { type: 'image/png' });
+    const ingest = jasmine.createSpy().and.returnValues(Promise.resolve(true), Promise.resolve(false));
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('fallback-save', { prompt: 'original', guidance_scale: 7, seed: 100 });
+    component.generationRequest.prompt = 'next prompt';
+    await (component as any).downloadJobImagesFallback('fallback-save');
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect(component.historyRecoveryUnsavedCount).toBe(1);
+    expect((component as any).getPendingJob().request.prompt).toBe('original');
+
+    ingest.and.resolveTo(true);
+    await component.retryHistorySave();
+    expect(sd.getJobImage).not.toHaveBeenCalled();
+    expect(ingest).toHaveBeenCalledTimes(3);
+    expect(ingest.calls.mostRecent().args[0][0]).toEqual(jasmine.objectContaining({ prompt: 'original', cfg: 7, seed: 100 }));
+    expect((component as any).getPendingJob()).toBeNull();
+  });
+
+  it('keeps current-tab recovery progress if localStorage stops accepting updates', async () => {
+    (component as any).savePendingJob('storage-quota', { prompt: 'keep this' });
+    const setItem = spyOn(Storage.prototype, 'setItem').and.callFake(() => { throw new DOMException('full', 'QuotaExceededError'); });
+    (component as any).beginCompletedJobRecovery('storage-quota');
+    (component as any).historyPanel = { ingestGeneratedImages: () => Promise.resolve(true) };
+    await (component as any).ingestDeliveredImages('storage-quota', [{ UUID: 'saved-in-db' }]);
+    expect((component as any).getPendingJob()).toEqual(jasmine.objectContaining({
+      job_id: 'storage-quota', phase: 'saving', savedGeneratedImages: ['saved-in-db'],
+    }));
+    expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('generation.save', jasmine.any(DOMException), { savedCount: 1 });
+    setItem.and.callThrough();
+  });
+
+  it('restores incomplete saves after reload and never expires them as an unfinished generation', fakeAsync(() => {
+    const savedImage = (component as any).generatedImageId('reload-save', 0);
+    localStorage.setItem('mobians:pending-job', JSON.stringify({
+      job_id: 'reload-save', phase: 'saving', expectedImageCount: 4,
+      createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+      savedGeneratedImages: [savedImage], request: { prompt: 'original prompt', seed: 123 },
+    }));
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const poll = spyOn(component, 'getJob');
+    sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+
+    component.ngOnInit();
+    flushMicrotasks();
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect((component as any).getPendingJob()?.job_id).toBe('reload-save');
+    tick(0); flushMicrotasks();
+    expect(poll).not.toHaveBeenCalled();
+    expect(sd.getJobImage.calls.allArgs().map((args: any[]) => args[1])).toEqual([1, 2, 3]);
+    expect(ingest).toHaveBeenCalledTimes(3);
+    expect(ingest.calls.first().args[0][0]).toEqual(jasmine.objectContaining({ prompt: 'original prompt', seed: 123 }));
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+  }));
+
+  it('bounds recovery on repeated visibility and online events and stops listening on destruction', fakeAsync(() => {
+    (component as any).savePendingJob('bounded-retry');
+    (component as any).beginCompletedJobRecovery('bounded-retry');
+    (component as any).showHistoryRecovery('bounded-retry');
+    spyOnProperty(document, 'visibilityState', 'get').and.returnValue('visible');
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const retry = spyOn(component, 'retryHistorySave').and.resolveTo();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      window.dispatchEvent(new Event('online'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      tick(30000);
+    }
+    expect(retry).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+    window.dispatchEvent(new Event('online'));
+    expect(retry).toHaveBeenCalledTimes(2);
+  }));
+
+  it('preserves previews unless the user explicitly stops recovery', async () => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJobImage = () => of(new Blob(['image'], { type: 'image/png' }));
+    sd.cancelJob = jasmine.createSpy();
+    (component as any).historyPanel = { ingestGeneratedImages: () => Promise.reject(new DOMException('full', 'QuotaExceededError')) };
+    (component as any).savePendingJob('stop-recovery');
+    await (component as any).downloadJobImages('stop-recovery');
+    const confirm = spyOn(window, 'confirm').and.returnValue(false);
+    component.stopHistoryRecovery();
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect((component as any).getPendingJob()).not.toBeNull();
+    confirm.and.returnValue(true);
+    component.stopHistoryRecovery();
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect((component as any).getPendingJob()).toBeNull();
+    expect(component.images.length).toBe(4);
+    expect(sd.cancelJob).not.toHaveBeenCalled();
+    expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('generation.save', jasmine.any(DOMException), { imageCount: 1 });
   });
 
   it('latches early cancel until the submit response arrives and ignores rapid repeated clicks', fakeAsync(() => {
@@ -474,6 +681,28 @@ describe('OptionsComponent', () => {
       expect(component.hasPendingJob).toBeTrue();
     }));
   }
+
+  it('stops stale status callbacks when another tab moves the job into save recovery', fakeAsync(() => {
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const status = new Subject<any>();
+    const poll = spyOn(sd, 'getJobStatus').and.returnValue(status);
+    (component as any).savePendingJob('other-tab-saving');
+    component.getJob('other-tab-saving'); tick(0);
+    expect(status.observers.length).toBe(1);
+    const recovery = JSON.stringify({ job_id: 'other-tab-saving', phase: 'saving', expectedImageCount: 4 });
+    localStorage.setItem('mobians:pending-job', recovery);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'mobians:pending-job', newValue: recovery }));
+    expect(status.observers.length).toBe(0);
+
+    // A stale response can arrive after the other tab started saving. Neither
+    // its error handler nor unsubscribe finalizer may clear the shared marker.
+    status.error({ status: 404 });
+    tick(5000);
+    expect(poll).toHaveBeenCalledTimes(1);
+    expect((component as any).getPendingJob()).toEqual(jasmine.objectContaining({ job_id: 'other-tab-saving', phase: 'saving' }));
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect(component.canGenerate).toBeFalse();
+  }));
 
   it('stops polling when another tab removes the pending job', fakeAsync(() => {
     const sd = TestBed.inject(StableDiffusionService) as any;
