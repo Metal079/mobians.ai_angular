@@ -278,7 +278,7 @@
           <app-hint text="Each generated image has a specific seed, if that seed is entered with the same prompt, you can regenerate the same or very similar images. By default a random seed is used with each generation."></app-hint>
         </label>
         <input type="number" class="form-control" id="seedInput1" placeholder="-1"
-          [(ngModel)]="generationRequest.seed" />
+          [(ngModel)]="generationRequest.seed" (ngModelChange)="saveSettings.emit()" />
         </div>
 
         <!-- Selected Image Seed -->

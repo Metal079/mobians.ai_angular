@@ -18,6 +18,8 @@ import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 import { OptionsComponent } from './options.component';
 import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 
+const seedPreferenceKey = 'mobians:seed-preference:v2';
+
 const testModelSettings = [
   {
     model_id: 'sonicDiffusionV4',
@@ -927,6 +929,164 @@ describe('OptionsComponent', () => {
     expect(JSON.parse(localStorage.getItem('mobians:pending-job') || '{}').job_id).toBe(jobId);
     expect(releaseSpy).not.toHaveBeenCalled();
   }));
+
+  for (const state of ['running', 'saving', 'expired'] as const) {
+    for (const seedChoice of [undefined, -1, 0, 42]) {
+      it(`preserves seed choice ${seedChoice} when restoring a ${state} job`, async () => {
+        localStorage.setItem(seedPreferenceKey, JSON.stringify({ seed: seedChoice ?? null }));
+        localStorage.setItem('mobians:pending-job', JSON.stringify({
+          job_id: 'seed-recovery',
+          createdAt: Date.now() - (state === 'expired' ? 25 * 60 * 60 * 1000 : 0),
+          phase: state === 'saving' ? 'saving' : undefined,
+          request: { prompt: 'Recovered prompt', seed: 87654321, model: 'novaMobianXL_v20' },
+        }));
+        spyOn(component, 'getJob');
+        spyOn(component, 'retryHistorySave').and.resolveTo();
+
+        await component.ngOnInit();
+
+        expect(component.generationRequest.seed).toBe(seedChoice);
+        expect(component.currentSeed).toBe(87654321);
+        expect(component.generationRequest.prompt).toBe('Recovered prompt');
+        if (state !== 'expired') expect((component as any).getPendingJob().request.seed).toBe(87654321);
+        component.saveSettings();
+        expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!).seed).toBe(seedChoice ?? null);
+        fixture.destroy();
+      });
+    }
+  }
+
+  for (const seedChoice of [undefined, null, -1, 0, 42]) {
+    it(`keeps seed choice ${seedChoice} separate from each submitted seed`, async () => {
+      await component.loadSettings();
+      component.generationRequest.seed = seedChoice;
+      component.generationRequest.prompt = '{Sonic|Tails}';
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({ job_id: 'seed-submission' }));
+      spyOn(component, 'getJob');
+      const random = spyOn(Math, 'random').and.returnValue(.12345678);
+      const seeds: number[] = [];
+      for (const randomValue of [.12345678, .87654321]) {
+        random.and.returnValue(randomValue);
+        await component.submitJob();
+        const request = sd.submitJob.calls.mostRecent().args[0];
+        seeds.push(request.seed);
+        expect(component.generationRequest.seed).toBe(seedChoice);
+        expect(component.currentSeed).toBe(request.seed);
+        expect(request.dynamic_prompting.expansion_seed).toBe(request.seed);
+        expect((component as any).getPendingJob().request.seed).toBe(request.seed);
+        expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!).seed).toBe(seedChoice ?? null);
+        (component as any).resetCancelledJob();
+      }
+      expect(seeds).toEqual(seedChoice == null || seedChoice === -1 ? [12345678, 87654321] : [seedChoice, seedChoice]);
+    });
+  }
+
+  it('does not persist a generated seed while reference image preparation is pending', async () => {
+    await component.loadSettings();
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.submitJob = jasmine.createSpy().and.returnValue(NEVER);
+    let resolveImage!: (value: string) => void;
+    (TestBed.inject(BlobMigrationService) as any).blobToBase64 = () => new Promise<string>(resolve => resolveImage = resolve);
+    component.referenceImage = { blob: new Blob(['image']) } as any;
+
+    const submission = component.submitJob();
+    expect(component.generationRequest.seed).toBeUndefined();
+    component.onPromptInputChange('Edited while preparing the image');
+    expect(localStorage.getItem('seed-input')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!).seed).toBeNull();
+    // A deliberate choice made during preparation belongs to the next request.
+    component.generationRequest.seed = 42;
+    resolveImage('image-data');
+    await submission;
+    expect(component.generationRequest.seed).toBe(42);
+    expect(sd.submitJob.calls.mostRecent().args[0].seed).toBe(component.currentSeed);
+  });
+
+  for (const legacySeed of [0, 42, 87654321]) {
+    it(`resets legacy seed ${legacySeed} once without changing unrelated saved data`, async () => {
+      localStorage.setItem('seed-input', String(legacySeed));
+      localStorage.setItem('prompt-input', 'Keep my prompt');
+      localStorage.setItem('negative-prompt-input', 'Keep my negative prompt');
+      localStorage.setItem('panel-theme', 'navy');
+      const pending = JSON.stringify({ job_id: 'legacy-job', request: { seed: legacySeed } });
+      localStorage.setItem('mobians:pending-job', pending);
+
+      await component.loadSettings();
+      component.saveSettings();
+      await component.loadSettings();
+
+      expect(component.generationRequest.seed).toBeUndefined();
+      expect(localStorage.getItem('seed-input')).toBeNull();
+      expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed: null });
+      expect(localStorage.getItem('mobians:pending-job')).toBe(pending);
+      expect(component.generationRequest.prompt).toBe('Keep my prompt');
+      expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+      expect(component.panelTheme).toBe('navy');
+    });
+  }
+
+  it('resumes an affected job without reusing its legacy fixed seed on the next submission', async () => {
+    localStorage.setItem('seed-input', '87654321');
+    localStorage.setItem('mobians:pending-job', JSON.stringify({
+      job_id: 'legacy-job', createdAt: Date.now(),
+      request: { seed: 87654321, prompt: 'Recovered prompt', model: 'novaMobianXL_v20' },
+    }));
+    spyOn(component, 'getJob');
+    await component.ngOnInit();
+    expect(component.currentSeed).toBe(87654321);
+    expect(component.generationRequest.seed).toBeUndefined();
+    expect((component as any).getPendingJob().request.seed).toBe(87654321);
+    (component as any).resetCancelledJob();
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.submitJob = jasmine.createSpy().and.returnValue(NEVER);
+    spyOn(Math, 'random').and.returnValue(.12345678);
+    await component.submitJob();
+    expect(sd.submitJob.calls.mostRecent().args[0].seed).toBe(12345678);
+    expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!).seed).toBeNull();
+  });
+
+  it('defaults to random for fresh, random, or invalid legacy seed settings', async () => {
+    for (const legacySeed of [null, '-1', '', 'invalid', 'NaN']) {
+      localStorage.removeItem(seedPreferenceKey);
+      if (legacySeed === null) localStorage.removeItem('seed-input');
+      else localStorage.setItem('seed-input', legacySeed);
+      await component.loadSettings();
+      expect(component.generationRequest.seed).toBeUndefined();
+      expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed: null });
+    }
+  });
+
+  it('persists a new seed choice immediately and ignores legacy writes from older tabs', async () => {
+    localStorage.setItem('seed-input', '87654321');
+    await component.loadSettings();
+    for (const seed of [null, 0, 1234, -1]) {
+      component.generationRequest.seed = seed;
+      component.saveSettings();
+      expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed });
+      localStorage.setItem('seed-input', '87654321');
+      await component.loadSettings();
+      expect(component.generationRequest.seed).toBe(seed ?? undefined);
+    }
+  });
+
+  it('falls back to random when new seed preferences are damaged instead of reviving a legacy seed', async () => {
+    localStorage.setItem(seedPreferenceKey, 'broken json');
+    localStorage.setItem('seed-input', '87654321');
+    await component.loadSettings();
+    expect(component.generationRequest.seed).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed: null });
+  });
+
+  it('retains the seed migration when resetting saved options', async () => {
+    localStorage.setItem('seed-input', '87654321');
+    await component.loadSettings();
+    spyOn(window, 'confirm').and.returnValue(true);
+    component.resetSessionStorage();
+    await component.loadSettings();
+    expect(component.generationRequest.seed).toBeUndefined();
+    expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed: null });
+  });
 
   it('does not overwrite persisted settings before hydration is complete', () => {
     localStorage.setItem('prompt-input', 'saved prompt');

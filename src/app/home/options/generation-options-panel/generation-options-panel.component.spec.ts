@@ -51,6 +51,18 @@ describe('Regional precision controls', () => {
     expect(fixture.nativeElement.querySelector('.model-select.p-disabled')).toBeNull();
   });
 
+  it('saves intentional seed edits and clearing immediately', async () => {
+    const saved: Array<number | null> = [];
+    component.saveSettings.subscribe(() => saved.push(component.generationRequest.seed));
+    const input = fixture.nativeElement.querySelector('#seedInput1') as HTMLInputElement;
+    input.value = '0'; input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(saved).toEqual([0]);
+    input.value = ''; input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(saved).toEqual([0, null]);
+  });
+
   function numberInput(key: string): HTMLInputElement { return fixture.nativeElement.querySelector('#region-value-' + key); }
   function commit(key: string, value: string): void {
     const input = numberInput(key); input.value = value;

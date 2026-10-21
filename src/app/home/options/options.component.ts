@@ -339,6 +339,7 @@ export class OptionsComponent implements OnInit {
   // Persistence keys
   private readonly pendingJobKey = 'mobians:pending-job';
   private readonly queueEtaKey = 'mobians:queue-eta';
+  private readonly seedPreferenceKey = 'mobians:seed-preference:v2';
   private readonly dynamicPromptCategorySyntaxMigrationKey = 'mobians:dynamic-prompt-category-syntax-v2';
   private readonly pendingMaxAgeMs = 24 * 60 * 60 * 1000; // 24h max age for pending jobs
 
@@ -568,7 +569,7 @@ export class OptionsComponent implements OnInit {
           if (pending.request.character_owner === this.sharedService.getUserDataValue()?.user_id && pending.request.character_id && pending.request.character_name) {
             this.characters.activeCharacter.set({ id: pending.request.character_id, imageId: pending.request.character_look_id, name: pending.request.character_name });
           }
-          this.generationRequest = { ...this.generationRequest, ...pending.request };
+          this.restorePendingRequest(pending.request);
           this.sharedService.setGenerationRequest(this.generationRequest);
           // Restore queue type if it was saved
           if (pending.request.queue_type) {
@@ -980,6 +981,37 @@ export class OptionsComponent implements OnInit {
     this.saveSettings();
   }
 
+  private normalizeSavedSeed(value: unknown): number | undefined {
+    if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+    if (typeof value === 'string' && !value.trim()) return undefined;
+    const seed = Number(value);
+    return Number.isSafeInteger(seed) && seed >= -1 ? seed : undefined;
+  }
+
+  private loadSeedPreference(): void {
+    const stored = localStorage.getItem(this.seedPreferenceKey);
+    this.generationRequest.seed = undefined;
+    if (stored !== null) {
+      try {
+        const preference = JSON.parse(stored);
+        this.generationRequest.seed = this.normalizeSavedSeed(preference?.seed);
+      } catch {
+        // Invalid preferences fall back to random, never to the legacy seed.
+      }
+    }
+    // Ignore legacy seeds once for every user: they may have been fixed by job
+    // recovery. Persist random mode so future deliberate choices survive reloads.
+    this.saveSeedPreference();
+    localStorage.removeItem('seed-input');
+  }
+
+  private saveSeedPreference(): void {
+    // A separate key prevents older open tabs from restoring a contaminated seed.
+    localStorage.setItem(this.seedPreferenceKey, JSON.stringify({
+      seed: this.generationRequest.seed ?? null,
+    }));
+  }
+
   // Save session storage info of changed settings
   saveSettings() {
     if (!this.settingsHydrated) return;
@@ -995,13 +1027,7 @@ export class OptionsComponent implements OnInit {
       localStorage.setItem("custom-denoise", this.generationRequest.strength.toString());
     }
 
-    // Save seed
-    if (this.generationRequest.seed == undefined) {
-      localStorage.removeItem("seed-input");
-    }
-    else if (this.generationRequest.seed != undefined) {
-      localStorage.setItem("seed-input", this.generationRequest.seed.toString());
-    }
+    this.saveSeedPreference();
 
     // Save cfg
     if (this.generationRequest.steps != undefined) {
@@ -1055,6 +1081,7 @@ export class OptionsComponent implements OnInit {
   // Load session storage info of changed settings
   async loadSettings() {
     this.migrateStoredDynamicPromptCategorySyntax();
+    this.loadSeedPreference();
 
     // Load other settings as before
     if (localStorage.getItem("prompt-input") != null) {
@@ -1065,9 +1092,6 @@ export class OptionsComponent implements OnInit {
     }
     if (localStorage.getItem("custom-denoise") != null) {
       this.generationRequest.strength = parseFloat(localStorage.getItem("custom-denoise")!);
-    }
-    if (localStorage.getItem("seed-input") != null) {
-      this.generationRequest.seed = parseInt(localStorage.getItem("seed-input")!);
     }
     if (localStorage.getItem("cfg") != null) {
       this.generationRequest.guidance_scale = this.normalizeCfgValue(localStorage.getItem("cfg"), this.getDefaultCfgForModel(this.generationRequest.model));
@@ -1158,6 +1182,7 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
     this.generationRequest.seed = undefined;
+    this.saveSeedPreference();
     this.generationRequest.model = this.getDefaultModelId();
     this.generationRequest.guidance_scale = this.getDefaultCfgForModel(this.generationRequest.model);
     this.panelTheme = 'sonic';
@@ -1267,7 +1292,7 @@ export class OptionsComponent implements OnInit {
     return normalized;
   }
 
-  private getDynamicPromptingForRequest(): DynamicPromptingConfig {
+  private getDynamicPromptingForRequest(seed = this.generationRequest.seed): DynamicPromptingConfig {
     const config = this.normalizeDynamicPromptingConfig(this.generationRequest.dynamic_prompting);
     const prompt = String(this.generationRequest.prompt || '').trim();
     if (!prompt || !this.hasDynamicPromptSyntax(prompt)) {
@@ -1278,7 +1303,7 @@ export class OptionsComponent implements OnInit {
       ...config,
       enabled: true,
       template: prompt,
-      expansion_seed: config.expansion_seed ?? this.generationRequest.seed,
+      expansion_seed: config.expansion_seed ?? seed,
     };
   }
 
@@ -1489,18 +1514,14 @@ export class OptionsComponent implements OnInit {
     this.saveSettings();
     this.inpaintingChange.emit(this.showInpaintingCanvas);
 
-    // Change seed to random number if default seed is selected
-    let defaultSeed: boolean;
-    if (this.generationRequest.seed == undefined || this.generationRequest.seed == -1) {
-      defaultSeed = true;
-      this.generationRequest.seed = Math.floor(Math.random() * 100000000);
-    }
-    else {
-      defaultSeed = false;
-    }
-    this.currentSeed = this.generationRequest.seed;
+    // Resolve randomness only for this job. The editable/persisted setting must
+    // remain the user's choice, including during asynchronous image preparation.
+    const seedForRequest = this.generationRequest.seed == null || this.generationRequest.seed == -1
+      ? Math.floor(Math.random() * 100000000)
+      : this.generationRequest.seed;
+    this.currentSeed = seedForRequest;
 
-    const dynamicPromptingForRequest = this.getDynamicPromptingForRequest();
+    const dynamicPromptingForRequest = this.getDynamicPromptingForRequest(seedForRequest);
 
     // set reference image if there is one
     if (this.referenceImage && (this.generationRequest.image == undefined || this.generationRequest.image == "")) {
@@ -1512,7 +1533,6 @@ export class OptionsComponent implements OnInit {
           this.submissionInProgress = false;
           this.resetCancelledJob();
           if (!this.componentDestroyed) this.showError(error);
-          if (defaultSeed) this.generationRequest.seed = undefined;
           return;
         }
       } else {
@@ -1528,7 +1548,6 @@ export class OptionsComponent implements OnInit {
     if (this.cancelInProgress || this.componentDestroyed) {
       this.submissionInProgress = false;
       this.resetCancelledJob();
-      if (defaultSeed) this.generationRequest.seed = undefined;
       return;
     }
 
@@ -1558,6 +1577,7 @@ export class OptionsComponent implements OnInit {
     const characterOwner = this.sharedService.getUserDataValue()?.user_id;
     const requestToSend = {
       ...this.generationRequest,
+      seed: seedForRequest,
       character_id: activeCharacter?.id || undefined,
       character_look_id: activeCharacter?.imageId || undefined,
       job_type: jobTypeForRequest,
@@ -1640,10 +1660,6 @@ export class OptionsComponent implements OnInit {
         }
       );
 
-    // reset seed to default if it was changed
-    if (defaultSeed) {
-      this.generationRequest.seed = undefined;
-    }
   }
 
   // Invalidate callbacks before unsubscribing: finalize must not finish an old job.
@@ -2525,10 +2541,17 @@ export class OptionsComponent implements OnInit {
     } catch {}
   }
 
+  private restorePendingRequest(request: any): void {
+    // Pending requests contain the resolved job seed, not the user's seed choice.
+    // Keep it for history/display without locking subsequent generations to it.
+    this.currentSeed = request.seed;
+    this.generationRequest = { ...this.generationRequest, ...request, seed: this.generationRequest.seed };
+  }
+
   private handleExpiredPendingJob(pending: { job_id: string; request?: any; createdAt?: number }) {
     // Restore previous settings if we have them
     if (pending.request) {
-      this.generationRequest = { ...this.generationRequest, ...pending.request };
+      this.restorePendingRequest(pending.request);
       this.sharedService.setGenerationRequest(this.generationRequest);
       if (Array.isArray(pending.request.loras)) {
         this.generationRequest.loras = this.snapshotLoras(pending.request.loras);
