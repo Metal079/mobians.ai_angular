@@ -27,6 +27,35 @@ describe('HistoryDiagnosticsService', () => {
 
   function request(): HttpRequest<any> { return backend.handle.calls.mostRecent().args[0]; }
 
+  it('records one report for an error propagated through multiple layers', fakeAsync(() => {
+    const error = new DOMException('fixture', 'AbortError');
+    service.report('db.read', error, { recovered: false });
+    service.report('history.sync', error);
+    flushMicrotasks();
+    expect(backend.handle).toHaveBeenCalledTimes(1);
+    expect(request().body.context.recovered).toBeFalse();
+  }));
+
+  it('records a recovery outcome even when database opening already reported the incident', fakeAsync(() => {
+    const error = new DOMException('fixture', 'UnknownError');
+    service.report('db.open', error);
+    service.report('db.read', error, { recovered: true });
+    service.report('history.sync', error);
+    flushMicrotasks();
+    expect(backend.handle).toHaveBeenCalledTimes(2);
+    expect(request().body.context.recovered).toBeTrue();
+  }));
+
+  it('distinguishes a successful recovery from an unresolved failure and keeps activity facts', fakeAsync(() => {
+    service.report('db.read', new DOMException('fixture', 'AbortError'), { recovered: true });
+    flushMicrotasks();
+    expect(request().body.context.recovered).toBeTrue();
+    service.report('db.read', new DOMException('fixture', 'AbortError'), { recovered: false, backgroundedDuringRequest: true, offlineDuringRequest: false });
+    flushMicrotasks();
+    expect(backend.handle).toHaveBeenCalledTimes(2);
+    expect(request().body.context).toEqual({ recovered: false, backgroundedDuringRequest: true, offlineDuringRequest: false });
+  }));
+
   it('includes bounded transport correlation without raw headers, paths, or body text', fakeAsync(() => {
     const error = { name: 'HttpErrorResponse', status: 504 };
     rememberHistoryHttpContext(error, { requestId: 'request-12345', requestDurationMs: 15500, retryCount: 1,

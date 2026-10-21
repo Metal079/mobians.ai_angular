@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, DestroyRef, EventEmitter, Input, NgZone, 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { concatMap, filter } from 'rxjs';
+import { concatMap, filter, firstValueFrom, fromEvent, take } from 'rxjs';
 import { ImageHistoryEventsService } from './image-history-events.service';
 import { v4 as uuidv4 } from 'uuid';
 import JSZip from 'jszip';
@@ -164,7 +164,14 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private favoriteMutationRevision = 0;
   private readonly deletedCloudImages = new Set<string>();
   readonly favoriteSavesInFlight = new Set<string>();
-  private readonly onOnline = () => { void this.syncFromCloud(); };
+  private canSyncInBackground(): boolean {
+    return !this.historyDestroyed && document.visibilityState !== 'hidden' && navigator.onLine;
+  }
+  private readonly onOnline = () => {
+    if (!this.historyInitialized || !this.canSyncInBackground()) return;
+    void this.syncFromCloud();
+    void this.syncTagsFromCloud();
+  };
 
   private readonly onStorage = (e: StorageEvent) => {
     if (e.key === this.tagsUpdateKey) {
@@ -229,6 +236,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     window.addEventListener('storage', this.onStorage);
     window.addEventListener('resize', this.onViewportResize);
     window.addEventListener('online', this.onOnline);
+    document.addEventListener('visibilitychange', this.onOnline);
     this.initializeHistory().catch((error) => {
       console.error('Failed to initialize image history:', error);
     });
@@ -243,6 +251,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     window.removeEventListener('storage', this.onStorage);
     window.removeEventListener('resize', this.onViewportResize);
     window.removeEventListener('online', this.onOnline);
+    document.removeEventListener('visibilitychange', this.onOnline);
     if (this.cloudSyncInterval) {
       clearInterval(this.cloudSyncInterval);
       this.cloudSyncInterval = undefined;
@@ -254,6 +263,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   async initializeHistory() {
     try {
+      if (document.visibilityState === 'hidden') {
+        await firstValueFrom(fromEvent(document, 'visibilitychange').pipe(
+          filter(() => document.visibilityState !== 'hidden'), take(1), takeUntilDestroyed(this.destroyRef),
+        ), { defaultValue: undefined });
+        if (this.historyDestroyed) return;
+      }
       await this.getDatabase();
       if (this.historyDestroyed) return;
       await this.migrateBase64ToBlobStore();
@@ -403,18 +418,24 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     // The grid shares this image object. Compress only the stored copy so expanding
     // a freshly generated PNG does not silently switch its browser-save format.
 
+    let previousFailure: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
+      let db: IDBDatabase | undefined;
       try {
-        const db = await this.getDatabase();
+        db = await this.getDatabase();
         await this.writeGeneratedImage(db, image, blobToStore);
+        if (previousFailure) this.reportHistoryError('history.save', previousFailure,
+          { attempt, recovered: true, requestedCount: 1, savedCount: 1 });
         return true;
       } catch (error) {
         this.lastSaveErrorName = (error as { name?: string })?.name || 'Error';
-        this.reportHistoryError('history.save', error, { attempt, requestedCount: 1, savedCount: 0 });
-        if (attempt === 0 && ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes(this.lastSaveErrorName)) {
-          this.invalidateDatabase();
+        if (!this.historyDestroyed && attempt === 0 && this.isTransientDatabaseError(error)) {
+          previousFailure = error;
+          this.invalidateDatabase(db);
+          await this.wait(50);
           continue;
         }
+        this.reportHistoryError('history.save', error, { attempt, recovered: false, requestedCount: 1, savedCount: 0 });
         return false;
       }
     }
@@ -1296,8 +1317,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     const userId = this.authService.getUserId();
     if (!this.authService.isLoggedIn() || image.favoriteSyncUserId !== userId) return false;
     const revision = image.favoriteSyncRevision;
-    const db = await this.getDatabase();
-    const latest = await this.getLocalImage(db, image.UUID);
+    const latest = await this.getLocalImage(image.UUID);
     if (!latest || latest.favoriteSyncRevision !== revision || !latest.favoriteSyncPending) return true;
     if (userId !== this.authService.getUserId()) return false;
     let saved = false;
@@ -1306,10 +1326,10 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       let blob = await this.getImageBlob(image.UUID);
       if (!blob?.size) {
         blob = image.blob?.size ? image.blob : (await this.imageSyncService.downloadImageBlobs([image.UUID])).get(image.UUID);
-        if (!blob?.size || !await this.storeCloudImageBlob(db, image.UUID, blob)) return false;
+        if (!blob?.size || !await this.storeCloudImageBlob(image.UUID, blob)) return false;
       }
       if (userId !== this.authService.getUserId()) return false;
-      const current = await this.getLocalImage(db, image.UUID);
+      const current = await this.getLocalImage(image.UUID);
       if (!current || current.favoriteSyncRevision !== revision || !current.favoriteSyncPending) return true;
       if (userId !== this.authService.getUserId()) return false;
       // DELETE is intentional even when the local sync-membership cache is stale.
@@ -1325,21 +1345,23 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (!saved || userId !== this.authService.getUserId()) return false;
 
     // Do not clear a newer change or resurrect an image deleted during the request.
-    await new Promise<void>((resolve, reject) => {
+    await this.withHistoryDatabase('history.favorite', db => new Promise<void>((resolve, reject) => {
       const tx = db.transaction(this.storeName, 'readwrite');
       const store = tx.objectStore(this.storeName);
       const request = store.get(image.UUID);
       request.onsuccess = () => {
         const current = request.result as MobiansImage | undefined;
-        if (current && current.favoriteSyncRevision === revision) {
+        if (current && current.favoriteSyncRevision === revision && userId === this.authService.getUserId()) {
           current.favoriteSyncPending = false;
           store.put(current);
         }
       };
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
+      let failure: DOMException | null = null;
+      tx.onerror = event => { failure ??= (event.target as IDBRequest)?.error || tx.error; };
+      tx.onabort = () => reject(failure || tx.error || new DOMException('Favorite acknowledgement aborted', 'AbortError'));
+    }));
+    if (userId !== this.authService.getUserId()) return false;
     this.markFavoriteMutation();
     if (image.favorite) {
       this.deletedCloudImages.delete(image.UUID);
@@ -1433,26 +1455,20 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   async updateImageInDB(image: MobiansImage): Promise<boolean> {
     try {
-      const db = await this.getDatabase();
-      const transaction = db.transaction(this.storeName, 'readwrite');
-      const store = transaction.objectStore(this.storeName);
-      const transactionDone = new Promise<void>((resolve, reject) => {
+      await this.withHistoryDatabase('history.favorite', db => new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(this.storeName, 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        let failure: DOMException | null = null;
         transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
-      });
-      const imageMetadata: any = { ...image };
-      delete imageMetadata.blob;
-      delete imageMetadata.url;
-      await new Promise<void>((resolve, reject) => {
-        const request = store.put(imageMetadata);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-      await transactionDone;
+        transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+        transaction.onabort = () => reject(failure || transaction.error || new DOMException('Favorite write aborted', 'AbortError'));
+        const imageMetadata: any = { ...image };
+        delete imageMetadata.blob;
+        delete imageMetadata.url;
+        store.put(imageMetadata);
+      }));
       return true;
-    } catch (error) {
-      this.reportHistoryError('history.favorite', error);
+    } catch {
       return false;
     }
   }
@@ -1925,6 +1941,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   async getDatabase(): Promise<IDBDatabase> {
     if (this.historyDestroyed) throw new DOMException('History panel closed', 'AbortError');
+    let reopenFailure: unknown;
     if (this.db) {
       try {
         // close() itself emits no close event; probe before reusing a cached handle.
@@ -1932,7 +1949,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         return this.db;
       } catch (error) {
         if ((error as DOMException)?.name !== 'InvalidStateError') throw error;
-        this.reportHistoryError('db.reopen', error);
+        reopenFailure = error;
         this.invalidateDatabase();
       }
     }
@@ -1950,13 +1967,42 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         if (this.databaseOpening === opening) this.databaseOpening = undefined;
       }).catch(() => {});
     }
-    return this.databaseOpening;
+    const opened = await this.databaseOpening;
+    if (reopenFailure) this.reportHistoryError('db.reopen', reopenFailure, { recovered: true });
+    return opened;
   }
 
   private invalidateDatabase(db = this.db): void {
     if (!db) return;
     if (this.db === db) this.db = null;
     db.close();
+  }
+
+  private isTransientDatabaseError(error: unknown): boolean {
+    return ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes((error as DOMException)?.name);
+  }
+
+  /** Only retry local operations that are read-only or idempotent and resolve on commit. */
+  private async withHistoryDatabase<T>(operation: string, work: (db: IDBDatabase) => Promise<T>): Promise<T> {
+    let previousFailure: unknown;
+    for (let attempt = 0; ; attempt++) {
+      let db: IDBDatabase | undefined;
+      try {
+        db = await this.getDatabase();
+        const result = await work(db);
+        if (previousFailure) this.reportHistoryError(operation, previousFailure, { attempt, recovered: true });
+        return result;
+      } catch (error) {
+        if (attempt === 0 && !this.historyDestroyed && this.isTransientDatabaseError(error)) {
+          previousFailure = error;
+          this.invalidateDatabase(db);
+          await this.wait(50);
+          continue;
+        }
+        this.reportHistoryError(operation, error, { attempt, recovered: false });
+        throw error;
+      }
+    }
   }
 
   private reportHistoryError(operation: string, error: unknown, context: Record<string, unknown> = {}): void {
@@ -2141,7 +2187,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         if (blob && this.localHistorySupported) {
           // Rendering a cloud favorite must also work when local storage is full.
           const downloadedBlob = blob;
-          void this.getDatabase().then(db => this.storeCloudImage(db, image, downloadedBlob))
+          void this.storeCloudImage(image, downloadedBlob)
             .catch(error => this.reportHistoryError('db.write', error));
         }
       }
@@ -2825,31 +2871,19 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
   private async getAllImagesFromDb(throwOnError = false): Promise<MobiansImage[]> {
     if (!this.localHistorySupported) return [];
-    for (let attempt = 0; attempt < 2; attempt++) {
-      let db: IDBDatabase | undefined;
-      try {
-        db = await this.getDatabase();
-        return await new Promise<MobiansImage[]>((resolve, reject) => {
-          const transaction = db!.transaction([this.storeName], 'readonly');
-          const request = transaction.objectStore(this.storeName).getAll();
-          let failure: DOMException | null = null;
-          transaction.oncomplete = () => resolve(request.result || []);
-          transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
-          transaction.onabort = () => reject(failure || transaction.error || new DOMException('History read aborted', 'AbortError'));
-        });
-      } catch (error) {
-        if (!this.historyDestroyed) {
-          this.reportHistoryError('db.read', error, { attempt });
-          if (attempt === 0 && db && ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes((error as DOMException)?.name)) {
-            this.invalidateDatabase(db);
-            continue;
-          }
-        }
-        if (throwOnError) throw error;
-        return [];
-      }
+    try {
+      return await this.withHistoryDatabase('db.read', db => new Promise<MobiansImage[]>((resolve, reject) => {
+        const transaction = db.transaction([this.storeName], 'readonly');
+        const request = transaction.objectStore(this.storeName).getAll();
+        let failure: DOMException | null = null;
+        transaction.oncomplete = () => resolve(request.result || []);
+        transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+        transaction.onabort = () => reject(failure || transaction.error || new DOMException('History read aborted', 'AbortError'));
+      }));
+    } catch (error) {
+      if (throwOnError) throw error;
+      return [];
     }
-    return [];
   }
 
   private async getAllImageUUIDs(): Promise<string[]> {
@@ -2937,12 +2971,12 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private async syncTagsFromCloud(): Promise<void> {
-    if (this.historyDestroyed || !this.localHistorySupported) return;
+    if (!this.canSyncInBackground() || !this.localHistorySupported) return;
     if (!this.authService.isLoggedIn() || this.tagsSyncInProgress) return;
     this.tagsSyncInProgress = true;
     try {
       const cloudTags = await this.imageSyncService.getCloudTags();
-      if (this.historyDestroyed || !Array.isArray(cloudTags)) return;
+      if (!this.canSyncInBackground() || !Array.isArray(cloudTags)) return;
 
       const lastSyncAt = this.getTagsLastSyncAt();
       const hasCloudData = cloudTags.length > 0;
@@ -3086,7 +3120,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
     void this.syncTagsFromCloud();
     this.cloudSyncInterval = window.setInterval(() => {
-      if (this.historyDestroyed) return;
+      if (!this.canSyncInBackground()) return;
       void this.syncTagsFromCloud();
       void this.syncFromCloud();
     }, this.cloudSyncIntervalMs);
@@ -3111,40 +3145,40 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     this.imageSelected.emit({ ...image, blob });
   }
 
-  private async getLocalImage(db: IDBDatabase, uuid: string): Promise<MobiansImage | null> {
-    return new Promise<MobiansImage | null>((resolve) => {
+  private async getLocalImage(uuid: string): Promise<MobiansImage | null> {
+    return this.withHistoryDatabase('db.read', db => new Promise<MobiansImage | null>((resolve, reject) => {
       const transaction = db.transaction(this.storeName, 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.get(uuid);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => resolve(null);
-    });
+      transaction.oncomplete = () => resolve(request.result || null);
+      let failure: DOMException | null = null;
+      transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+      transaction.onabort = () => reject(failure || transaction.error || new DOMException('History read aborted', 'AbortError'));
+    }));
   }
 
-  private async hasStoredImageBlob(db: IDBDatabase, uuid: string): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
+  private async hasStoredImageBlob(uuid: string): Promise<boolean> {
+    return this.withHistoryDatabase('db.read', db => new Promise<boolean>((resolve, reject) => {
       const transaction = db.transaction(this.blobStoreName, 'readonly');
       const store = transaction.objectStore(this.blobStoreName);
       const request = store.get(uuid);
-      request.onsuccess = () => resolve(!!request.result?.blob);
-      request.onerror = () => resolve(false);
-    });
+      transaction.oncomplete = () => resolve(!!request.result?.blob);
+      let failure: DOMException | null = null;
+      transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+      transaction.onabort = () => reject(failure || transaction.error || new DOMException('History blob read aborted', 'AbortError'));
+    }));
   }
 
-  private async storeCloudImage(db: IDBDatabase, cloudImage: MobiansImage, blob: Blob): Promise<boolean> {
+  private async storeCloudImage(cloudImage: MobiansImage, blob: Blob): Promise<boolean> {
     try {
-      return await new Promise<boolean>((resolve) => {
+      return await this.withHistoryDatabase('db.write', db => new Promise<boolean>((resolve, reject) => {
         const transaction = db.transaction([this.storeName, this.blobStoreName], 'readwrite');
         const imageStore = transaction.objectStore(this.storeName);
         const blobStore = transaction.objectStore(this.blobStoreName);
-        let failed = false;
-
-        transaction.oncomplete = () => resolve(!failed);
-        transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
-        transaction.onabort = () => {
-          this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
-          resolve(false);
-        };
+        let failure: DOMException | null = null;
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+        transaction.onabort = () => reject(failure || transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
 
         const currentRequest = imageStore.get(cloudImage.UUID);
         currentRequest.onsuccess = () => {
@@ -3154,45 +3188,37 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
           delete imageMetadata.url;
           imageStore.put(imageMetadata);
         };
-        currentRequest.onerror = () => { failed = true; };
-
-        const blobRequest = blobStore.put({ UUID: cloudImage.UUID, blob });
-        blobRequest.onerror = () => { failed = true; };
-      });
-    } catch (error) {
-      this.reportHistoryError('db.write', error);
+        blobStore.put({ UUID: cloudImage.UUID, blob });
+      }));
+    } catch {
       return false;
     }
   }
 
-  private async storeCloudImageBlob(db: IDBDatabase, uuid: string, blob: Blob): Promise<boolean> {
+  private async storeCloudImageBlob(uuid: string, blob: Blob): Promise<boolean> {
     try {
-      return await new Promise<boolean>((resolve) => {
+      return await this.withHistoryDatabase('db.write', db => new Promise<boolean>((resolve, reject) => {
         const transaction = db.transaction(this.blobStoreName, 'readwrite');
         const blobStore = transaction.objectStore(this.blobStoreName);
 
         transaction.oncomplete = () => resolve(true);
-        transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
-        transaction.onabort = () => {
-          this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
-          resolve(false);
-        };
+        let failure: DOMException | null = null;
+        transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+        transaction.onabort = () => reject(failure || transaction.error || new DOMException('Cloud cache write aborted', 'AbortError'));
 
         blobStore.put({ UUID: uuid, blob });
-      });
-    } catch (error) {
-      this.reportHistoryError('db.write', error);
+      }));
+    } catch {
       return false;
     }
   }
 
   private async updateLocalCloudMetadata(
-    db: IDBDatabase,
     localImage: MobiansImage,
     cloudImage: MobiansImage,
     favoriteRevision = this.getFavoriteRevision()
   ): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
+    return this.withHistoryDatabase('db.write', db => new Promise<boolean>((resolve, reject) => {
       const transaction = db.transaction(this.storeName, 'readwrite');
       const store = transaction.objectStore(this.storeName);
       let updated: MobiansImage | undefined;
@@ -3214,21 +3240,19 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         }
         resolve(!!updated);
       };
-      transaction.onerror = event => this.reportHistoryError('db.write', (event.target as IDBRequest)?.error || transaction.error);
-      transaction.onabort = () => {
-        this.reportHistoryError('db.write', transaction.error || new DOMException('Cloud metadata write aborted', 'AbortError'));
-        resolve(false);
-      };
-    });
+      let failure: DOMException | null = null;
+      transaction.onerror = event => { failure ??= (event.target as IDBRequest)?.error || transaction.error; };
+      transaction.onabort = () => reject(failure || transaction.error || new DOMException('Cloud metadata write aborted', 'AbortError'));
+    }));
   }
 
   private async syncFromCloud(notify = false): Promise<void> {
-    if (!this.authService.isLoggedIn() || this.destroyRef.destroyed) return;
+    if (!this.canSyncInBackground() || !this.authService.isLoggedIn()) return;
     if (this.cloudSyncTask) return this.cloudSyncTask;
     const task = (async () => {
       try {
         await this.imageSyncService.fetchSyncStatus();
-        if (this.historyDestroyed) return;
+        if (!this.canSyncInBackground()) return;
         try {
           if (this.localHistorySupported) await this.retryFavoriteChanges();
         } catch (error) {
@@ -3253,6 +3277,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   async mergeCloudImages(): Promise<number> {
+    if (!this.canSyncInBackground()) return 0;
     try {
       const favoriteRevision = this.getFavoriteRevision();
       const userId = this.authService.getUserId();
@@ -3263,7 +3288,6 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       await this.updateFavoriteImages();
       if (images.length === 0 || !this.localHistorySupported) return 0;
 
-      const db = await this.getDatabase();
       let imagesAdded = 0;
       let imagesUpdated = 0;
       let blobsRestored = 0;
@@ -3271,19 +3295,19 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       const blobOnlyUUIDs: string[] = [];
 
       for (const cloudImage of images) {
-        if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return 0;
-        const localImage = await this.getLocalImage(db, cloudImage.UUID);
+        if (userId !== this.authService.getUserId() || !this.canSyncInBackground()) return 0;
+        const localImage = await this.getLocalImage(cloudImage.UUID);
 
         if (!localImage) {
           imagesToAdd.push(cloudImage);
           continue;
         }
 
-        if (await this.updateLocalCloudMetadata(db, localImage, cloudImage, favoriteRevision)) {
+        if (await this.updateLocalCloudMetadata(localImage, cloudImage, favoriteRevision)) {
           imagesUpdated++;
         }
 
-        if (!(await this.hasStoredImageBlob(db, cloudImage.UUID))) {
+        if (!(await this.hasStoredImageBlob(cloudImage.UUID))) {
           blobOnlyUUIDs.push(cloudImage.UUID);
         }
       }
@@ -3296,25 +3320,27 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       if (userId !== this.authService.getUserId() || this.destroyRef.destroyed) return 0;
 
       for (const cloudImage of imagesToAdd) {
+        if (userId !== this.authService.getUserId() || !this.canSyncInBackground()) return 0;
         if (this.deletedCloudImages.has(cloudImage.UUID)) continue;
         const blob = cloudBlobs.get(cloudImage.UUID);
         if (!blob) {
           continue;
         }
 
-        if (await this.storeCloudImage(db, cloudImage, blob)) {
+        if (await this.storeCloudImage(cloudImage, blob)) {
           imagesAdded++;
         }
       }
 
       for (const uuid of blobOnlyUUIDs) {
+        if (userId !== this.authService.getUserId() || !this.canSyncInBackground()) return 0;
         if (this.deletedCloudImages.has(uuid)) continue;
         const blob = cloudBlobs.get(uuid);
         if (!blob) {
           continue;
         }
 
-        if (await this.storeCloudImageBlob(db, uuid, blob)) {
+        if (await this.storeCloudImageBlob(uuid, blob)) {
           this.imageUrlCache.delete(uuid);
           const visibleImage = this.currentPageImages.find(image => image.UUID === uuid)
             || this.favoritePageImages.find(image => image.UUID === uuid);

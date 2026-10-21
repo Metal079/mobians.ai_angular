@@ -45,6 +45,7 @@ export class HistoryDiagnosticsService {
   // Deliberately bypass AuthInterceptor: telemetry rejection must never sign the user out.
   private readonly http: HttpClient;
   private readonly seen = new Map<string, number>();
+  private readonly reportedErrors = new WeakMap<object, boolean | undefined>();
   private sentCount = 0;
   private readonly sessionId = this.newId();
 
@@ -58,10 +59,17 @@ export class HistoryDiagnosticsService {
       if (!OPERATIONS.has(operation) || this.sentCount >= 20) return;
       const safeError = this.describeError(error);
       const safeContext = this.sanitizeContext({ ...historyHttpContext(error), ...context });
-      const key = [operation, safeError.name, safeContext['dbState'], safeContext['httpStatus']].join(':');
+      const recovered = safeContext['recovered'] as boolean | undefined;
+      if (error && typeof error === 'object' && this.reportedErrors.has(error)) {
+        const previous = this.reportedErrors.get(error);
+        // Propagation adds no new incident, but a later recovery is useful evidence.
+        if (recovered === undefined || previous === recovered || previous === true) return;
+      }
+      const key = [operation, safeError.name, safeContext['dbState'], safeContext['httpStatus'], safeContext['recovered']].join(':');
       const now = Date.now();
       if (this.seen.has(key) && now - this.seen.get(key)! < 60000) return;
       this.seen.set(key, now);
+      if (error && typeof error === 'object') this.reportedErrors.set(error, recovered);
       this.sentCount++;
       const payload = {
         schemaVersion: 1, eventId: this.newId(), sessionId: this.sessionId,
@@ -104,7 +112,7 @@ export class HistoryDiagnosticsService {
     }
     if (['open', 'closed', 'opening', 'unavailable', 'unknown'].includes(context['dbState'] as string)) result['dbState'] = context['dbState'];
     if (typeof context['syncEnabled'] === 'boolean') result['syncEnabled'] = context['syncEnabled'];
-    for (const key of ['serviceWorkerBypassed', 'includeBlobs']) {
+    for (const key of ['serviceWorkerBypassed', 'includeBlobs', 'recovered', 'backgroundedDuringRequest', 'offlineDuringRequest']) {
       if (typeof context[key] === 'boolean') result[key] = context[key];
     }
     if (typeof context['requestId'] === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(context['requestId'])) result['requestId'] = context['requestId'];

@@ -129,6 +129,38 @@ describe('ImageHistoryPanelComponent', () => {
   });
 
   describe('closing history during cloud requests', () => {
+    it('does not open local storage for a hidden panel that is closed before becoming visible', fakeAsync(() => {
+      const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue('hidden');
+      const open = spyOn(component, 'getDatabase');
+      void component.initializeHistory();
+      flushMicrotasks();
+      tick(30000);
+      expect(open).not.toHaveBeenCalled();
+      fixture.destroy();
+      flushMicrotasks();
+      visibility.and.returnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      flushMicrotasks();
+      expect(open).not.toHaveBeenCalled();
+    }));
+
+    it('skips periodic cloud requests while hidden and allows a refresh when visible again', fakeAsync(() => {
+      const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue('hidden');
+      (component as any).historyInitialized = true;
+      authService.isLoggedIn.and.returnValue(true);
+      (component as any).startCloudTagSync();
+      tick(120000);
+      expect(imageSyncService.getCloudTags).not.toHaveBeenCalled();
+      expect(imageSyncService.fetchSyncStatus).not.toHaveBeenCalled();
+      const sync = spyOn<any>(component, 'syncFromCloud').and.resolveTo();
+      const tags = spyOn<any>(component, 'syncTagsFromCloud').and.resolveTo();
+      visibility.and.returnValue('visible');
+      (component as any).onOnline();
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(tags).toHaveBeenCalledTimes(1);
+      fixture.destroy();
+    }));
+
     it('does not restart its minute timer when initialization completes after navigation', fakeAsync(() => {
       authService.isLoggedIn.and.returnValue(true);
       spyOn(component, 'getDatabase').and.resolveTo({} as IDBDatabase);
@@ -230,7 +262,7 @@ describe('ImageHistoryPanelComponent', () => {
       expect((await (component as any).getAllImagesFromDb(true)).length).toBe(1);
       expect((await component.getImageBlob('retry-aborted'))?.size).toBeGreaterThan(0);
       expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
-        jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ attempt: 0 }));
+        jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ attempt: 1, recovered: true, savedCount: 1 }));
     });
 
     it('reopens and retries an aborted native metadata read without losing favorites', async () => {
@@ -307,6 +339,66 @@ describe('ImageHistoryPanelComponent', () => {
       fixture.destroy();
       expect(() => db.transaction('ImageStore')).toThrow();
       await expectAsync(component.getDatabase()).toBeRejectedWith(jasmine.objectContaining({ name: 'AbortError' }));
+    });
+
+    it('restores cloud images if the database is reopened while files are downloading', async () => {
+      authService.isLoggedIn.and.returnValue(true);
+      const image = { ...savedImage('restore-after-reopen'), favorite: true };
+      imageSyncService.downloadFromCloud.and.resolveTo({ images: [image], blobs: new Map() });
+      let release!: (blobs: Map<string, Blob>) => void;
+      let started!: () => void;
+      const downloading = new Promise<void>(resolve => { started = resolve; });
+      imageSyncService.downloadImageBlobs.and.callFake(() => {
+        started();
+        return new Promise(resolve => { release = resolve; });
+      });
+      const restoring = component.mergeCloudImages();
+      await downloading;
+      (component as any).invalidateDatabase();
+      await component.getDatabase();
+      release(new Map([[image.UUID, image.blob!]]));
+      expect(await restoring).toBe(1);
+      expect((await component.getImageBlob(image.UUID))?.size).toBeGreaterThan(0);
+      expect((await (component as any).getAllImagesFromDb(true))[0].favorite).toBeTrue();
+    });
+
+    it('acknowledges a cloud favorite after the local database was reopened during upload', async () => {
+      const image = savedImage('favorite-after-reopen');
+      await component.ingestGeneratedImages([image]);
+      authService.isLoggedIn.and.returnValue(true);
+      let release!: (saved: boolean) => void;
+      let started!: () => void;
+      const uploading = new Promise<void>(resolve => { started = resolve; });
+      imageSyncService.syncImage.and.callFake(() => {
+        started();
+        return new Promise(resolve => { release = resolve; });
+      });
+      const favoriting = component.toggleFavorite(image);
+      await uploading;
+      (component as any).invalidateDatabase();
+      await component.getDatabase();
+      release(true);
+      await favoriting;
+      const persisted = (await (component as any).getAllImagesFromDb(true))[0];
+      expect(persisted.favorite).toBeTrue();
+      expect(persisted.favoriteSyncPending).toBeFalse();
+      expect(imageSyncService.syncImage).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries an aborted favorite write once and reports its recovery', async () => {
+      const image = savedImage('favorite-write-retry');
+      await component.ingestGeneratedImages([image]);
+      const db = await component.getDatabase();
+      const transaction = db.transaction.bind(db);
+      spyOn(db, 'transaction').and.callFake(((stores: string | string[], mode?: IDBTransactionMode) => {
+        const tx = transaction(stores, mode);
+        if (mode === 'readwrite') queueMicrotask(() => tx.abort());
+        return tx;
+      }) as typeof db.transaction);
+      await component.toggleFavorite(image);
+      expect((await (component as any).getAllImagesFromDb(true))[0].favorite).toBeTrue();
+      expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.favorite',
+        jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ recovered: true }));
     });
   });
 
@@ -729,12 +821,11 @@ describe('ImageHistoryPanelComponent', () => {
     ]));
 
     spyOn(component as any, 'getDatabase').and.resolveTo(fakeDb);
-    spyOn(component as any, 'getLocalImage').and.callFake((_db: IDBDatabase, uuid: string) => {
+    spyOn(component as any, 'getLocalImage').and.callFake((uuid: string) => {
       return Promise.resolve(uuid === 'local-1' ? localImage : null);
     });
     spyOn(component as any, 'hasStoredImageBlob').and.resolveTo(true);
     spyOn(component as any, 'updateLocalCloudMetadata').and.callFake(async (
-      _db: IDBDatabase,
       local: MobiansImage,
       cloud: MobiansImage
     ) => {
@@ -752,7 +843,7 @@ describe('ImageHistoryPanelComponent', () => {
 
     expect(imageSyncService.downloadFromCloud).toHaveBeenCalledWith(false);
     expect(imageSyncService.downloadImageBlobs).toHaveBeenCalledOnceWith(['missing-1']);
-    expect((component as any).storeCloudImage).toHaveBeenCalledWith(fakeDb, cloudMissingImage, missingBlob);
+    expect((component as any).storeCloudImage).toHaveBeenCalledWith(cloudMissingImage, missingBlob);
     expect(localImage.favorite).toBeTrue();
     expect(localImage.tags).toEqual(['tag-1']);
     expect(mergedCount).toBe(2);
@@ -834,7 +925,7 @@ describe('ImageHistoryPanelComponent', () => {
     });
 
     const newImage = (UUID: string, favorite = false) => ({ ...createImage({ UUID, favorite }), blob: new Blob(['pixels'], { type: 'image/webp' }) });
-    const readImage = (uuid: string) => (component as any).getLocalImage(db, uuid) as Promise<MobiansImage>;
+    const readImage = (uuid: string) => (component as any).getLocalImage(uuid) as Promise<MobiansImage>;
 
     it('finishes saving generated images while an unrelated cloud favorite download is stalled', async () => {
       (component as any).hydrateImageUrls.and.callThrough();
@@ -899,7 +990,7 @@ describe('ImageHistoryPanelComponent', () => {
       expect(pending.favorite).toBeFalse();
       expect(pending.favoriteSyncPending).toBeTrue();
       expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Cloud removal pending' }));
-      await (component as any).updateLocalCloudMetadata(db, pending, { ...pending, favorite: true });
+      await (component as any).updateLocalCloudMetadata(pending, { ...pending, favorite: true });
       expect((await readImage(image.UUID)).favorite).toBeFalse();
 
       const reloaded = TestBed.createComponent(ImageHistoryPanelComponent);
@@ -978,7 +1069,7 @@ describe('ImageHistoryPanelComponent', () => {
       expect(pending.favorite).toBeTrue();
       expect(pending.favoriteSyncPending).toBeTrue();
       expect(messages).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'warn', summary: 'Cloud backup pending' }));
-      await (component as any).updateLocalCloudMetadata(db, pending, { ...pending, favorite: false });
+      await (component as any).updateLocalCloudMetadata(pending, { ...pending, favorite: false });
       expect((await readImage(image.UUID)).favorite).toBeTrue();
 
       const reloaded = TestBed.createComponent(ImageHistoryPanelComponent);
