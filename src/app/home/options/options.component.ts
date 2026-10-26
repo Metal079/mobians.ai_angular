@@ -40,6 +40,7 @@ import { CharacterPickerComponent } from 'src/app/characters/character-picker.co
 import { imageDownloadConcurrency, runImageDownloadPool } from './image-download-pool';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 import { supportsLocalHistory, unsupportedHistoryError } from 'src/app/history-storage';
+import { StableTextareaAutosizeDirective } from './stable-textarea-autosize.directive';
 
 interface PendingGenerationJob {
   job_id: string;
@@ -63,6 +64,7 @@ interface PendingGenerationJob {
       ButtonModule,
       TooltipModule,
       TextareaModule,
+      StableTextareaAutosizeDirective,
       HintComponent,
       GenerationOptionsPanelComponent,
       ImageHistoryPanelComponent,

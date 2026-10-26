@@ -71,7 +71,7 @@
         <div class="dynamic-prompt-highlight-layer" aria-hidden="true" [innerHTML]="getDynamicPromptHighlightHtml()"></div>
       }
 
-      <textarea pInputTextarea [autoResize]="true" [(ngModel)]="generationRequest.prompt"
+      <textarea pInputTextarea appStableAutosize [(ngModel)]="generationRequest.prompt"
         (ngModelChange)="onPromptInputChange($event)" class="form-control resizable-textarea" [class.dynamic-prompt-textarea-active]="isDynamicPromptActive()" placeholder="Enter Prompt"
       aria-label="Enter Prompt" aria-describedby="generate-button" id="prompt-input" rows="1" cols="3" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
 
