@@ -220,7 +220,7 @@ describe('OptionsComponent', () => {
       ...testModelSettings[2], model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2',
       base_model: 'Krea 2', default_cfg: 1, credit_cost: 40, lora_credit_cost: 5,
       is_default: false, supported_operations: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], output_count: 4,
-      supports_negative_prompt: true, supports_dynamic_prompting: true,
+      supports_negative_prompt: false, supports_dynamic_prompting: true, fixed_cfg: 1,
       supports_regional_prompting: true, supports_upscale: true,
       default_steps: 8, max_loras: 3,
     }]);
@@ -238,8 +238,8 @@ describe('OptionsComponent', () => {
       dynamic_prompting: { enabled: true }, strength: 0.7,
     });
     expect([request.width, request.height, request.steps, request.guidance_scale, request.batch_size])
-      .toEqual([512, 768, 8, 7, 4]);
-    expect(request.negative_prompt).toBe('old settings');
+      .toEqual([512, 768, 8, 1, 4]);
+    expect(request.negative_prompt).toBe('');
     expect(request.dynamic_prompting.enabled).toBeTrue();
     expect(request.strength).toBe(0.7);
     expect(component.upscaleCreditCost).toBe(150);
@@ -254,7 +254,7 @@ describe('OptionsComponent', () => {
     expect(component.canGenerate).toBeTrue();
     expect(component.selectedModelSettings?.supports_regional_prompting).toBeTrue();
     expect(component.selectedModelSettings?.supports_upscale).toBeTrue();
-    expect(component.selectedModelSettings?.fixed_cfg).toBeUndefined();
+    expect(component.selectedModelSettings?.fixed_cfg).toBe(1);
     component.referenceImage = undefined;
     component.changeModel('novaMobianXL_v20');
     expect(component.isTextOnlyModel).toBeFalse();

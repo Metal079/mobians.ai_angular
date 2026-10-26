@@ -215,6 +215,7 @@
                     (ngModelChange)="saveSettings.emit()"
                     placeholder="Describe this area"></textarea>
 
+                  @if (selectedModel?.supports_negative_prompt !== false) {
                   <label class="form-label mb-1">Region Negative Prompt (optional)
                     <app-hint text="Things to avoid in this region (wrong character, colors, clothing, etc)." variant="regional"></app-hint>
                   </label>
@@ -223,6 +224,7 @@
                     [(ngModel)]="region.negative_prompt"
                     (ngModelChange)="saveSettings.emit()"
                     placeholder="What to avoid in this area">
+                  }
 
                   <div class="form-check mb-2">
                     <input
@@ -305,8 +307,6 @@
       </label>
       <input type="range" class="form-range" min="1" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
-        } @else {
-          <p class="mb-3">CFG is fixed at {{ selectedModel?.fixed_cfg }} for this model.</p>
         }
 
         <!-- FastPass Code -->
