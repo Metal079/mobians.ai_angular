@@ -31,6 +31,15 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Input() modelsLoadError = false;
   @Output() retryModels = new EventEmitter<void>();
 
+  get selectedModel(): GenerationModelSettings | undefined {
+    return this.modelSettings.find(model => model.model_id === this.generationRequest?.model);
+  }
+
+  get textOnlyModel(): boolean {
+    const operations = this.selectedModel?.supported_operations;
+    return operations?.length === 1 && operations[0] === 'txt2img';
+  }
+
   @Input() panelTheme: PanelTheme = 'sonic';
   @Output() panelThemeChange = new EventEmitter<PanelTheme>();
   @Input() darkInputFields = false;

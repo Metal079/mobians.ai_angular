@@ -112,7 +112,7 @@ export class AdminComponent implements OnInit, OnDestroy {
   uploadingManualLora = false;
   manualLoraModelFile: File | null = null;
   manualLoraPreviewFile: File | null = null;
-  readonly manualLoraBaseModels = ['Pony', 'SD 1.5', 'Illustrious', 'Anima'];
+  readonly manualLoraBaseModels = ['Pony', 'SD 1.5', 'Illustrious', 'Anima', 'Krea 2'];
   manualLoraForm = {
     name: '',
     version: '',

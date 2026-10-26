@@ -55,6 +55,12 @@
 </div>
 
 <!-- Prompt input box and advanced options button -->
+@if (selectedModelSettings?.model_help) {
+  <p class="model-capability-note" role="note">{{ selectedModelSettings?.model_help }}</p>
+}
+@if (isTextOnlyModel && referenceImage) {
+  <p class="mb-2" role="alert">Remove the reference image to generate with this model, or choose a model that supports image inputs.</p>
+}
 <div class="input-button-container d-flex flex-wrap align-items-center justify-content-start">
   <div class="prompt-editor">
     <div class="prompt-header">
@@ -128,7 +134,7 @@
   }
 
   <!-- buttons that show with reference images expanded -->
-  @if (referenceImage) {
+  @if (referenceImage && !isTextOnlyModel) {
     <div class="inpaint-button">
       <!-- inpaint switch -->
       <p-button label="Inpainting" (click)="openImageModal()"></p-button>
@@ -149,7 +155,7 @@
   }
 
   <!-- Denoise strength -->
-  @if (referenceImage) {
+  @if (referenceImage && !isTextOnlyModel) {
     <div id="denoise-strength">
       <label for="custom-denoise" class="form-label">Strength: <span id="denoise-value">{{ generationRequest.strength
       }}</span>
@@ -171,12 +177,14 @@
 
   <!-- Buttons for Loras, Options, and Image History -->
   <div class="button-group d-flex align-items-center mt-2 mt-md-0">
+    @if (selectedModelSettings?.supports_dynamic_prompting !== false) {
     <app-dynamic-prompt-helper
       class="prompt-helper-inline"
       [currentPrompt]="generationRequest.prompt"
       [active]="isDynamicPromptActive()"
       (promptApplied)="onDynamicPromptApplied($event)">
     </app-dynamic-prompt-helper>
+    }
     <button class="btn btn-primary dropdown-toggle ms-2" data-bs-toggle="collapse" href="#collapseExample" role="button"
       aria-expanded="false" aria-controls="collapseExample" (click)="toggleOptions()">
       Options
@@ -230,6 +238,7 @@
 <!-- Loras Content Panel -->
 <app-loras-panel
   [generationRequest]="generationRequest"
+  [maxLoras]="selectedModelSettings?.max_loras ?? 3"
   [modelsTypes]="models_types"
   [isLoggedIn]="isLoggedIn"
   [resetToken]="loraResetToken"

@@ -17,6 +17,13 @@ export interface CreditPackagesResponse {
 }
 
 export interface GenerationModelSettings {
+  supports_negative_prompt?: boolean;
+  supports_dynamic_prompting?: boolean;
+  supports_loras?: boolean;
+  fixed_cfg?: number;
+  default_steps?: number;
+  max_loras?: number;
+  model_help?: string;
   output_count?: number;
   max_reference_images?: number;
   supported_operations?: string[];

@@ -99,6 +99,7 @@ export class OptionsComponent implements OnInit {
   get canGenerate(): boolean {
     return !this.imageEditor.pending() && this.enableGenerationButton && !this.hasPendingJob && !this.submissionInProgress && !this.cancelInProgress
       && !this.modelsLoading && !this.modelsLoadError
+      && !(this.isTextOnlyModel && !!this.referenceImage)
       && !!this.getModelSetting(this.generationRequest.model);
   }
   models_types: { [model: string]: string; } = this.createModelTypeMap(this.modelSettings);
@@ -134,6 +135,31 @@ export class OptionsComponent implements OnInit {
   private getModelSetting(modelId: unknown): GenerationModelSettings | undefined {
     const normalized = typeof modelId === 'string' ? modelId.trim() : '';
     return this.modelSettings.find(model => model.model_id === normalized);
+  }
+
+  get selectedModelSettings(): GenerationModelSettings | undefined {
+    return this.getModelSetting(this.generationRequest?.model);
+  }
+
+  get isTextOnlyModel(): boolean {
+    const operations = this.selectedModelSettings?.supported_operations;
+    return operations?.length === 1 && operations[0] === 'txt2img';
+  }
+
+  private applyModelRequestCapabilities(request: any): any {
+    const model = this.getModelSetting(request.model);
+    const fixed = { ...request };
+    if (model?.fixed_cfg !== undefined) fixed.guidance_scale = model.fixed_cfg;
+    if (model?.default_steps !== undefined) fixed.steps = model.default_steps;
+    if (model?.output_count !== undefined) fixed.batch_size = model.output_count;
+    if (model?.supports_negative_prompt === false) fixed.negative_prompt = '';
+    if (model?.supports_dynamic_prompting === false) fixed.dynamic_prompting = { enabled: false };
+    if (this.isTextOnlyModel) {
+      fixed.strength = undefined;
+      [fixed.width, fixed.height] = request.width === request.height ? [1024, 1024]
+        : request.height > request.width ? [832, 1248] : [1248, 832];
+    }
+    return fixed;
   }
 
   private setModelSettings(modelSettings: GenerationModelSettings[], defaultModelId?: string): void {
@@ -730,6 +756,11 @@ export class OptionsComponent implements OnInit {
     this.disableRegionalPromptingForUnsupportedModel(selectedModelId);
 
     this.generationRequest.guidance_scale = this.getDefaultCfgForModel(selectedModelId);
+    if (this.isTextOnlyModel) {
+      this.hiresEnabled = false;
+      if (!this.referenceImage) this.generationRequest.job_type = 'txt2img';
+      this.generationRequest.dynamic_prompting = { enabled: false };
+    }
 
     // Update credit cost for new model
     this.updateCreditCost();
@@ -787,6 +818,7 @@ export class OptionsComponent implements OnInit {
 
   private isHiresAvailable(): boolean {
     return (
+      !this.isTextOnlyModel &&
       !this.referenceImage &&
       this.generationRequest?.job_type === 'txt2img'
     );
@@ -1575,7 +1607,7 @@ export class OptionsComponent implements OnInit {
 
     const activeCharacter = this.characters.activeCharacter();
     const characterOwner = this.sharedService.getUserDataValue()?.user_id;
-    const requestToSend = {
+    const requestToSend = this.applyModelRequestCapabilities({
       ...this.generationRequest,
       seed: seedForRequest,
       character_id: activeCharacter?.id || undefined,
@@ -1584,7 +1616,7 @@ export class OptionsComponent implements OnInit {
       queue_type: queueTypeForRequest,
       regional_prompting: this.sanitizeRegionalPrompting(this.generationRequest.regional_prompting, this.generationRequest.model),
       dynamic_prompting: dynamicPromptingForRequest,
-    };
+    });
 
     this.sharedService.setGenerationRequest(this.generationRequest);
 

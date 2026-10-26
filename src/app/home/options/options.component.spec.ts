@@ -215,6 +215,47 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  function selectKroma() {
+    (component as any).setModelSettings([...testModelSettings, {
+      ...testModelSettings[2], model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2',
+      base_model: 'Krea 2', default_cfg: 1, credit_cost: 40, lora_credit_cost: 5,
+      is_default: false, supported_operations: ['txt2img'], output_count: 4,
+      supports_negative_prompt: false, supports_dynamic_prompting: false,
+      supports_regional_prompting: false, supports_upscale: false, fixed_cfg: 1,
+      default_steps: 8, max_loras: 3,
+    }]);
+    component.changeModel('Kroma-Krea2');
+  }
+
+  it('bounds Kroma requests and prices the complete four-image batch with LoRAs', () => {
+    selectKroma();
+    component.generationRequest.loras = [{ id: 1 }, { id: 2 }] as any;
+    component.updateCreditCost();
+    expect(component.creditCost).toBe(50);
+    const request = (component as any).applyModelRequestCapabilities({
+      ...component.generationRequest, width: 512, height: 768,
+      steps: 20, guidance_scale: 7, batch_size: 8, negative_prompt: 'old settings',
+      dynamic_prompting: { enabled: true }, strength: 0.7,
+    });
+    expect([request.width, request.height, request.steps, request.guidance_scale, request.batch_size])
+      .toEqual([832, 1248, 8, 1, 4]);
+    expect(request.negative_prompt).toBe('');
+    expect(request.dynamic_prompting.enabled).toBeFalse();
+    expect(request.strength).toBeUndefined();
+  });
+
+  it('blocks reference images on Kroma and restores ordinary controls when switching back', () => {
+    component.hiresEnabled = true;
+    selectKroma();
+    expect(component.hiresEnabled).toBeFalse();
+    component.referenceImage = 'data:image/png;base64,test' as any;
+    expect(component.canGenerate).toBeFalse();
+    component.referenceImage = undefined;
+    component.changeModel('novaMobianXL_v20');
+    expect(component.isTextOnlyModel).toBeFalse();
+    expect(component.generationRequest.guidance_scale).toBe(4);
+  });
+
   it('does not automatically or manually retry saves when local history is unsupported', async () => {
     spyOnProperty(component, 'localHistorySupported', 'get').and.returnValue(false);
     const download = spyOn<any>(component, 'downloadJobImages').and.resolveTo();

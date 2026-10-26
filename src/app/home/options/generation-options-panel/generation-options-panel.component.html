@@ -13,6 +13,7 @@
       [disabled]="modelsLoading || modelsLoadError || !modelSettings.length"
       [placeholder]="modelsLoading ? 'Loading models…' : (modelsLoadError ? 'Models unavailable' : 'Select a model')"
       optionValue="model_id"
+      optionLabel="display_name"
       [(ngModel)]="generationRequest.model"
       (onChange)="onModelSelectionChange($event.value)">
       <ng-template #selectedItem let-model>
@@ -69,6 +70,7 @@
     </div>
 
     <!-- Negative Prompt -->
+    @if (selectedModel?.supports_negative_prompt !== false) {
     <div class="mb-3">
       <label for="negative-prompt-input" class="form-label">Negative Prompt
         <app-hint text="Add terms you want the AI to avoid when generating the image. Separate each term with a comma. By default a negative prompt is provided so this does not need to be modified unless the below negative does not work well for you."></app-hint>
@@ -76,7 +78,9 @@
       <textarea class="form-control" id="negative-prompt-input" rows="3"
       [(ngModel)]="generationRequest.negative_prompt" (ngModelChange)="saveSettings.emit()"></textarea>
     </div>
+    }
 
+    @if (!textOnlyModel) {
     <section class="regional-panel mb-3">
       <div class="regional-header">
         <div class="regional-title-wrap">
@@ -269,6 +273,7 @@
         </div>
       }
     </section>
+    }
 
     <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
       <!-- Seed -->
@@ -293,17 +298,21 @@
         </div>
 
         <!-- CFG -->
+        @if (selectedModel?.fixed_cfg === undefined) {
         <label for="customRange1" class="form-label">CFG: <span id="cfg-value">{{ generationRequest.guidance_scale
         }}</span>
         <app-hint text="CFG refers to how closely an image tries to follow a prompt. Too high values may fry images, while too low values will result in an unrelated photo being generated but generally more creative/pretty. This can be experimented with, but its recommended to stick to around the default value for the model."></app-hint>
       </label>
       <input type="range" class="form-range" min="1" max="15" value="7" id="customRange1"
         [(ngModel)]="generationRequest.guidance_scale" (ngModelChange)="saveSettings.emit()" />
+        } @else {
+          <p class="mb-3">CFG is fixed at {{ selectedModel?.fixed_cfg }} for this model.</p>
+        }
 
         <!-- FastPass Code -->
         <div class="mb-3">
           <!-- Hi-Res (Generate + Upscale) -->
-          @if (generationRequest.job_type == 'txt2img' && !referenceImage) {
+          @if (generationRequest.job_type == 'txt2img' && !referenceImage && !textOnlyModel) {
             <div
               class="d-flex justify-content-start mb-3">
               <div class="form-check me-3">
