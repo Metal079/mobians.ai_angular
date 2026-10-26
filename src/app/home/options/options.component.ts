@@ -335,6 +335,7 @@ export class OptionsComponent implements OnInit {
   private recoveryAttempts = 0;
   private lastAutomaticRecoveryAt = 0;
   private deliveryInProgress = false;
+  private historySaveDeferred = false;
   // Track active polling subscription and cancel state
   private jobPollSub?: Subscription;
   private submissionInProgress = false;
@@ -2048,6 +2049,7 @@ export class OptionsComponent implements OnInit {
     } finally {
       this.deliveryInProgress = false;
       if (!this.componentDestroyed) this.cdr.markForCheck();
+      if (this.historySaveDeferred) this.onRecoveryOpportunity();
     }
   }
 
@@ -2387,6 +2389,12 @@ export class OptionsComponent implements OnInit {
     const fresh = images.filter(image => !saved.has(image.UUID));
     if (!fresh.length || !this.historyPanel) return;
     for (const image of fresh) {
+      // Mobile browsers may suspend IndexedDB while backgrounded. Keep the
+      // previews and resume on visibilitychange or when delivery finishes.
+      if (document.visibilityState === 'hidden') {
+        this.historySaveDeferred = true;
+        return;
+      }
       try {
         if (await this.historyPanel.ingestGeneratedImages([image], { notifyFailure: false }) !== true) continue;
       } catch (error) {
@@ -2467,9 +2475,10 @@ export class OptionsComponent implements OnInit {
   }
 
   async retryHistorySave(): Promise<void> {
-    if (!this.localHistorySupported) return;
+    if (!this.localHistorySupported || document.visibilityState === 'hidden') return;
     const pending = this.getPendingJob();
     if (this.componentDestroyed || this.historyRecoveryInProgress || this.deliveryInProgress || pending?.phase !== 'saving') return;
+    this.historySaveDeferred = false;
     this.historyRecoveryInProgress = true;
     this.cdr.markForCheck();
     try {
@@ -2486,6 +2495,7 @@ export class OptionsComponent implements OnInit {
     } finally {
       this.historyRecoveryInProgress = false;
       if (!this.componentDestroyed) this.cdr.markForCheck();
+      if (this.historySaveDeferred) this.onRecoveryOpportunity();
     }
   }
 
@@ -2550,12 +2560,14 @@ export class OptionsComponent implements OnInit {
   }
 
   private savePendingJob(job_id: string, request?: any) {
+    this.historySaveDeferred = false;
     this.recoveryAttempts = 0;
     this.lastAutomaticRecoveryAt = 0;
     this.persistPendingJob({ job_id, request, createdAt: Date.now() });
   }
 
   private removePendingJob() {
+    this.historySaveDeferred = false;
     this.pendingJobInMemory = null;
     this.pendingJobPersistenceFailed = false;
     try {

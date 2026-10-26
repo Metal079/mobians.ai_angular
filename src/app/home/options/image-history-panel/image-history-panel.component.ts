@@ -429,9 +429,11 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         return true;
       } catch (error) {
         this.lastSaveErrorName = (error as { name?: string })?.name || 'Error';
+        // A failed final attempt must not leave the same unusable connection
+        // cached for the user's next retry.
+        if (this.isTransientDatabaseError(error)) this.invalidateDatabase(db);
         if (!this.historyDestroyed && attempt === 0 && this.isTransientDatabaseError(error)) {
           previousFailure = error;
-          this.invalidateDatabase(db);
           await this.wait(50);
           continue;
         }
@@ -445,33 +447,57 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   private writeGeneratedImage(db: IDBDatabase, image: MobiansImage, blob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
       const tx = db.transaction([this.storeName, this.blobStoreName], 'readwrite');
-      const metadata = tx.objectStore(this.storeName);
-      const blobs = tx.objectStore(this.blobStoreName);
+      let settled = false;
       let failure: unknown;
-      tx.oncomplete = () => resolve();
-      tx.onerror = event => { failure ??= (event.target as IDBRequest)?.error || tx.error; };
-      tx.onabort = () => reject(failure || tx.error || new DOMException('History write aborted', 'AbortError'));
-      const guard = (write: () => void) => {
-        try { write(); } catch (error) { failure = error; tx.abort(); }
+      const finish = (error?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(writeTimeout);
+        if (error) reject(error);
+        else resolve();
       };
-      const existing = metadata.get(image.UUID);
-      existing.onsuccess = () => guard(() => {
-        // A resumed download must not overwrite a favorite, tags, or pending sync.
-        if (!existing.result) {
-          const record = { ...image };
-          delete record.blob;
-          delete record.url;
-          metadata.add(record);
-        } else {
-          // Keep the preview's original file while reflecting its durable metadata.
-          const originalBlob = image.blob;
-          const originalUrl = image.url;
-          Object.assign(image, existing.result, { blob: originalBlob, url: originalUrl });
-        }
-      });
-      const storedBlob = blobs.get(image.UUID);
-      storedBlob.onsuccess = () => guard(() => {
-        if (!storedBlob.result?.blob?.size) blobs.put({ UUID: image.UUID, blob });
+      const fail = (error: unknown) => {
+        if (settled) return;
+        // Settle before abort: stalled mobile storage may never emit an abort
+        // event, or may throw because the transaction has already closed.
+        finish(error);
+        try { tx.abort(); } catch { /* The write is already treated as unconfirmed. */ }
+      };
+      const writeTimeout = setTimeout(() => {
+        fail(new DOMException('Saving history timed out', 'TimeoutError'));
+      }, 10_000);
+      tx.oncomplete = () => finish(failure);
+      tx.onerror = event => {
+        failure ??= (event.target as IDBRequest)?.error || tx.error || new DOMException('History write failed', 'UnknownError');
+        fail(failure);
+      };
+      tx.onabort = () => finish(failure || tx.error || new DOMException('History write aborted', 'AbortError'));
+      const guard = (write: () => void) => {
+        if (settled) return;
+        try { write(); } catch (error) { fail(error); }
+      };
+      guard(() => {
+        const metadata = tx.objectStore(this.storeName);
+        const blobs = tx.objectStore(this.blobStoreName);
+        const existing = metadata.get(image.UUID);
+        existing.onsuccess = () => guard(() => {
+          // A resumed download must not overwrite a favorite, tags, or pending sync.
+          if (!existing.result) {
+            const record = { ...image };
+            delete record.blob;
+            delete record.url;
+            metadata.add(record);
+          } else {
+            // Keep the preview's original file while reflecting its durable metadata.
+            const originalBlob = image.blob;
+            const originalUrl = image.url;
+            Object.assign(image, existing.result, { blob: originalBlob, url: originalUrl });
+          }
+        });
+        const storedBlob = blobs.get(image.UUID);
+        storedBlob.onsuccess = () => guard(() => {
+          if (!storedBlob.result?.blob?.size) blobs.put({ UUID: image.UUID, blob });
+        });
       });
     });
   }
@@ -1979,7 +2005,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   }
 
   private isTransientDatabaseError(error: unknown): boolean {
-    return ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError'].includes((error as DOMException)?.name);
+    return ['InvalidStateError', 'AbortError', 'UnknownError', 'NotReadableError', 'TimeoutError'].includes((error as DOMException)?.name);
   }
 
   /** Only retry local operations that are read-only or idempotent and resolve on commit. */

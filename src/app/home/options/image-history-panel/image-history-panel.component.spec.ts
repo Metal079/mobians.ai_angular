@@ -215,6 +215,118 @@ describe('ImageHistoryPanelComponent', () => {
     });
   });
 
+  describe('stalled history writes', () => {
+    const image = (): MobiansImage => ({
+      UUID: 'stalled-save', width: 48, height: 48, aspectRatio: '1:1',
+      blob: new Blob(['pixels'], { type: 'image/webp' }),
+    });
+    const connection = () => {
+      const metadataRead: any = { result: undefined };
+      const blobRead: any = { result: undefined };
+      const metadata = { get: () => metadataRead, add: jasmine.createSpy('addMetadata') };
+      const blobs = { get: () => blobRead, put: jasmine.createSpy('putBlob') };
+      const tx: any = {
+        error: null,
+        objectStore: (name: string) => name === 'ImageStore' ? metadata : blobs,
+        abort: jasmine.createSpy('abort'),
+      };
+      const db = {
+        version: 38, transaction: jasmine.createSpy('transaction').and.returnValue(tx),
+        close: jasmine.createSpy('close'),
+      } as unknown as IDBDatabase;
+      return { db, tx, metadataRead, blobRead, metadata, blobs };
+    };
+
+    beforeEach(() => {
+      spyOn(component, 'paginateImages').and.resolveTo([]);
+      spyOn(component, 'updateFavoriteImages').and.resolveTo();
+    });
+
+    it('reopens once after a silent stall and acknowledges only the new transaction commit', fakeAsync(() => {
+      const first = connection();
+      const second = connection();
+      (component as any).db = first.db;
+      const reopen = spyOn(component, 'openDatabase').and.resolveTo(second.db);
+      let result: boolean | undefined;
+      void component.ingestGeneratedImages([image()]).then(saved => result = saved);
+      flushMicrotasks();
+      tick(9999);
+      expect(result).toBeUndefined();
+      tick(51);
+      expect(first.tx.abort).toHaveBeenCalledTimes(1);
+      expect(first.db.close).toHaveBeenCalledTimes(1);
+      expect(reopen).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined();
+      first.tx.oncomplete();
+      flushMicrotasks();
+      expect(result).toBeUndefined();
+      second.tx.oncomplete();
+      flushMicrotasks();
+      expect(result).toBeTrue();
+      expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
+        jasmine.objectContaining({ name: 'TimeoutError' }), jasmine.objectContaining({ attempt: 1, recovered: true, savedCount: 1 }));
+      tick(10000);
+      expect(second.tx.abort).not.toHaveBeenCalled();
+    }));
+
+    for (const abortThrows of [false, true]) {
+      it('finishes repeated silent stalls when abort ' + (abortThrows ? 'throws' : 'never emits an event'), fakeAsync(() => {
+        const first = connection();
+        const second = connection();
+        if (abortThrows) {
+          first.tx.abort.and.throwError(new DOMException('already closed', 'InvalidStateError'));
+          second.tx.abort.and.throwError(new DOMException('already closed', 'InvalidStateError'));
+        }
+        (component as any).db = first.db;
+        const reopen = spyOn(component, 'openDatabase').and.resolveTo(second.db);
+        let result: boolean | undefined;
+        void component.ingestGeneratedImages([image()], { notifyFailure: false }).then(saved => result = saved);
+        flushMicrotasks();
+        tick(20050);
+        expect(result).toBeFalse();
+        expect(reopen).toHaveBeenCalledTimes(1);
+        expect(first.db.close).toHaveBeenCalledTimes(1);
+        expect(second.db.close).toHaveBeenCalledTimes(1);
+        expect((component as any).db).toBeNull();
+        expect(component.imageHistoryMetadata).toEqual([]);
+
+        // Late browser callbacks cannot write more records or report success.
+        for (const stalled of [first, second]) {
+          stalled.metadataRead.onsuccess();
+          stalled.blobRead.onsuccess();
+          stalled.tx.oncomplete();
+          expect(stalled.metadata.add).not.toHaveBeenCalled();
+          expect(stalled.blobs.put).not.toHaveBeenCalled();
+        }
+        flushMicrotasks();
+        expect(result).toBeFalse();
+        expect(component.imageHistoryMetadata).toEqual([]);
+        expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
+          jasmine.objectContaining({ name: 'TimeoutError' }), jasmine.objectContaining({ attempt: 1, recovered: false, savedCount: 0 }));
+      }));
+    }
+
+    for (const outcome of ['commit', 'abort', 'error', 'setup failure']) {
+      it('clears the watchdog on ' + outcome, fakeAsync(() => {
+        const active = connection();
+        const clear = spyOn(window, 'clearTimeout').and.callThrough();
+        const error = new DOMException('write fixture', 'QuotaExceededError');
+        if (outcome === 'setup failure') active.tx.objectStore = () => { throw error; };
+        let result: unknown;
+        void (component as any).writeGeneratedImage(active.db, image(), image().blob)
+          .then(() => result = 'committed', (failure: unknown) => result = failure);
+        if (outcome === 'commit') active.tx.oncomplete();
+        if (outcome === 'abort') { active.tx.error = error; active.tx.onabort(); }
+        if (outcome === 'error') active.tx.onerror({ target: { error } });
+        flushMicrotasks();
+        expect(result).toBe(outcome === 'commit' ? 'committed' : error);
+        expect(clear).toHaveBeenCalledTimes(1);
+        tick(10000);
+        expect(active.tx.abort).toHaveBeenCalledTimes(['error', 'setup failure'].includes(outcome) ? 1 : 0);
+      }));
+    }
+  });
+
   describe('native database recovery', () => {
     let databaseName: string;
     const savedImage = (UUID: string): MobiansImage => ({
@@ -263,6 +375,19 @@ describe('ImageHistoryPanelComponent', () => {
       expect((await component.getImageBlob('retry-aborted'))?.size).toBeGreaterThan(0);
       expect(TestBed.inject(HistoryDiagnosticsService).report).toHaveBeenCalledWith('history.save',
         jasmine.objectContaining({ name: 'AbortError' }), jasmine.objectContaining({ attempt: 1, recovered: true, savedCount: 1 }));
+    });
+
+    it('discards the final failed connection so a later save can recover without reloading', async () => {
+      expect(await component.ingestGeneratedImages([savedImage('before-failure')])).toBeTrue();
+      const write = spyOn<any>(component, 'writeGeneratedImage')
+        .and.rejectWith(new DOMException('storage connection interrupted', 'UnknownError'));
+      expect(await component.ingestGeneratedImages([savedImage('retry-later')], { notifyFailure: false })).toBeFalse();
+      expect(write).toHaveBeenCalledTimes(2);
+      expect((component as any).db).toBeNull();
+      write.and.callThrough();
+      expect(await component.ingestGeneratedImages([savedImage('retry-later')])).toBeTrue();
+      expect((await (component as any).getAllImagesFromDb(true)).map((saved: MobiansImage) => saved.UUID))
+        .toEqual(['before-failure', 'retry-later']);
     });
 
     it('reopens and retries an aborted native metadata read without losing favorites', async () => {

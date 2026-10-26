@@ -600,6 +600,64 @@ describe('OptionsComponent', () => {
     expect((component as any).getPendingJob()).toBeNull();
   }));
 
+  it('keeps background deliveries for saving when the mobile page becomes visible', fakeAsync(() => {
+    const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue('hidden');
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('background-delivery');
+    void (component as any).downloadJobImages('background-delivery');
+    flushMicrotasks();
+    expect(ingest).not.toHaveBeenCalled();
+    expect(component.images.length).toBe(4);
+    expect(component.historyRecoveryPending).toBeTrue();
+    expect(component.historyRecoveryInProgress).toBeFalse();
+    expect((component as any).getPendingJob()?.phase).toBe('saving');
+
+    void component.retryHistorySave();
+    flushMicrotasks();
+    expect(ingest).not.toHaveBeenCalled();
+    visibility.and.returnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    flushMicrotasks();
+    expect(ingest).toHaveBeenCalledTimes(4);
+    expect(sd.getJobImage).toHaveBeenCalledTimes(4); // Reuse the retained previews.
+    expect(component.historyRecoveryInProgress).toBeFalse();
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect(component.canGenerate).toBeTrue();
+    expect((component as any).getPendingJob()).toBeNull();
+  }));
+
+  it('resumes deferred saves if visibility returns before the last download finishes', fakeAsync(() => {
+    const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue('hidden');
+    spyOnProperty(navigator, 'onLine', 'get').and.returnValue(true);
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    const lastImage = new Subject<Blob>();
+    const blob = new Blob(['image'], { type: 'image/png' });
+    sd.getJobImage = jasmine.createSpy().and.callFake((_job: string, index: number) => index === 0 ? of(blob) : lastImage);
+    const ingest = jasmine.createSpy().and.resolveTo(true);
+    (component as any).historyPanel = { ingestGeneratedImages: ingest };
+    (component as any).savePendingJob('resume-during-download', { batch_size: 2 });
+    void (component as any).downloadJobImages('resume-during-download');
+    flushMicrotasks();
+    expect(ingest).not.toHaveBeenCalled();
+    expect((component as any).deliveryInProgress).toBeTrue();
+
+    visibility.and.returnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    lastImage.next(blob);
+    lastImage.complete();
+    flushMicrotasks();
+    expect(ingest).toHaveBeenCalledTimes(2);
+    expect(sd.getJobImage).toHaveBeenCalledTimes(2);
+    expect(component.historyRecoveryPending).toBeFalse();
+    expect(component.historyRecoveryInProgress).toBeFalse();
+    expect(component.canGenerate).toBeTrue();
+    expect((component as any).getPendingJob()).toBeNull();
+  }));
+
   it('bounds recovery on repeated visibility and online events and stops listening on destruction', fakeAsync(() => {
     (component as any).savePendingJob('bounded-retry');
     (component as any).beginCompletedJobRecovery('bounded-retry');
