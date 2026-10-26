@@ -2089,7 +2089,7 @@ export class OptionsComponent implements OnInit {
         }
 
         // The bulk endpoint is authoritative for jobs that return fewer images
-        // than the regular four-image batch (for example, an upscale).
+        // than the requested batch.
         const current = this.getPendingJob();
         if (current?.job_id === job_id) {
           current.expectedImageCount = response.result.length;
@@ -2421,8 +2421,8 @@ export class OptionsComponent implements OnInit {
     };
     pending.phase = 'saving';
     const requestedCount = Number(pending.request?.batch_size);
-    pending.expectedImageCount ??= pending.request?.job_type === 'upscale' ? 1
-      : Number.isInteger(requestedCount) && requestedCount >= 1 && requestedCount <= 4 ? requestedCount : 4;
+    pending.expectedImageCount ??= Number.isInteger(requestedCount) && requestedCount >= 1 && requestedCount <= 4
+      ? requestedCount : 4;
     this.persistPendingJob(pending);
     this.hasPendingJob = true;
     this.enableGenerationButton = false;

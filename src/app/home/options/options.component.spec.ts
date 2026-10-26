@@ -219,15 +219,15 @@ describe('OptionsComponent', () => {
     (component as any).setModelSettings([...testModelSettings, {
       ...testModelSettings[2], model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2',
       base_model: 'Krea 2', default_cfg: 1, credit_cost: 40, lora_credit_cost: 5,
-      is_default: false, supported_operations: ['txt2img'], output_count: 4,
-      supports_negative_prompt: false, supports_dynamic_prompting: false,
-      supports_regional_prompting: false, supports_upscale: false, fixed_cfg: 1,
+      is_default: false, supported_operations: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], output_count: 4,
+      supports_negative_prompt: true, supports_dynamic_prompting: true,
+      supports_regional_prompting: true, supports_upscale: true,
       default_steps: 8, max_loras: 3,
     }]);
     component.changeModel('Kroma-Krea2');
   }
 
-  it('bounds Kroma requests and prices the complete four-image batch with LoRAs', () => {
+  it('preserves Kroma feature controls and prices the complete four-image batch with LoRAs', () => {
     selectKroma();
     component.generationRequest.loras = [{ id: 1 }, { id: 2 }] as any;
     component.updateCreditCost();
@@ -238,18 +238,23 @@ describe('OptionsComponent', () => {
       dynamic_prompting: { enabled: true }, strength: 0.7,
     });
     expect([request.width, request.height, request.steps, request.guidance_scale, request.batch_size])
-      .toEqual([832, 1248, 8, 1, 4]);
-    expect(request.negative_prompt).toBe('');
-    expect(request.dynamic_prompting.enabled).toBeFalse();
-    expect(request.strength).toBeUndefined();
+      .toEqual([512, 768, 8, 7, 4]);
+    expect(request.negative_prompt).toBe('old settings');
+    expect(request.dynamic_prompting.enabled).toBeTrue();
+    expect(request.strength).toBe(0.7);
+    expect(component.upscaleCreditCost).toBe(150);
+    expect(component.hiresCreditCost).toBe(200);
   });
 
-  it('blocks reference images on Kroma and restores ordinary controls when switching back', () => {
-    component.hiresEnabled = true;
+  it('allows Kroma reference images and exposes the normal feature controls', () => {
     selectKroma();
-    expect(component.hiresEnabled).toBeFalse();
+    component.enableGenerationButton = true;
+    component.hasPendingJob = false;
     component.referenceImage = 'data:image/png;base64,test' as any;
-    expect(component.canGenerate).toBeFalse();
+    expect(component.canGenerate).toBeTrue();
+    expect(component.selectedModelSettings?.supports_regional_prompting).toBeTrue();
+    expect(component.selectedModelSettings?.supports_upscale).toBeTrue();
+    expect(component.selectedModelSettings?.fixed_cfg).toBeUndefined();
     component.referenceImage = undefined;
     component.changeModel('novaMobianXL_v20');
     expect(component.isTextOnlyModel).toBeFalse();
@@ -513,16 +518,24 @@ describe('OptionsComponent', () => {
     expect(component.historyRecoveryPending).toBeFalse();
   });
 
-  it('finishes a single-image upscale without waiting for three nonexistent images', async () => {
-    const sd = TestBed.inject(StableDiffusionService) as any;
-    sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
-    (component as any).historyPanel = { ingestGeneratedImages: () => Promise.resolve(true) };
-    (component as any).savePendingJob('single-upscale', { job_type: 'upscale', batch_size: 4 });
-    await (component as any).downloadJobImages('single-upscale');
-    expect(sd.getJobImage).toHaveBeenCalledOnceWith('single-upscale', 0);
-    expect(component.hasPendingJob).toBeFalse();
-    expect((component as any).getPendingJob()).toBeNull();
-  });
+  for (const batchSize of [4, undefined]) {
+    it(`downloads and saves all four upscale results with batch_size ${batchSize}`, async () => {
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.getJobImage = jasmine.createSpy().and.returnValue(of(new Blob(['image'], { type: 'image/png' })));
+      const ingest = jasmine.createSpy().and.resolveTo(true);
+      (component as any).historyPanel = { ingestGeneratedImages: ingest };
+      (component as any).savePendingJob('four-upscales', { job_type: 'upscale', batch_size: batchSize });
+
+      await (component as any).downloadJobImages('four-upscales');
+
+      expect(sd.getJobImage.calls.allArgs()).toEqual([0, 1, 2, 3].map(index => ['four-upscales', index]));
+      const expectedIds = [0, 1, 2, 3].map(index => (component as any).generatedImageId('four-upscales', index));
+      expect(component.images.map(image => image.UUID)).toEqual(expectedIds);
+      expect(ingest.calls.allArgs().map((args: any[]) => args[0][0].UUID)).toEqual(expectedIds);
+      expect(component.hasPendingJob).toBeFalse();
+      expect((component as any).getPendingJob()).toBeNull();
+    });
+  }
 
   it('uses the full result count when an older pending job returns fewer images', async () => {
     const sd = TestBed.inject(StableDiffusionService) as any;
