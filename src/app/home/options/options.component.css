@@ -395,8 +395,3 @@
   .prompt-editor { width: 100%; margin-left: 0; }
   .prompt-header { padding-inline: .5rem .25rem; }
 }
-.model-capability-note {
-  margin: .75rem 1.25rem;
-  font-size: .875rem;
-  line-height: 1.5;
-}

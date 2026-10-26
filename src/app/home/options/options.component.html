@@ -55,9 +55,6 @@
 </div>
 
 <!-- Prompt input box and advanced options button -->
-@if (selectedModelSettings?.model_help) {
-  <p class="model-capability-note" role="note">{{ selectedModelSettings?.model_help }}</p>
-}
 @if (isTextOnlyModel && referenceImage) {
   <p class="mb-2" role="alert">Remove the reference image to generate with this model, or choose a model that supports image inputs.</p>
 }
