@@ -10,6 +10,7 @@ import {
   UserCreditsResponse
 } from '../stable-diffusion.service';
 import { sessionInvalid$ } from './auth.interceptor';
+import { CompletedSignupTracker } from './signup-tracking';
 
 export type AuthProvider = 'discord' | 'google';
 type AuthMode = 'login' | 'link';
@@ -25,6 +26,7 @@ export interface UserCredits {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private readonly signupTracker = new CompletedSignupTracker();
   private _credits$ = new BehaviorSubject<UserCredits | null>(null);
   public credits$ = this._credits$.asObservable();
   private readonly sessionValidationRetryDelaysMs = [500, 1500];
@@ -368,6 +370,7 @@ export class AuthService {
               // Refresh from server to get accurate can_claim_daily_bonus
               this.refreshCredits();
             }
+            this.signupTracker.record(resp, provider, link);
             resolve();
           },
           error: (err) => reject(err)
@@ -395,6 +398,7 @@ export class AuthService {
               // Refresh from server to get accurate can_claim_daily_bonus
               this.refreshCredits();
             }
+            this.signupTracker.record(resp, provider, link);
             resolve();
           },
           error: (err) => reject(err)

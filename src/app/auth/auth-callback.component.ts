@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService, AuthProvider } from './auth.service';
+import { updateAnalyticsPageLocation } from './signup-tracking';
 
 @Component({
     selector: 'app-auth-callback',
@@ -63,7 +64,8 @@ export class AuthCallbackComponent implements OnInit {
         console.log('AuthCallback: calling exchangeCode...');
         await this.auth.exchangeCode(provider, code, link);
         console.log('AuthCallback: exchangeCode succeeded, navigating home');
-        this.router.navigateByUrl('/');
+        await this.router.navigateByUrl('/');
+        updateAnalyticsPageLocation();
       } catch (e: any) {
         console.error('Auth exchange failed:', e);
         this.error = e?.message || 'Failed to complete sign in. Please try again.';
@@ -75,6 +77,6 @@ export class AuthCallbackComponent implements OnInit {
   }
 
   retry() {
-    this.router.navigateByUrl('/');
+    this.router.navigateByUrl('/').then(() => updateAnalyticsPageLocation());
   }
 }

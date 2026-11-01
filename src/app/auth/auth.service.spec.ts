@@ -3,6 +3,7 @@ import { of, throwError } from 'rxjs';
 import { SharedService } from '../shared.service';
 import { CurrentUserResponse, StableDiffusionService } from '../stable-diffusion.service';
 import { AuthService } from './auth.service';
+import { CompletedSignupTracker } from './signup-tracking';
 
 interface MutableSessionValidationDelays {
   sessionValidationRetryDelaysMs: number[];
@@ -29,7 +30,7 @@ describe('AuthService', () => {
       localStorage.setItem('userData', JSON.stringify(userData));
     } catch {}
 
-    api = jasmine.createSpyObj<StableDiffusionService>('StableDiffusionService', ['getCurrentUser']);
+    api = jasmine.createSpyObj<StableDiffusionService>('StableDiffusionService', ['getCurrentUser', 'googleLogin', 'discordLogin']);
     router = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
     shared = jasmine.createSpyObj<SharedService>('SharedService', ['getUserDataValue', 'setUserData']);
     shared.getUserDataValue.and.callFake(() => userData);
@@ -48,6 +49,34 @@ describe('AuthService', () => {
       localStorage.removeItem('authToken');
       localStorage.removeItem('userData');
     } catch {}
+  });
+
+  for (const provider of ['google', 'discord'] as const) {
+    it(`tracks the backend result only after a successful ${provider} exchange`, async () => {
+      const record = spyOn(CompletedSignupTracker.prototype, 'record');
+      const response = { status: 'success', is_new_user: true, user_id: 'new-user', token: 'new-token' };
+      const login = provider === 'google' ? api.googleLogin : api.discordLogin;
+      login.and.returnValue(of(response));
+      await service.exchangeCode(provider, 'test-code');
+      expect(record).toHaveBeenCalledOnceWith(response, provider, false);
+      expect(localStorage.getItem('authToken')).toBe('new-token');
+    });
+
+    it(`does not track a failed ${provider} exchange`, async () => {
+      const record = spyOn(CompletedSignupTracker.prototype, 'record');
+      const login = provider === 'google' ? api.googleLogin : api.discordLogin;
+      login.and.returnValue(throwError(() => new Error('exchange failed')));
+      await expectAsync(service.exchangeCode(provider, 'bad-code')).toBeRejected();
+      expect(record).not.toHaveBeenCalled();
+    });
+  }
+
+  it('preserves the account-link flag for signup exclusion', async () => {
+    const record = spyOn(CompletedSignupTracker.prototype, 'record');
+    const response = { status: 'success', is_new_user: false, user_id: 'linked-user', token: 'new-token' };
+    api.googleLogin.and.returnValue(of(response));
+    await service.exchangeCode('google', 'link-code', true);
+    expect(record).toHaveBeenCalledOnceWith(response, 'google', true);
   });
 
   it('keeps stored auth state when startup session validation is temporarily unavailable', async () => {

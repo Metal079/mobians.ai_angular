@@ -28,19 +28,30 @@
   
   <!-- Defer non-critical third-party scripts to after page load -->
   <script>
+    // Queue analytics before Angular can finish a fast OAuth callback. The
+    // network script remains deferred, and preview/local builds send no events.
+    var measurementEnabled = /^(www\.)?mobians\.ai$/.test(window.location.hostname);
+    if (measurementEnabled) {
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
+      window.gtag('js', new Date());
+      // OAuth codes must not be included in automatic page-view URLs either.
+      if (window.location.pathname === '/auth/callback') {
+        window.gtag('set', 'page_location', window.location.origin + window.location.pathname);
+      }
+      window.gtag('config', 'G-NQ1MYQTHLM');
+      window.gtag('config', 'AW-995326044');
+    }
+
     // Load third-party scripts after page becomes interactive
     function loadDeferredScripts() {
-      // Google Analytics
-      var gtag = document.createElement('script');
-      gtag.src = 'https://www.googletagmanager.com/gtag/js?id=G-NQ1MYQTHLM';
-      gtag.async = true;
-      document.head.appendChild(gtag);
-      
-      window.dataLayer = window.dataLayer || [];
-      function gtagFn() { dataLayer.push(arguments); }
-      window.gtag = gtagFn;
-      gtagFn('js', new Date());
-      gtagFn('config', 'G-NQ1MYQTHLM');
+      // One Google tag serves both Analytics and Ads destinations.
+      if (measurementEnabled) {
+        var googleTag = document.createElement('script');
+        googleTag.src = 'https://www.googletagmanager.com/gtag/js?id=G-NQ1MYQTHLM';
+        googleTag.async = true;
+        document.head.appendChild(googleTag);
+      }
       
       // Google AdSense - load after a delay
       setTimeout(function() {

@@ -385,6 +385,9 @@ export interface JobStatusResponse {
 }
 
 export interface AuthExchangeResponse {
+  status?: string;
+  user_id?: string | number;
+  is_new_user?: boolean;
   token?: string;
   credits?: number;
   daily_bonus_streak?: number;
