@@ -19,6 +19,7 @@ import { OptionsComponent } from './options.component';
 import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 
 const seedPreferenceKey = 'mobians:seed-preference:v2';
+const negativePromptKey = 'mobians:negative-prompt:v2';
 
 const testModelSettings = [
   {
@@ -215,15 +216,17 @@ describe('OptionsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  const kromaModelSettings = {
+    ...testModelSettings[2], model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2',
+    base_model: 'Krea 2', default_cfg: 1, credit_cost: 40, lora_credit_cost: 5,
+    is_default: false, supported_operations: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], output_count: 4,
+    supports_negative_prompt: false, supports_dynamic_prompting: true, fixed_cfg: 1,
+    supports_regional_prompting: true, supports_upscale: true,
+    default_steps: 8, max_loras: 3,
+  };
+
   function selectKroma() {
-    (component as any).setModelSettings([...testModelSettings, {
-      ...testModelSettings[2], model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2',
-      base_model: 'Krea 2', default_cfg: 1, credit_cost: 40, lora_credit_cost: 5,
-      is_default: false, supported_operations: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], output_count: 4,
-      supports_negative_prompt: false, supports_dynamic_prompting: true, fixed_cfg: 1,
-      supports_regional_prompting: true, supports_upscale: true,
-      default_steps: 8, max_loras: 3,
-    }]);
+    (component as any).setModelSettings([...testModelSettings, kromaModelSettings]);
     component.changeModel('Kroma-Krea2');
   }
 
@@ -947,6 +950,27 @@ describe('OptionsComponent', () => {
     expect(component.generationRequest.negative_prompt).toBe('blurry');
   });
 
+  for (const lookModel of ['', 'Kroma-Krea2']) {
+    it(`keeps the current negative prompt when a look ${lookModel ? `saved on ${lookModel}` : 'loaded as prompts only'} has none`, () => {
+      (component as any).setModelSettings([...testModelSettings, kromaModelSettings]);
+      spyOn(TestBed.inject(CharactersService), 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {
+        label: 'Kroma look', model: lookModel, appearance: 'blue fox', scene: '', negative_prompt: '',
+        width: 512, height: 512, guidance_scale: 1, loras: [],
+      } });
+      component.generationRequest.negative_prompt = 'Keep my negative prompt';
+      const previous = structuredClone(component.generationRequest);
+      spyOn(component, 'saveSettings');
+
+      (component as any).applyCharacterHandoff();
+
+      expect(component.generationRequest.prompt).toBe('blue fox');
+      expect(component.generationRequest.model).toBe(lookModel || previous.model);
+      expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+      component.undoCharacter();
+      expect(component.generationRequest).toEqual(previous);
+    });
+  }
+
   it('keeps the current request if a job started before the character handoff is consumed', () => {
     spyOn(TestBed.inject(CharactersService), 'takeImageHandoff').and.returnValue({ name: 'Ash', recipe: {} as any });
     const request = component.generationRequest;
@@ -1067,6 +1091,95 @@ describe('OptionsComponent', () => {
       });
     }
   }
+
+  for (const state of ['running', 'saving', 'expired'] as const) {
+    it(`keeps the saved negative prompt when restoring a ${state} job from a model without negative prompts`, async () => {
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      spyOn(sd, 'getGenerationModels').and.returnValue(of({
+        default_model: 'novaMobianXL_v20', models: [...testModelSettings, kromaModelSettings],
+      }));
+      localStorage.setItem(negativePromptKey, 'Keep my negative prompt');
+      localStorage.setItem('model', 'Kroma-Krea2');
+      localStorage.setItem('mobians:pending-job', JSON.stringify({
+        job_id: 'kroma-recovery',
+        createdAt: Date.now() - (state === 'expired' ? 25 * 60 * 60 * 1000 : 0),
+        phase: state === 'saving' ? 'saving' : undefined,
+        // Submitted Kroma requests carry the empty negative prompt the model requires.
+        request: { prompt: 'Recovered prompt', negative_prompt: '', guidance_scale: 1, model: 'Kroma-Krea2' },
+      }));
+      spyOn(component, 'getJob');
+      spyOn(component, 'retryHistorySave').and.resolveTo();
+
+      await component.ngOnInit();
+
+      expect(component.generationRequest.model).toBe('Kroma-Krea2');
+      expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+      // Switching back to a model with a negative prompt must not persist an empty one.
+      component.changeModel('novaMobianXL_v20');
+      expect(localStorage.getItem(negativePromptKey)).toBe('Keep my negative prompt');
+      fixture.destroy();
+    });
+  }
+
+  it('sends an empty negative prompt for models without one while keeping the saved text', async () => {
+    selectKroma();
+    await component.loadSettings();
+    component.generationRequest.negative_prompt = 'Keep my negative prompt';
+    const sd = TestBed.inject(StableDiffusionService) as any;
+    sd.submitJob = jasmine.createSpy().and.returnValue(of({ job_id: 'kroma-submission' }));
+    spyOn(component, 'getJob');
+
+    await component.submitJob();
+
+    expect(sd.submitJob.calls.mostRecent().args[0].negative_prompt).toBe('');
+    // History metadata records what the job actually used.
+    expect((component as any).getPendingJob().request.negative_prompt).toBe('');
+    expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+    expect(localStorage.getItem(negativePromptKey)).toBe('Keep my negative prompt');
+  });
+
+  for (const empty of ['', '  \n']) {
+    it(`resets a saved empty negative prompt ${JSON.stringify(empty)} to the default once`, async () => {
+      localStorage.setItem('negative-prompt-input', empty);
+
+      await component.loadSettings();
+
+      expect(component.generationRequest.negative_prompt).toBe(component.defaultNegativePrompt);
+      expect(localStorage.getItem(negativePromptKey)).toBe(component.defaultNegativePrompt);
+      // An empty negative prompt chosen afterwards is deliberate and survives reloads.
+      component.generationRequest.negative_prompt = '';
+      component.saveSettings();
+      await component.loadSettings();
+      expect(component.generationRequest.negative_prompt).toBe('');
+    });
+  }
+
+  it('keeps a saved negative prompt and ignores later writes from older open tabs', async () => {
+    localStorage.setItem('negative-prompt-input', 'Keep my negative prompt');
+
+    await component.loadSettings();
+
+    expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+    expect(localStorage.getItem(negativePromptKey)).toBe('Keep my negative prompt');
+    localStorage.setItem('negative-prompt-input', ''); // An older tab repeats the bug.
+    await component.loadSettings();
+    expect(component.generationRequest.negative_prompt).toBe('Keep my negative prompt');
+  });
+
+  it('uses the default negative prompt for new users and after resetting saved options', async () => {
+    await component.loadSettings();
+    expect(component.generationRequest.negative_prompt).toBe(component.defaultNegativePrompt);
+
+    component.generationRequest.negative_prompt = 'Custom negative prompt';
+    component.saveSettings();
+    localStorage.setItem('negative-prompt-input', 'Stale legacy negative prompt');
+    spyOn(window, 'confirm').and.returnValue(true);
+    component.resetSessionStorage();
+    await component.loadSettings();
+
+    expect(component.generationRequest.negative_prompt).toBe(component.defaultNegativePrompt);
+    expect(localStorage.getItem(negativePromptKey)).toBe(component.defaultNegativePrompt);
+  });
 
   for (const seedChoice of [undefined, null, -1, 0, 42]) {
     it(`keeps seed choice ${seedChoice} separate from each submitted seed`, async () => {

@@ -369,6 +369,8 @@ export class OptionsComponent implements OnInit {
   private readonly pendingJobKey = 'mobians:pending-job';
   private readonly queueEtaKey = 'mobians:queue-eta';
   private readonly seedPreferenceKey = 'mobians:seed-preference:v2';
+  private readonly negativePromptKey = 'mobians:negative-prompt:v2';
+  private readonly legacyNegativePromptKey = 'negative-prompt-input';
   private readonly dynamicPromptCategorySyntaxMigrationKey = 'mobians:dynamic-prompt-category-syntax-v2';
   private readonly pendingMaxAgeMs = 24 * 60 * 60 * 1000; // 24h max age for pending jobs
 
@@ -666,7 +668,9 @@ export class OptionsComponent implements OnInit {
     this.sharedService.setReferenceImage(null);
     this.generationRequest = {
       ...this.generationRequest,
-      model: recipe.model || this.generationRequest.model, prompt: characterPrompt(recipe), negative_prompt: recipe.negative_prompt,
+      model: recipe.model || this.generationRequest.model, prompt: characterPrompt(recipe),
+      // Looks saved from a model without negative prompts have none; keep the current one.
+      negative_prompt: recipe.negative_prompt?.trim() ? recipe.negative_prompt : this.generationRequest.negative_prompt,
       guidance_scale: recipe.model ? recipe.guidance_scale : this.generationRequest.guidance_scale,
       loras: this.snapshotLoras(recipe.model ? recipe.loras : currentLoras), seed: undefined,
       image: undefined, image_UUID: undefined, mask_image: undefined, color_inpaint: undefined,
@@ -1047,6 +1051,20 @@ export class OptionsComponent implements OnInit {
     }));
   }
 
+  private loadNegativePrompt(): void {
+    let stored = localStorage.getItem(this.negativePromptKey);
+    if (stored === null) {
+      // Job recovery used to save an empty negative prompt after a job on a model
+      // without one. Move every user to this key once, replacing an empty saved
+      // value with the default; an empty negative prompt chosen later is kept.
+      // A separate key prevents older open tabs from saving it empty again.
+      const legacy = localStorage.getItem(this.legacyNegativePromptKey);
+      stored = legacy?.trim() ? legacy : this.defaultNegativePrompt;
+      localStorage.setItem(this.negativePromptKey, stored);
+    }
+    this.generationRequest.negative_prompt = stored;
+  }
+
   // Save session storage info of changed settings
   saveSettings() {
     if (!this.settingsHydrated) return;
@@ -1055,7 +1073,7 @@ export class OptionsComponent implements OnInit {
     localStorage.setItem("prompt-input", this.generationRequest.prompt);
 
     // Save negative prompt
-    localStorage.setItem("negative-prompt-input", this.generationRequest.negative_prompt);
+    localStorage.setItem(this.negativePromptKey, this.generationRequest.negative_prompt);
 
     // Save denoise strength
     if (this.generationRequest.strength != undefined) {
@@ -1122,9 +1140,7 @@ export class OptionsComponent implements OnInit {
     if (localStorage.getItem("prompt-input") != null) {
       this.generationRequest.prompt = localStorage.getItem("prompt-input")!;
     }
-    if (localStorage.getItem("negative-prompt-input") != null) {
-      this.generationRequest.negative_prompt = localStorage.getItem("negative-prompt-input")!;
-    }
+    this.loadNegativePrompt();
     if (localStorage.getItem("custom-denoise") != null) {
       this.generationRequest.strength = parseFloat(localStorage.getItem("custom-denoise")!);
     }
@@ -1197,7 +1213,8 @@ export class OptionsComponent implements OnInit {
     }
     this.dismissCharacter();
     localStorage.removeItem("prompt-input");
-    localStorage.removeItem("negative-prompt-input");
+    localStorage.removeItem(this.negativePromptKey);
+    localStorage.removeItem(this.legacyNegativePromptKey);
     localStorage.removeItem("custom-denoise");
     localStorage.removeItem("seed-input");
     localStorage.removeItem("cfg");
@@ -2591,7 +2608,12 @@ export class OptionsComponent implements OnInit {
     // Pending requests contain the resolved job seed, not the user's seed choice.
     // Keep it for history/display without locking subsequent generations to it.
     this.currentSeed = request.seed;
-    this.generationRequest = { ...this.generationRequest, ...request, seed: this.generationRequest.seed };
+    // They also hold the negative prompt as sent, which is empty for models that
+    // do not accept one. The saved text is already loaded; do not overwrite it.
+    this.generationRequest = {
+      ...this.generationRequest, ...request,
+      seed: this.generationRequest.seed, negative_prompt: this.generationRequest.negative_prompt,
+    };
   }
 
   private handleExpiredPendingJob(pending: { job_id: string; request?: any; createdAt?: number }) {
