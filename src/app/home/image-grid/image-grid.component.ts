@@ -14,6 +14,7 @@ import { RingGameComponent } from './ring-game/ring-game.component';
 import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.component';
 import { SignupNudgeComponent } from './signup-nudge/signup-nudge.component';
 import { VideoHandoffService } from 'src/app/video/video-handoff.service';
+import { NotifyMeComponent } from 'src/app/notifications/notify-me.component';
 
 
 @Component({
@@ -21,7 +22,7 @@ import { VideoHandoffService } from 'src/app/video/video-handoff.service';
     templateUrl: './image-grid.component.html',
     styleUrls: ['./image-grid.component.css'],
     standalone: true,
-    imports: [CommonModule, RingGameComponent, RingLeaderboardComponent, SignupNudgeComponent]
+    imports: [CommonModule, RingGameComponent, RingLeaderboardComponent, SignupNudgeComponent, NotifyMeComponent]
 })
 export class ImageGridComponent implements OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
@@ -280,9 +281,12 @@ export class ImageGridComponent implements OnDestroy {
     return this.screenWidth <= 600;
   }
 
-  /** Too low for the full sign-up prompt to sit under the queue status (a landscape image on a phone). */
+  /**
+   * Too low for the full sign-up prompt to sit under the queue status and the
+   * "Notify me" button without touching them: a square or landscape image on a phone.
+   */
   isShortGrid(): boolean {
-    return (this.isMobileView() ? this.screenHeight : this.aspectRatio?.height ?? 512) < 320;
+    return (this.isMobileView() ? this.screenHeight : this.aspectRatio?.height ?? 512) < 420;
   }
 
   ngOnChanges(changes: SimpleChanges) {

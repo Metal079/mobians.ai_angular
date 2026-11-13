@@ -9,6 +9,7 @@ import { Subscription } from 'rxjs';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { LoginModalComponent } from './auth/login-modal.component';
 import { WelcomeDialogComponent } from './auth/welcome-dialog.component';
+import { PushOptOutComponent } from './notifications/push-opt-out.component';
 import { ProfileMenuComponent } from './auth/profile-menu.component';
 import { CreditsPurchaseComponent } from './auth/credits-purchase.component';
 import { AccountCtaService, CreditPurchaseCtaContext, LoginCtaContext } from './auth/account-cta.service';
@@ -18,7 +19,7 @@ import { AccountCtaService, CreditPurchaseCtaContext, LoginCtaContext } from './
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     standalone: true,
-    imports: [RouterOutlet, LoginModalComponent, WelcomeDialogComponent, ProfileMenuComponent, CreditsPurchaseComponent, CharacterSaveDialogComponent, ImageEditorComponent]
+    imports: [RouterOutlet, LoginModalComponent, WelcomeDialogComponent, PushOptOutComponent, ProfileMenuComponent, CreditsPurchaseComponent, CharacterSaveDialogComponent, ImageEditorComponent]
 })
 export class AppComponent implements OnInit, OnDestroy {
   loginPromptVisible = false;

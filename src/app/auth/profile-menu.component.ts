@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, Output, EventEmitter, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { asyncScheduler, observeOn, Subscription } from 'rxjs';
@@ -7,16 +7,21 @@ import { AuthService, UserCredits } from './auth.service';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { AccountCtaService } from './account-cta.service';
+import { NotificationService } from '../notification.service';
+import { NotificationSettingsComponent } from '../notifications/notification-settings.component';
 
 @Component({
     selector: 'app-profile-menu',
     templateUrl: './profile-menu.component.html',
     styleUrls: ['./profile-menu.component.css'],
     standalone: true,
-    imports: [CommonModule, RouterLink, ButtonModule]
+    imports: [CommonModule, RouterLink, ButtonModule, NotificationSettingsComponent]
 })
 export class ProfileMenuComponent implements OnInit, OnDestroy {
   @Output() loginRequest = new EventEmitter<void>();
+  private readonly notifications = inject(NotificationService);
+  /** Set after a daily claim, to offer a reminder while the streak is on the person's mind. */
+  justClaimedDaily = false;
   private startMinimizedApplied = false;
   @Input() set startMinimized(value: boolean) {
     if (value && !this.startMinimizedApplied) {
@@ -121,6 +126,7 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
 
         this.dailyStreak = streakAfterClaim ?? 0;
         this.credits = result.newBalance ?? this.credits;
+        this.justClaimedDaily = true;
 
         this.messageService.add({
           severity: 'success',
@@ -174,8 +180,11 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     });
   }
   
-  logout() { 
-    this.auth.logout(); 
+  async logout() {
+    // While the session still exists: this device stops receiving the account's notifications.
+    await this.notifications.detachFromAccount();
+    this.justClaimedDaily = false;
+    this.auth.logout();
   }
 
   private calculateDailyBonus(streak: number | null | undefined): number {

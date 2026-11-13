@@ -29,6 +29,8 @@
         @if (aprilFools.isAprilFools() && aprilFoolsQueueMessage && !queueStatusMessage) {
           <div class="eggman-queue-message">{{ aprilFoolsQueueMessage }}</div>
         }
+        <!-- Offered to everyone who is waiting and has not turned notifications on. -->
+        <app-notify-me></app-notify-me>
       </div>
     </div>
     @if (aprilFools.isAprilFools()) {

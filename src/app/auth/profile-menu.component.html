@@ -88,6 +88,8 @@
         routerLink="/admin">
       </button>
     }
+    <!-- What this device may be notified about (hidden where the browser cannot do push). -->
+    <app-notification-settings [signedIn]="isLoggedIn" [offerReminder]="justClaimedDaily"></app-notification-settings>
     <!-- Actions -->
     <div class="actions">
       @if (!isLoggedIn) {
