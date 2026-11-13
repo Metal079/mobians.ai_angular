@@ -19,4 +19,7 @@ export const environment = {
   isDevJob: false,
   // PayPal (staging typically uses sandbox; replace if needed)
   paypalClientId: 'Abvbwdl-mP9GbFTglLpJcyLF8ZYlIY-pSwRqry68WgLNOrr0L2LdBcxXND20CaFX0dRxHOmqT03fxf_1',
+  // Google Ads conversion for completed credit purchases, as 'AW-995326044/<label>'.
+  // Empty disables it; the Analytics purchase event is sent either way.
+  googleAdsPurchaseSendTo: '',
 };

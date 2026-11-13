@@ -22,6 +22,8 @@ describe('Credit checkout with public package loading', () => {
   let callbacks: any;
   let originalPayPal: any;
   let buttons: jasmine.Spy;
+  let tag: jasmine.Spy;
+  let originalTag: any;
 
   beforeEach(async () => {
     localStorage.setItem('authToken', 'checkout-test-session');
@@ -32,6 +34,8 @@ describe('Credit checkout with public package loading', () => {
       return { render: jasmine.createSpy('render').and.resolveTo(undefined) };
     });
     (window as any).paypal = { Buttons: buttons };
+    originalTag = (window as any).gtag;
+    tag = (window as any).gtag = jasmine.createSpy('gtag');
     auth = { updateCredits: jasmine.createSpy(), refreshCredits: jasmine.createSpy().and.resolveTo({ credits: 5100 }) };
     messages = { add: jasmine.createSpy() };
     spyOn(console, 'error');
@@ -55,6 +59,8 @@ describe('Credit checkout with public package loading', () => {
     localStorage.removeItem('userData');
     if (originalPayPal === undefined) delete (window as any).paypal;
     else (window as any).paypal = originalPayPal;
+    if (originalTag === undefined) delete (window as any).gtag;
+    else (window as any).gtag = originalTag;
   });
 
   async function openCheckout() {
@@ -102,6 +108,11 @@ describe('Credit checkout with public package loading', () => {
     expect(completed).toHaveBeenCalledOnceWith(1500);
     expect(component.processing).toBeFalse();
     expect(component.visible).toBeFalse();
+    // The completed purchase is reported once, for the pack that was bought.
+    expect(tag.calls.allArgs()).toEqual([['event', 'purchase', jasmine.objectContaining({
+      transaction_id: 'TEST-ORDER', value: 5, currency: 'USD',
+      items: [{ item_id: 'starter', item_name: 'Starter', price: 5, quantity: 1 }]
+    })]]);
   });
 
   it('refreshes the balance when the capture response does not include one', async () => {
@@ -135,6 +146,7 @@ describe('Credit checkout with public package loading', () => {
     expect(component.visible).toBeTrue();
     expect(completed).not.toHaveBeenCalled();
     expect(auth.updateCredits).not.toHaveBeenCalled();
+    expect(tag).not.toHaveBeenCalled();
     expect(messages.add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Payment Error' }));
   });
 

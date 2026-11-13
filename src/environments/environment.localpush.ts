@@ -10,4 +10,7 @@ export const environment = {
   vapidPublicKey: 'BPbnK_IH_tF427HnxUi92CBmOpNWOk_LK9IgakxQALNmdzcN_0R07nz18swt2EwtsfWXe0fr3ScdYTvoIJ3wVQA',
   isDevJob: true,
   paypalClientId: 'AZJtYStugvvDqrqwfzlniBJWJ8bUYPlLUTE-vT8AeUxGy7JrKyO51TpzFo3RAUSJfHKNInCsEPTdahK-',
+  // Google Ads conversion for completed credit purchases, as 'AW-995326044/<label>'.
+  // Empty disables it; the Analytics purchase event is sent either way.
+  googleAdsPurchaseSendTo: '',
 };

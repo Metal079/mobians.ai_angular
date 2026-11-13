@@ -7,6 +7,7 @@ import { environment } from 'src/environments/environment';
 import { firstValueFrom } from 'rxjs';
 import { DialogModule } from 'primeng/dialog';
 import { CreditPurchaseCtaContext } from './account-cta.service';
+import { trackPurchase } from '../analytics';
 
 declare var paypal: any;
 
@@ -174,7 +175,10 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
     // Clear existing buttons
     this.paypalContainer.nativeElement.innerHTML = '';
     
-    const packageId = this.selectedPackage.id;
+    // Captured now so the purchase is reported for the pack these buttons sell,
+    // even if the selection changes while PayPal is open.
+    const purchasedPackage = this.selectedPackage;
+    const packageId = purchasedPackage.id;
 
     paypal.Buttons({
       style: {
@@ -219,6 +223,14 @@ export class CreditsPurchaseComponent implements OnInit, OnDestroy, AfterViewIni
             await this.auth.refreshCredits();
           }
           
+          trackPurchase({
+            orderId: data.orderID,
+            packageId: purchasedPackage.id,
+            packageName: purchasedPackage.name,
+            priceUsd: purchasedPackage.price_usd,
+            credits: purchasedPackage.credits
+          }, environment.googleAdsPurchaseSendTo);
+
           this.messageService.add({
             severity: 'success',
             summary: 'Purchase Complete! 🎉',
