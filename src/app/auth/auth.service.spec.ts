@@ -98,6 +98,39 @@ describe('AuthService', () => {
     expect(api.googleLogin).toHaveBeenCalledOnceWith(jasmine.objectContaining({ link: true, attribution: undefined }));
   });
 
+  it('learns from the server that a second sign-in method has been connected', async () => {
+    userData = { ...userData, google_user_id: 'g-me' };
+    api.getCurrentUser.and.returnValue(of({
+      status: 'success', user: { credits: 12, is_banned: false, discord_user_id: 'd-me', google_user_id: 'g-me' }
+    } as CurrentUserResponse));
+    expect(await service.validateSession()).toBeTrue();
+    expect(userData.discord_user_id).toBe('d-me');
+    expect(userData.google_user_id).toBe('g-me');
+  });
+
+  it('keeps the Discord reward offer through a credits refresh and a daily claim', async () => {
+    const withReward = jasmine.createSpyObj<StableDiffusionService>('StableDiffusionService',
+      ['getCurrentUser', 'googleLogin', 'discordLogin', 'getUserCredits', 'claimDailyBonus']);
+    withReward.getUserCredits.and.returnValue(of({
+      status: 'success', credits: 200, can_claim_daily_bonus: true, daily_bonus_streak: 0,
+      discord_join_reward: { claimed: false, credits: 100 }
+    }));
+    withReward.claimDailyBonus.and.returnValue(of({ status: 'success', new_balance: 230, streak: 1, credits_awarded: 30, message: 'ok' } as any));
+    const fresh = new AuthService(router, shared, withReward);
+    let latest: any;
+    fresh.credits$.subscribe(value => latest = value);
+
+    await fresh.refreshCredits();
+    expect(latest.discordJoinReward).toEqual({ claimed: false, credits: 100 });
+    await fresh.claimDailyBonus();
+    expect(latest.credits).toBe(230);
+    expect(latest.discordJoinReward).toEqual({ claimed: false, credits: 100 });
+
+    withReward.getUserCredits.and.returnValue(of({ status: 'success', credits: 230, can_claim_daily_bonus: false, daily_bonus_streak: 1 }));
+    await fresh.refreshCredits();
+    expect(latest.discordJoinReward).toBeNull();          // an older server that does not report it: nothing is offered
+  });
+
   it('keeps stored auth state when startup session validation is temporarily unavailable', async () => {
     api.getCurrentUser.and.returnValue(throwError(() => ({ status: 503 })));
 

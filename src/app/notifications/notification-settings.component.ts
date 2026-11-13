@@ -6,6 +6,9 @@ import { NotificationService, PushPreferences } from '../notification.service';
  * the Account panel. Finished jobs is what turning notifications on has always
  * meant; the daily-bonus reminder and news are separate, off until chosen, and
  * each can be switched off again here or from the notification itself.
+ *
+ * It is one line until opened, so it does not make the floating panel taller for
+ * people who never touch it.
  */
 @Component({
   selector: 'app-notification-settings',
@@ -13,35 +16,39 @@ import { NotificationService, PushPreferences } from '../notification.service';
   template: `
     @if (notifications.supported) {
       <section class="notification-settings" aria-label="Notifications on this device">
-        <div class="heading">
-          <i class="bi bi-bell" aria-hidden="true"></i> Notifications on this device
-        </div>
+        <button type="button" class="heading" [attr.aria-expanded]="expanded()" (click)="expanded.set(!expanded())">
+          <span><i class="bi bi-bell" aria-hidden="true"></i> Notifications <small>{{ notifications.enabled() ? 'On' : 'Off' }}</small></span>
+          <i class="bi" [class.bi-chevron-up]="expanded()" [class.bi-chevron-down]="!expanded()" aria-hidden="true"></i>
+        </button>
 
-        @if (!notifications.enabled()) {
-          @if (notifications.blockedByBrowser) {
-            <p class="note">Notifications are blocked for this site in your browser's settings.</p>
+        @if (expanded()) {
+          @if (!notifications.enabled()) {
+            @if (notifications.blockedByBrowser) {
+              <p class="note">Notifications are blocked for this site in your browser's settings.</p>
+            } @else {
+              <button type="button" class="turn-on" [disabled]="busy()" (click)="turnOn()">Turn on for this device</button>
+              <p class="note">Get told when your image or video is ready, even with the tab closed.</p>
+            }
           } @else {
-            <button type="button" class="turn-on" [disabled]="busy()" (click)="turnOn()">Turn on</button>
-            <p class="note">Get told when your image or video is ready, even with the tab closed.</p>
+            <label class="switch-row">
+              <input type="checkbox" [checked]="value('jobs')" [disabled]="busy()" (change)="set('jobs', $event)">
+              <span>Finished images and videos</span>
+            </label>
+            <label class="switch-row" [class.unavailable]="!signedIn">
+              <input type="checkbox" [checked]="signedIn && value('reminders')" [disabled]="busy() || !signedIn" (change)="set('reminders', $event)">
+              <span>Daily bonus reminder
+                <small>{{ signedIn ? 'At most once a day, only while you have a streak to keep.' : 'Sign in to use this.' }}</small>
+              </span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" [checked]="value('news')" [disabled]="busy()" (change)="set('news', $event)">
+              <span>New features <small>Only for bigger announcements.</small></span>
+            </label>
+            <button type="button" class="turn-off" [disabled]="busy()" (click)="turnOff()">Turn all off on this device</button>
           }
-        } @else {
-          <label class="switch-row">
-            <input type="checkbox" [checked]="value('jobs')" [disabled]="busy()" (change)="set('jobs', $event)">
-            <span>Finished images and videos</span>
-          </label>
-          <label class="switch-row" [class.unavailable]="!signedIn">
-            <input type="checkbox" [checked]="signedIn && value('reminders')" [disabled]="busy() || !signedIn" (change)="set('reminders', $event)">
-            <span>Daily bonus reminder
-              <small>{{ signedIn ? 'At most once a day, only while you have a streak to keep.' : 'Sign in to use this.' }}</small>
-            </span>
-          </label>
-          <label class="switch-row">
-            <input type="checkbox" [checked]="value('news')" [disabled]="busy()" (change)="set('news', $event)">
-            <span>New features <small>Only for bigger announcements.</small></span>
-          </label>
-          <button type="button" class="turn-off" [disabled]="busy()" (click)="turnOff()">Turn all off on this device</button>
         }
 
+        <!-- Shown without opening the section: it is offered at the one moment it is relevant. -->
         @if (offerReminder && signedIn && !value('reminders') && !notifications.blockedByBrowser) {
           <div class="offer" role="status">
             <span>Don't lose your streak.</span>
@@ -53,8 +60,10 @@ import { NotificationService, PushPreferences } from '../notification.service';
     }
   `,
   styles: [`
-    .notification-settings { display: grid; gap: .35rem; padding: .6rem 0 .2rem; border-top: 1px solid rgb(0 0 0 / 10%); font-size: .82rem; text-align: left; }
-    .heading { font-weight: 600; }
+    .notification-settings { display: grid; gap: .35rem; padding: .45rem 0 .2rem; border-top: 1px solid rgb(0 0 0 / 10%); font-size: .82rem; text-align: left; }
+    .heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; padding: 0; border: 0; background: none;
+      color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+    .heading small { margin-left: .3rem; font-weight: 400; opacity: .7; }
     .note { margin: 0; font-size: .75rem; opacity: .8; }
     .switch-row { display: flex; align-items: flex-start; gap: .5rem; margin: 0; cursor: pointer; }
     .switch-row input { margin-top: .2rem; flex: none; width: 1rem; height: 1rem; }
@@ -74,6 +83,7 @@ export class NotificationSettingsComponent {
   @Input() offerReminder = false;
 
   readonly notifications = inject(NotificationService);
+  readonly expanded = signal(false);
   readonly busy = signal(false);
   readonly message = signal('');
 

@@ -88,6 +88,8 @@
         routerLink="/admin">
       </button>
     }
+    <!-- One-time credits for joining the Discord server (hidden once claimed or when signed out). -->
+    <app-discord-reward-card [signedIn]="isLoggedIn" [hasDiscord]="hasDiscord"></app-discord-reward-card>
     <!-- What this device may be notified about (hidden where the browser cannot do push). -->
     <app-notification-settings [signedIn]="isLoggedIn" [offerReminder]="justClaimedDaily"></app-notification-settings>
     <!-- Actions -->
@@ -95,12 +97,12 @@
       @if (!isLoggedIn) {
         <button pButton type="button" class="p-button-sm w-full" label="Login" icon="pi pi-sign-in" (click)="login()"></button>
       }
-      <!-- Only show Link Google if logged in via Google (not Discord) and don't have Google linked yet -->
-      @if (isLoggedIn && !hasGoogle && !hasDiscord) {
+      <!-- Connect the sign-in method this account does not have yet. (These conditions used to also
+           require the other method to be missing, which can never be true for a signed-in account.) -->
+      @if (isLoggedIn && !hasGoogle) {
         <button pButton type="button" class="p-button-outlined p-button-sm" label="Link Google" icon="pi pi-google" (click)="link('google')"></button>
       }
-      <!-- Only show Link Discord if logged in via Discord (not Google) and don't have Discord linked yet -->
-      @if (isLoggedIn && !hasDiscord && !hasGoogle) {
+      @if (isLoggedIn && !hasDiscord && !discordRewardOffered) {
         <button pButton type="button" class="p-button-outlined p-button-sm" label="Link Discord" icon="pi pi-discord" (click)="link('discord')"></button>
       }
       @if (isLoggedIn) {

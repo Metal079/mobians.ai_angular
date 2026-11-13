@@ -74,6 +74,8 @@ export interface UserCredits {
   lastDailyBonus?: string | null;
   nextDailyBonus?: number;
   nextDailyBonusStreak?: number;
+  /** The one-time Discord join reward: still on offer, already had, or (null) not available. */
+  discordJoinReward?: { claimed: boolean; credits: number } | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -138,6 +140,9 @@ export class AuthService {
             ...userData,
             credits: response.user.credits ?? userData.credits,
             is_banned: response.user.is_banned ?? userData.is_banned,
+            // An account can have both sign-in methods; the stored copy may predate the second one.
+            discord_user_id: response.user.discord_user_id ?? userData.discord_user_id,
+            google_user_id: response.user.google_user_id ?? userData.google_user_id,
           });
           // Update credits observable
           if (response.user.credits !== undefined) {
@@ -148,7 +153,8 @@ export class AuthService {
               dailyBonusStreak: response.user.daily_bonus_streak ?? current?.dailyBonusStreak ?? 0,
               lastDailyBonus: response.user.last_daily_bonus ?? current?.lastDailyBonus ?? null,
               nextDailyBonus: current?.nextDailyBonus,
-              nextDailyBonusStreak: current?.nextDailyBonusStreak
+              nextDailyBonusStreak: current?.nextDailyBonusStreak,
+              discordJoinReward: current?.discordJoinReward
             });
           }
         }
@@ -278,7 +284,8 @@ export class AuthService {
           dailyBonusStreak: response.daily_bonus_streak,
           lastDailyBonus: response.last_daily_bonus,
           nextDailyBonus: response.next_daily_bonus,
-          nextDailyBonusStreak: response.next_daily_bonus_streak
+          nextDailyBonusStreak: response.next_daily_bonus_streak,
+          discordJoinReward: response.discord_join_reward ?? null
         };
         this._credits$.next(creditsData);
         
@@ -310,6 +317,7 @@ export class AuthService {
       if (response?.status === 'success') {
         // Update credits
         this._credits$.next({
+          ...this._credits$.value,
           credits: response.new_balance,
           canClaimDailyBonus: false,
           dailyBonusStreak: response.streak

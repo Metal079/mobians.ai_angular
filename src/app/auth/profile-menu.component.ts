@@ -9,13 +9,14 @@ import { ButtonModule } from 'primeng/button';
 import { AccountCtaService } from './account-cta.service';
 import { NotificationService } from '../notification.service';
 import { NotificationSettingsComponent } from '../notifications/notification-settings.component';
+import { DiscordRewardCardComponent } from './discord-reward-card.component';
 
 @Component({
     selector: 'app-profile-menu',
     templateUrl: './profile-menu.component.html',
     styleUrls: ['./profile-menu.component.css'],
     standalone: true,
-    imports: [CommonModule, RouterLink, ButtonModule, NotificationSettingsComponent]
+    imports: [CommonModule, RouterLink, ButtonModule, NotificationSettingsComponent, DiscordRewardCardComponent]
 })
 export class ProfileMenuComponent implements OnInit, OnDestroy {
   @Output() loginRequest = new EventEmitter<void>();
@@ -41,6 +42,8 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
   dailyStreak = 0;
   nextDailyBonusFromServer: number | null = null;
   claimingBonus = false;
+  /** The Discord join reward is still on offer: its card then covers connecting Discord, so the plain link button is not shown too. */
+  discordRewardOffered = false;
 
   // Daily bonus configuration
   private readonly DAILY_BASE = 30;
@@ -82,7 +85,9 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
         this.canClaimDailyBonus = this.coerceBoolean(creditsData.canClaimDailyBonus);
         this.dailyStreak = Math.max(creditsData.dailyBonusStreak || 0, 0);
         this.nextDailyBonusFromServer = this.normalizeServerBonus(creditsData.nextDailyBonus);
+        this.discordRewardOffered = !!creditsData.discordJoinReward && !creditsData.discordJoinReward.claimed;
       } else {
+        this.discordRewardOffered = false;
         this.credits = 0;
         this.canClaimDailyBonus = false;
         this.dailyStreak = 0;

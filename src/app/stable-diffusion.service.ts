@@ -62,6 +62,9 @@ export interface PayPalCaptureResponse {
 export interface ApiUser {
   credits?: number;
   is_banned?: boolean;
+  /** The sign-in methods connected to the account; either may be missing. */
+  discord_user_id?: string | null;
+  google_user_id?: string | null;
   daily_bonus_streak?: number;
   last_daily_bonus?: string | null;
 }
@@ -79,6 +82,8 @@ export interface UserCreditsResponse {
   last_daily_bonus?: string | null;
   next_daily_bonus?: number;
   next_daily_bonus_streak?: number;
+  /** Whether the one-time Discord join reward is still on offer; null when the server cannot grant it. */
+  discord_join_reward?: { claimed: boolean; credits: number } | null;
 }
 
 export interface DailyBonusResponse {

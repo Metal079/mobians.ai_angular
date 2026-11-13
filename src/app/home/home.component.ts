@@ -57,7 +57,7 @@ export class HomeComponent {
   headerMessage: HeaderMessage[] = [{
     severity: 'info',
     summary: 'Welcome to Mobians!',
-    detail: 'Join the community on Discord and gain credits by participating in our weekly events!',
+    detail: 'Join the community on Discord for 100 free credits, plus more in our weekly events!',
     linkText: 'Click here to join.',
     linkUrl: DISCORD_INVITE_URL,
   }];

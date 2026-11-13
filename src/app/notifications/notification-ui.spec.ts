@@ -47,15 +47,35 @@ describe('notification controls', () => {
   });
 
   describe('Account panel switches', () => {
-    function create(signedIn = true, offerReminder = false): ComponentFixture<NotificationSettingsComponent> {
+    function create(signedIn = true, offerReminder = false, expanded = true): ComponentFixture<NotificationSettingsComponent> {
       const fixture = TestBed.createComponent(NotificationSettingsComponent);
       fixture.componentRef.setInput('signedIn', signedIn);
       fixture.componentRef.setInput('offerReminder', offerReminder);
+      fixture.componentInstance.expanded.set(expanded);
       fixture.detectChanges();
       return fixture;
     }
     const boxes = (fixture: ComponentFixture<unknown>) =>
       Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[type=checkbox]'));
+
+    it('is a single line until opened, saying whether notifications are on', () => {
+      const fixture = create(true, false, false);
+      expect(text(fixture)).toBe('Notifications Off');
+      expect(fixture.nativeElement.querySelector('.turn-on')).toBeNull();
+      fixture.nativeElement.querySelector('.heading').click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.turn-on')).not.toBeNull();
+      notifications.enabled.set(true);
+      fixture.nativeElement.querySelector('.heading').click();
+      fixture.detectChanges();
+      expect(text(fixture)).toBe('Notifications On');
+    });
+
+    it('offers the streak reminder even while closed', () => {
+      const fixture = create(true, true, false);
+      expect(fixture.nativeElement.querySelector('.offer button')).not.toBeNull();
+      expect(boxes(fixture).length).toBe(0);
+    });
 
     it('shows nothing where the browser cannot do push', () => {
       notifications.supported = false;
