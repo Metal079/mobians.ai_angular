@@ -1,0 +1,45 @@
+.announcements-admin { display: grid; gap: 1rem; max-width: 900px; padding: 1rem 0; }
+.intro, .quiet { margin: 0; opacity: .8; font-size: .9rem; }
+h3 { margin: 0; font-size: 1.05rem; }
+
+.notice { margin: 0; padding: .6rem .8rem; border-radius: 8px; background: rgb(16 185 129 / 15%); border: 1px solid rgb(16 185 129 / 45%); }
+.notice.error { background: rgb(239 68 68 / 12%); border-color: rgb(239 68 68 / 50%); }
+
+.editor, .publish-options { display: grid; gap: .7rem; padding: 1rem; border: 1px solid rgb(128 128 128 / 35%); border-radius: 10px; }
+.publish-options { border-color: rgb(16 185 129 / 60%); }
+.publish-options p { margin: 0; font-size: .9rem; }
+
+label { display: grid; gap: .25rem; margin: 0; font-size: .9rem; }
+label > span { font-weight: 600; }
+small { font-weight: 400; opacity: .7; }
+input[type=text], textarea { width: 100%; box-sizing: border-box; padding: .5rem .6rem; border: 1px solid rgb(128 128 128 / 50%); border-radius: 6px; font: inherit; }
+textarea { resize: vertical; }
+.link-fields { display: grid; grid-template-columns: 2fr 1fr; gap: .7rem; }
+
+.check { display: flex; align-items: flex-start; gap: .55rem; cursor: pointer; }
+.check input { margin-top: .25rem; flex: none; width: 1rem; height: 1rem; }
+.check > span { font-weight: 600; }
+.check small { display: block; }
+.check.unavailable { cursor: default; opacity: .65; }
+
+.actions, .post-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+button { padding: .4rem .85rem; border: 1px solid rgb(128 128 128 / 55%); border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+button.primary { border-color: #0f9d6b; background: #10b981; color: #fff; font-weight: 600; }
+/* A light fill keeps the red readable on every theme's surface colour, including the blue ones. */
+button.danger { border-color: #b91c1c; background: rgb(255 255 255 / 88%); color: #b91c1c; font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0f9d6b; outline-offset: 2px; }
+
+.posts { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.posts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: start; padding: .8rem; border: 1px solid rgb(128 128 128 / 30%); border-radius: 10px; }
+.posts li.editing { border-color: #10b981; }
+.post-main { display: grid; gap: .2rem; min-width: 0; }
+.status { justify-self: start; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; text-transform: uppercase; background: rgb(128 128 128 / 25%); }
+.status[data-status=published] { background: rgb(16 185 129 / 25%); }
+.status[data-status=archived] { background: rgb(239 68 68 / 18%); }
+.meta { font-size: .78rem; opacity: .7; }
+.preview { margin: .2rem 0 0; font-size: .88rem; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+@media (max-width: 640px) {
+  .link-fields, .posts li { grid-template-columns: 1fr; }
+}

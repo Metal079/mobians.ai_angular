@@ -37,3 +37,42 @@
   background: var(--theme-primary);
   box-shadow: 0 4px 12px rgba(2, 19, 46, 0.25);
 }
+
+/* The "What's new" bell takes a fixed slot at the end of the pill when there are posts. */
+.mode-switch.with-bell {
+  grid-template-columns: 1fr 1fr 1.35fr 42px;
+}
+
+.whats-new-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--theme-surface-text);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.whats-new-bell:hover {
+  background: color-mix(in srgb, var(--theme-primary) 22%, transparent);
+}
+
+.whats-new-bell:focus-visible {
+  outline: 3px solid var(--theme-primary-outline);
+  outline-offset: 2px;
+}
+
+.unread-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--theme-surface-bg);
+}

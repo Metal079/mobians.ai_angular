@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
+import { AnnouncementsAdminComponent } from './announcements-admin/announcements-admin.component';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -83,7 +84,8 @@ type CommunityModerationContentType = 'templates' | 'categories';
       ToastModule,
       ToggleSwitchModule,
       TooltipModule,
-      ProgressSpinnerModule
+      ProgressSpinnerModule,
+      AnnouncementsAdminComponent
     ]
 })
 export class AdminComponent implements OnInit, OnDestroy {

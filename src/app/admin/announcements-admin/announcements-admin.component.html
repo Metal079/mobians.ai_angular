@@ -1,0 +1,92 @@
+<div class="announcements-admin">
+  <p class="intro">
+    Posts appear on the site behind the bell next to Image / Video / Characters. Text is shown exactly as typed
+    (line breaks kept, no formatting). Nothing is on the site until you publish it.
+  </p>
+
+  @if (notice(); as shown) {
+    <p class="notice" [class.error]="shown.kind === 'error'" role="status">{{ shown.text }}</p>
+  }
+
+  <!-- Write or edit -->
+  <form class="editor" (ngSubmit)="save()">
+    <h3>{{ editingId() === null ? 'New post' : 'Edit post' }}</h3>
+    <label>
+      <span>Title <small>{{ draft.title.length }} / {{ titleLimit }}</small></span>
+      <input type="text" name="title" [(ngModel)]="draft.title" [maxlength]="titleLimit" placeholder="Krea 2 is here" autocomplete="off">
+    </label>
+    <label>
+      <span>Text <small>{{ draft.body.length }} / {{ bodyLimit }}</small></span>
+      <textarea name="body" rows="5" [(ngModel)]="draft.body" [maxlength]="bodyLimit" placeholder="What changed, in a sentence or two."></textarea>
+    </label>
+    <div class="link-fields">
+      <label>
+        <span>Link <small>optional: https://… or a page of this site such as /video</small></span>
+        <input type="text" name="link_url" [(ngModel)]="draft.link_url" maxlength="500" placeholder="/video" autocomplete="off">
+      </label>
+      <label>
+        <span>Button text <small>optional</small></span>
+        <input type="text" name="link_label" [(ngModel)]="draft.link_label" maxlength="60" placeholder="Try it" autocomplete="off">
+      </label>
+    </div>
+    <div class="actions">
+      <button type="submit" class="primary" [disabled]="!draftIsValid || busy()">{{ editingId() === null ? 'Save draft' : 'Save changes' }}</button>
+      @if (editingId() !== null) { <button type="button" [disabled]="busy()" (click)="startNew()">Cancel</button> }
+    </div>
+  </form>
+
+  <!-- Publish options -->
+  @if (publishing(); as post) {
+    <div class="publish-options" role="group" aria-label="Publish options">
+      <h3>Publish "{{ post.title }}"</h3>
+      <p>It becomes visible on the site right away.</p>
+      <label class="check">
+        <input type="checkbox" name="alsoPush" [(ngModel)]="alsoPush">
+        <span>Also send a push notification
+          <small>Reaches the {{ newsDevices() }} device{{ newsDevices() === 1 ? '' : 's' }} that asked for news, in their daytime. Not allowed within 72 hours of the last one.</small>
+        </span>
+      </label>
+      <label class="check" [class.unavailable]="!discordConfigured()">
+        <input type="checkbox" name="alsoDiscord" [(ngModel)]="alsoDiscord" [disabled]="!discordConfigured()">
+        <span>Also post to the Discord announcements channel
+          <small>{{ discordConfigured() ? 'Posted once; it cannot ping anyone.' : 'Not set up on the server yet (needs a channel webhook).' }}</small>
+        </span>
+      </label>
+      <div class="actions">
+        <button type="button" class="primary" [disabled]="busy()" (click)="publish()">Publish</button>
+        <button type="button" [disabled]="busy()" (click)="publishing.set(null)">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <!-- Existing posts -->
+  <h3>Posts</h3>
+  @if (loading()) {
+    <p class="quiet">Loading…</p>
+  } @else if (posts().length === 0) {
+    <p class="quiet">No posts yet. The bell appears on the site once the first one is published.</p>
+  } @else {
+    <ul class="posts">
+      @for (post of posts(); track post.id) {
+        <li [class.editing]="editingId() === post.id">
+          <div class="post-main">
+            <span class="status" [attr.data-status]="post.status">{{ post.status }}</span>
+            <strong>{{ post.title }}</strong>
+            <span class="meta">
+              @if (post.published_at) { published {{ post.published_at | date: 'medium' }} } @else { not published }
+              @if (post.send_push) { · pushed }
+              @if (post.discord_posted_at) { · on Discord }
+            </span>
+            <p class="preview">{{ post.body }}</p>
+          </div>
+          <div class="post-actions">
+            <button type="button" [disabled]="busy()" (click)="edit(post)">Edit</button>
+            <button type="button" [disabled]="busy()" (click)="askPublish(post)">{{ post.status === 'published' ? 'Publish options' : 'Publish' }}</button>
+            @if (post.status === 'published') { <button type="button" [disabled]="busy()" (click)="archive(post)">Take off site</button> }
+            <button type="button" class="danger" [disabled]="busy()" (click)="remove(post)">{{ confirmingDelete() === post.id ? 'Really delete?' : 'Delete' }}</button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>

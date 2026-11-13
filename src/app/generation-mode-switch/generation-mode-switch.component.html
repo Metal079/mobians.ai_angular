@@ -1,4 +1,4 @@
-<nav class="mode-switch" aria-label="Create and collect">
+<nav class="mode-switch" [class.with-bell]="whatsNew.posts().length > 0" aria-label="Create and collect">
   <a routerLink="/" [class.active]="active === 'image'" [attr.aria-current]="active === 'image' ? 'page' : null">
     <i class="bi bi-image" aria-hidden="true"></i>
     Image
@@ -11,4 +11,12 @@
     <i class="bi bi-person-heart" aria-hidden="true"></i>
     Characters
   </a>
+  <!-- "What's new": only present once an admin has published something; the dot means unread. -->
+  @if (whatsNew.posts().length > 0) {
+    <button type="button" class="whats-new-bell" title="What's new" (click)="whatsNew.open()"
+            [attr.aria-label]="whatsNew.hasUnread() ? 'What\'s new: unread posts' : 'What\'s new'">
+      <i class="bi" [class.bi-bell-fill]="whatsNew.hasUnread()" [class.bi-bell]="!whatsNew.hasUnread()" aria-hidden="true"></i>
+      @if (whatsNew.hasUnread()) { <span class="unread-dot" aria-hidden="true"></span> }
+    </button>
+  }
 </nav>

@@ -82,6 +82,12 @@
             </span>
           </div>
         </p-tab>
+        <p-tab [value]="6">
+          <div class="tab-header">
+            <i class="bi bi-bell"></i>
+            <span>What's New</span>
+          </div>
+        </p-tab>
       </p-tablist>
       <p-tabpanels>
         <p-tabpanel [value]="0">
@@ -1019,6 +1025,11 @@
             <div class="empty-state"><i class="bi bi-exclamation-triangle"></i><p>Video service tables are unavailable. Apply migration 033, then refresh.</p></div>
           }
         </section>
+      </p-tabpanel>
+
+      <!-- Posts shown behind the site's bell; its own component keeps this file from growing further. -->
+      <p-tabpanel [value]="6">
+        @if (adminTab === 6) { <app-announcements-admin></app-announcements-admin> }
       </p-tabpanel>
     </p-tabpanels>
   </p-tabs>
