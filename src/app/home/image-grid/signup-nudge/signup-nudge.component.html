@@ -1,0 +1,19 @@
+@if (visible()) {
+  <!-- Clicks must not reach the image grid behind the wait card: the grid opens a file picker. -->
+  <aside class="signup-nudge" [class.wait]="variant === 'wait'" [class.result]="variant === 'result'" [class.compact]="compact"
+         role="note" (click)="$event.stopPropagation()">
+    <p>
+      @if (variant === 'wait' && compact) {
+        <strong>Tired of waiting?</strong> Sign in free for 200 credits.
+      } @else if (variant === 'wait') {
+        <strong>Tired of waiting?</strong> Sign in free for 200 credits: priority images in seconds, or your first video. You keep your place in line.
+      } @else {
+        <strong>Like these?</strong> Sign in free to keep your history synced across devices, and get 200 credits.
+      }
+    </p>
+    <button type="button" class="signup-nudge-cta" (click)="signIn()">Sign in free</button>
+    <button type="button" class="signup-nudge-close" aria-label="Hide this message" title="Hide" (click)="dismiss()">
+      <i class="bi bi-x-lg" aria-hidden="true"></i>
+    </button>
+  </aside>
+}

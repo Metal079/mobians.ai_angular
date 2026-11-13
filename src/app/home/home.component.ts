@@ -15,6 +15,7 @@ import { GenerationModeSwitchComponent } from '../generation-mode-switch/generat
 import { ImageEditorService } from '../image-editor/image-editor.service';
 import { AccountCtaService } from '../auth/account-cta.service';
 import { trackEvent } from '../analytics';
+import { SignupNudgeComponent } from './image-grid/signup-nudge/signup-nudge.component';
 
 interface HeaderMessage {
   severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
@@ -31,7 +32,7 @@ const DISCORD_INVITE_URL = 'https://discord.gg/mobians';
     templateUrl: './home.component.html',
     styleUrls: ['./home.component.css'],
     standalone: true,
-    imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent, GenerationModeSwitchComponent]
+    imports: [MessageModule, ImageModalComponent, ImageGridComponent, OptionsComponent, FaqComponent, GenerationModeSwitchComponent, SignupNudgeComponent]
 })
 export class HomeComponent {
   readonly imageEditor = inject(ImageEditorService);

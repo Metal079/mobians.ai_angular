@@ -28,6 +28,9 @@
       (imageExpandedChange)="onImageExpandedChange($event)"
       (ringsToSubmit)="onRingsToSubmit($event)"
     ></app-image-grid>
+    @if (!showLoading && images.length > 0) {
+      <app-signup-nudge variant="result"></app-signup-nudge>
+    }
   </div>
   <app-options
     (imagesChange)="onImagesChange($event)"

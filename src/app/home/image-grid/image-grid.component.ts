@@ -12,6 +12,7 @@ import { BlobMigrationService } from 'src/app/blob-migration.service';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { RingGameComponent } from './ring-game/ring-game.component';
 import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.component';
+import { SignupNudgeComponent } from './signup-nudge/signup-nudge.component';
 
 
 @Component({
@@ -19,7 +20,7 @@ import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.co
     templateUrl: './image-grid.component.html',
     styleUrls: ['./image-grid.component.css'],
     standalone: true,
-    imports: [CommonModule, RingGameComponent, RingLeaderboardComponent]
+    imports: [CommonModule, RingGameComponent, RingLeaderboardComponent, SignupNudgeComponent]
 })
 export class ImageGridComponent implements OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
@@ -275,6 +276,11 @@ export class ImageGridComponent implements OnDestroy {
 
   isMobileView(): boolean {
     return this.screenWidth <= 600;
+  }
+
+  /** Too low for the full sign-up prompt to sit under the queue status (a landscape image on a phone). */
+  isShortGrid(): boolean {
+    return (this.isMobileView() ? this.screenHeight : this.aspectRatio?.height ?? 512) < 320;
   }
 
   ngOnChanges(changes: SimpleChanges) {

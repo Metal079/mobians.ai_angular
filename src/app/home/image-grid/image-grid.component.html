@@ -33,6 +33,9 @@
     </div>
     @if (aprilFools.isAprilFools()) {
       <app-ring-game (ringsCollected)="onRingsCollected($event)"></app-ring-game>
+    } @else {
+      <!-- Visitors with no account: a sign-up prompt after a few seconds of waiting. -->
+      <app-signup-nudge variant="wait" [compact]="isShortGrid()"></app-signup-nudge>
     }
   }
   <!-- Keep each result in its original position while other downloads finish. -->
