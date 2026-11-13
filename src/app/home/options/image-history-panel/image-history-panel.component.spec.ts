@@ -1,5 +1,6 @@
 import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
+import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { BehaviorSubject, of } from 'rxjs';
@@ -104,6 +105,7 @@ describe('ImageHistoryPanelComponent', () => {
         { provide: HistoryDiagnosticsService, useValue: { report: jasmine.createSpy('report') } },
         { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { requestSave: () => {} } },
+        { provide: VideoHandoffService, useValue: { animate: jasmine.createSpy('animate').and.resolveTo('opened') } },
         { provide: MessageService, useClass: MessageServiceStub },
         { provide: BlobMigrationService, useClass: BlobMigrationServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
@@ -126,6 +128,31 @@ describe('ImageHistoryPanelComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('offers "Make a video" in each image menu, handing over the full picture', async () => {
+    const animate = TestBed.inject(VideoHandoffService).animate as jasmine.Spy;
+    const stored = new Blob(['pixels'], { type: 'image/webp' });
+    spyOn(component as any, 'getBlobFromStore').and.resolveTo(stored);
+    const image = createImage({ UUID: 'from-history' });
+    const labels = component.getImageActions(image).map(item => item.label);
+    expect(labels.indexOf('Make a video')).toBe(labels.indexOf('Edit with AI') + 1);
+
+    component.getImageActions(image).find(item => item.label === 'Make a video')!.command!({});
+    await Promise.resolve();
+    expect(animate).toHaveBeenCalledOnceWith(image, jasmine.any(Function), 'image_history');
+    expect(await animate.calls.mostRecent().args[1]()).toBe(stored);        // history thumbnails hold no data: it is read from storage
+  });
+
+  it('says so when the picture for a video cannot be loaded', async () => {
+    (TestBed.inject(VideoHandoffService).animate as jasmine.Spy).and.resolveTo('failed');
+    const messages = spyOn(TestBed.inject(MessageService), 'add');
+    await component.makeVideo(createImage({ UUID: 'gone' }));
+    expect(messages).toHaveBeenCalledOnceWith(jasmine.objectContaining({ summary: 'Image unavailable' }));
+    messages.calls.reset();
+    (TestBed.inject(VideoHandoffService).animate as jasmine.Spy).and.resolveTo('sign-in');
+    await component.makeVideo(createImage({ UUID: 'needs-account' }));
+    expect(messages).not.toHaveBeenCalled();
   });
 
   describe('closing history during cloud requests', () => {

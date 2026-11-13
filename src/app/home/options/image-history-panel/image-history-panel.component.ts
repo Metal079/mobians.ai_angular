@@ -21,6 +21,7 @@ import { ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { TabsModule } from 'primeng/tabs';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
+import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 import { supportsLocalHistory, unsupportedHistoryError } from 'src/app/history-storage';
 
 @Component({
@@ -47,6 +48,14 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       return;
     }
     this.characters.requestSave({ ...image, blob }, image.characterId);
+  }
+  private readonly videoHandoff = inject(VideoHandoffService);
+  /** Open the video page with this image as the first frame (signing in first if needed). */
+  async makeVideo(image: MobiansImage): Promise<void> {
+    const result = await this.videoHandoff.animate(image, () => this.getDownloadBlob(image), 'image_history');
+    if (result === 'failed') {
+      this.messageService.add({ severity: 'warn', summary: 'Image unavailable', detail: 'Open this image from history and try again.' });
+    }
   }
   private readonly destroyRef = inject(DestroyRef);
   private readonly historyEvents = inject(ImageHistoryEventsService);
@@ -879,6 +888,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (!items) {
       items = [
         { label: 'Edit with AI', icon: 'bi bi-stars', visible: this.imageEditor.available(), command: () => { void this.editWithAI(image); } },
+        { label: 'Make a video', icon: 'bi bi-camera-reels', command: () => { void this.makeVideo(image); } },
         { label: 'Save character', icon: 'bi bi-bookmark-heart', command: () => { void this.saveCharacter(image); } },
         { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
         { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
