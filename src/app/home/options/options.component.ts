@@ -425,6 +425,12 @@ export class OptionsComponent implements OnInit {
       }
     );
 
+    // The wait screen's "Notify me" button and this page's checkbox are one switch.
+    effect(() => {
+      const on = this.notificationService.enabled();
+      if (on !== this.enableNotifications) this.enableNotifications = on;
+    });
+
     window.addEventListener('storage', this.onJobStorageChange);
     window.addEventListener('online', this.onRecoveryOpportunity);
     document.addEventListener('visibilitychange', this.onRecoveryOpportunity);
@@ -1885,9 +1891,9 @@ export class OptionsComponent implements OnInit {
           if (this.cancelInProgress) {
             return;
           }
+          // The push itself now comes from the server for everyone; the page only plays the sound.
           if (this.enableNotifications) {
             this.notificationService.playDing();
-            this.notificationService.sendPushNotification();
           }
           if (jobComplete) {
             // Status polling detected completion — now download images individually
@@ -2322,12 +2328,12 @@ export class OptionsComponent implements OnInit {
         localStorage.setItem('notifications-user-id', userId);
       }
       this.notificationService.userId = userId;
-      this.notificationService.subscribeToNotifications();
-    } else {
-      // Fully unsubscribe: drop the browser's push subscription AND delete the
-      // server-side row so the backend stops targeting this device.
-      this.notificationService.unsubscribeFromNotifications();
     }
+    // The service owns the on/off state (the wait screen's "Notify me" button shares it):
+    // on subscribes this browser, off unsubscribes it and deletes the server-side row.
+    void this.notificationService.setEnabled(this.enableNotifications).then(subscribed => {
+      if (this.enableNotifications && !subscribed) this.enableNotifications = false;
+    });
   }
 
   openImageModal() {

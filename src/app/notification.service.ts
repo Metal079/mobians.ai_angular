@@ -1,9 +1,27 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import { environment } from '../environments/environment';
+import { trackEvent } from './analytics';
+
+/**
+ * What this device has agreed to be pushed. `jobs` is "your image is ready";
+ * `reminders` is the once-a-day bonus reminder; `news` is a "What's new" post an
+ * admin chose to push. The backend keeps these per device
+ * (push_preferences.py) and every reminder or news push carries its own
+ * "Turn off" button, handled in notification-sw.js.
+ */
+export interface PushPreferences {
+  jobs: boolean;
+  reminders: boolean;
+  news: boolean;
+}
+
+interface SubscribeResponse {
+  preferences?: PushPreferences | null;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -13,8 +31,14 @@ export class NotificationService {
   readonly VAPID_PUBLIC_KEY = environment.vapidPublicKey;
   private static readonly USER_ID_STORAGE_KEY = 'notifications-user-id';
   private static readonly VAPID_PUBLIC_KEY_STORAGE_KEY = 'notifications-vapid-public-key';
+  private static readonly ENABLED_STORAGE_KEY = 'notifications-enabled';
   public userId: string;
   private readonly apiBaseUrl = environment.apiBaseUrl;
+
+  /** Whether the person switched notifications on for this device (the Options checkbox and the wait screen share it). */
+  readonly enabled = signal(this.readEnabled());
+  /** The switches the server holds for this device; null until it has answered or when not subscribed. */
+  readonly preferences = signal<PushPreferences | null>(null);
 
   constructor(private http: HttpClient, private swPush: SwPush) {
     // Persist the anonymous id across reloads so the backend can keep
@@ -36,6 +60,94 @@ export class NotificationService {
         void this.sendSubscriptionToServer(subscription);
       }
     });
+  }
+
+  /** False where the browser or this build cannot do web push at all. */
+  get supported(): boolean {
+    return this.swPush.isEnabled;
+  }
+
+  /** The person blocked notifications for this site in the browser; only they can undo that, in browser settings. */
+  get blockedByBrowser(): boolean {
+    return typeof Notification !== 'undefined' && Notification.permission === 'denied';
+  }
+
+  /**
+   * Switch notifications on or off for this device. Turning them on asks the
+   * browser for permission if needed; `preferences` are the switches the person
+   * just chose (left out, the device keeps what it had, or starts with finished
+   * jobs only). Returns whether the device ends up subscribed.
+   */
+  async setEnabled(on: boolean, preferences?: Partial<PushPreferences>): Promise<boolean> {
+    this.enabled.set(on);
+    this.storeEnabled(on);
+    if (!on) {
+      await this.unsubscribeFromNotifications();
+      this.preferences.set(null);
+      return false;
+    }
+    const subscribed = await this.subscribeToNotifications(preferences);
+    if (!subscribed) {
+      // Permission refused or unsupported: do not pretend it is on.
+      this.enabled.set(false);
+      this.storeEnabled(false);
+    }
+    return subscribed;
+  }
+
+  /** Change one or more switches on this device. Returns false if the device is not subscribed or the call failed. */
+  async setPreferences(changes: Partial<PushPreferences>): Promise<boolean> {
+    if (!this.swPush.isEnabled) return false;
+    try {
+      const subscription = await firstValueFrom(this.swPush.subscription);
+      if (!subscription?.endpoint) return false;
+      const response = await firstValueFrom(this.http.post<SubscribeResponse>(`${this.apiBaseUrl}/push/preferences`, {
+        endpoint: subscription.endpoint, ...changes, timezone: this.timeZone()
+      }));
+      if (response?.preferences) this.preferences.set(response.preferences);
+      return true;
+    } catch (error) {
+      console.error('Error changing notification preferences:', error);
+      return false;
+    }
+  }
+
+  /** On sign-out: this device stops receiving the account's notifications. */
+  async detachFromAccount(): Promise<void> {
+    if (!this.swPush.isEnabled) return;
+    try {
+      const subscription = await firstValueFrom(this.swPush.subscription);
+      if (!subscription?.endpoint) return;
+      await firstValueFrom(this.http.post(`${this.apiBaseUrl}/push/detach`, { endpoint: subscription.endpoint }));
+      const current = this.preferences();
+      if (current) this.preferences.set({ ...current, reminders: false });
+    } catch (error) {
+      console.error('Error detaching push subscription:', error);
+    }
+  }
+
+  private readEnabled(): boolean {
+    try {
+      return localStorage.getItem(NotificationService.ENABLED_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  private storeEnabled(on: boolean): void {
+    try {
+      localStorage.setItem(NotificationService.ENABLED_STORAGE_KEY, String(on));
+    } catch {
+      // Storage unavailable: the choice lasts until the page is closed.
+    }
+  }
+
+  private timeZone(): string | undefined {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private loadOrCreateUserId(): string {
@@ -84,11 +196,16 @@ export class NotificationService {
     ding.play();
   }
 
-  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
+  /**
+   * Tell the backend about this device. `preferences` is only sent when the
+   * person has just chosen them: this runs on every page load, and a plain
+   * refresh must not change anyone's switches.
+   */
+  private async sendSubscriptionToServer(subscription: PushSubscription, preferences?: Partial<PushPreferences>): Promise<boolean> {
     const subscriptionJson = subscription.toJSON();
     const keys = subscriptionJson.keys;
     if (!subscription.endpoint || !keys?.['p256dh'] || !keys['auth']) {
-      return;
+      return false;
     }
 
     const data = {
@@ -96,21 +213,24 @@ export class NotificationService {
       endpoint: subscription.endpoint,
       expirationTime: subscription.expirationTime,
       keys,
+      timezone: this.timeZone(),
+      ...(preferences ? { preferences } : {}),
     };
 
     try {
-      const response = await firstValueFrom(this.http.post(`${this.apiBaseUrl}/subscribe`, data));
+      const response = await firstValueFrom(this.http.post<SubscribeResponse>(`${this.apiBaseUrl}/subscribe`, data));
       this.storeCurrentVapidPublicKey();
-      console.log('Subscription sent to server:', response);
+      if (response?.preferences) this.preferences.set(response.preferences);
+      return true;
     } catch (error) {
       console.error('Error sending subscription to server:', error);
+      return false;
     }
   }
 
   private async removeSubscriptionFromServer(endpoint: string): Promise<void> {
     try {
       await firstValueFrom(this.http.post(`${this.apiBaseUrl}/unsubscribe`, { endpoint }));
-      console.log('Push subscription removed from server');
     } catch (error) {
       console.error('Error removing push subscription:', error);
     }
@@ -127,17 +247,17 @@ export class NotificationService {
     }
   }
 
-  async subscribeToNotifications(): Promise<void> {
+  /** Subscribe this browser (asking for permission if needed). Returns whether it is subscribed afterwards. */
+  async subscribeToNotifications(preferences?: Partial<PushPreferences>): Promise<boolean> {
     if (!this.swPush.isEnabled) {
       console.warn('Push notifications are unavailable in this build. Use the local push build or a production-like build so the service worker can register.');
-      return;
+      return false;
     }
 
     const existingSubscription = await firstValueFrom(this.swPush.subscription);
 
     if (existingSubscription && this.hasCurrentVapidPublicKey()) {
-      await this.sendSubscriptionToServer(existingSubscription);
-      return;
+      return this.sendSubscriptionToServer(existingSubscription, preferences);
     }
 
     if (existingSubscription) {
@@ -148,9 +268,12 @@ export class NotificationService {
       const subscription = await this.swPush.requestSubscription({
         serverPublicKey: this.VAPID_PUBLIC_KEY
       });
-      await this.sendSubscriptionToServer(subscription);
+      const sent = await this.sendSubscriptionToServer(subscription, preferences);
+      if (sent) trackEvent('push_opt_in', { reminders: !!preferences?.reminders, news: !!preferences?.news });
+      return sent;
     } catch (err) {
       console.error('Could not subscribe to notifications', err);
+      return false;
     }
   }
 
@@ -173,28 +296,12 @@ export class NotificationService {
     }
   }
 
-  sendPushNotification() {
-    // When the user is signed in, the backend sends a server-initiated push
-    // the moment the job row flips to completed/failed (see
-    // job_completion_notifier_task). Firing a second one from the tab would
-    // cause duplicate notifications, so we skip it here.
-    if (this.isAuthenticated()) {
-      return;
-    }
-    const userId = this.userId; // Use the user ID generated earlier
-    this.http.get(`${this.apiBaseUrl}/send_notification/${userId}`).subscribe(response => {
-      console.log('Push notification sent:', response);
-    }, error => {
-      console.error('Error sending push notification:', error);
-    });
-  }
-
-  private isAuthenticated(): boolean {
-    try {
-      return !!localStorage.getItem('authToken');
-    } catch {
-      return false;
-    }
-  }
+  /**
+   * Kept for callers written before the server did this itself. Finished jobs are
+   * now pushed by the backend for everyone, signed in or not (it finds a
+   * no-account browser through the id sent with the job), which also works after
+   * the tab is closed; pushing from the page as well would notify twice.
+   */
+  sendPushNotification(): void {}
 
 }

@@ -155,7 +155,9 @@ class MessageServiceStub {
 }
 class NotificationServiceStub {
   userId?: string;
+  enabled = signal(false);
   subscribeToNotifications() {}
+  setEnabled(on: boolean) { this.enabled.set(on); return Promise.resolve(on); }
 }
 class SwPushStub {}
 class DialogServiceStub {}

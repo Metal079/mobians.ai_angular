@@ -225,18 +225,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Check if daily bonus can be claimed based on last claim date.
-   * Uses UTC to match server-side logic.
-   */
-  private canClaimDaily(lastDailyBonus: string | null): boolean {
-    if (!lastDailyBonus) return true;
-    // Use UTC date to match server
-    const now = new Date();
-    const todayUTC = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
-    return lastDailyBonus !== todayUTC;
-  }
-
   private normalizeCanClaimDailyBonus(value: unknown): boolean {
     if (typeof value === 'boolean') {
       return value;

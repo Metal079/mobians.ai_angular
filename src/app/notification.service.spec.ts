@@ -27,6 +27,8 @@ describe('NotificationService', () => {
 
   const userId = 'test-user-id';
   const vapidStorageKey = 'notifications-vapid-public-key';
+  const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let postResponse: unknown;
 
   function createSubscription(endpoint: string): PushSubscription {
     return {
@@ -53,13 +55,14 @@ describe('NotificationService', () => {
     requestSubscriptionCalls = [];
     unsubscribeCallCount = 0;
     requestSubscriptionResult = null;
+    postResponse = {};
 
     http = {
       get: (..._args: unknown[]) => of({}),
       post: (...args: unknown[]) => {
         const [url, body] = args as [string, unknown];
         postCalls.push({ url, body });
-        return of({});
+        return of(postResponse);
       },
     };
 
@@ -139,6 +142,7 @@ describe('NotificationService', () => {
             p256dh: 'test-p256dh',
             auth: 'test-auth',
           },
+          timezone: deviceTimeZone,
         },
       },
     ]);
@@ -167,8 +171,93 @@ describe('NotificationService', () => {
             p256dh: 'test-p256dh',
             auth: 'test-auth',
           },
+          timezone: deviceTimeZone,
         },
       },
     ]);
+  });
+
+  describe('switches for this device', () => {
+    const current = () => createSubscription('https://fcm.googleapis.com/fcm/send/current');
+    const lastBody = () => postCalls[postCalls.length - 1].body as any;
+
+    it('turning notifications on sends the choices the person just made, and remembers it is on', async () => {
+      setupService(null);
+      requestSubscriptionResult = current();
+      postResponse = { preferences: { jobs: true, reminders: true, news: false } };
+      expect(service.enabled()).toBeFalse();
+
+      expect(await service.setEnabled(true, { jobs: true, reminders: true })).toBeTrue();
+
+      expect(lastBody().preferences).toEqual({ jobs: true, reminders: true });
+      expect(lastBody().timezone).toBe(deviceTimeZone);
+      expect(service.enabled()).toBeTrue();
+      expect(localStorage.getItem('notifications-enabled')).toBe('true');
+      expect(service.preferences()).toEqual({ jobs: true, reminders: true, news: false });
+    });
+
+    it('an ordinary page load re-registers the device without sending any switches', () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      postResponse = { preferences: { jobs: true, reminders: false, news: true } };
+      setupService(current());
+      expect(postCalls.length).toBe(1);
+      expect('preferences' in lastBody()).toBeFalse();
+    });
+
+    it('does not claim to be on when the browser refuses permission', async () => {
+      setupService(null);                                   // requestSubscription will throw
+      spyOn(console, 'error');
+      expect(await service.setEnabled(true)).toBeFalse();
+      expect(service.enabled()).toBeFalse();
+      expect(localStorage.getItem('notifications-enabled')).toBe('false');
+    });
+
+    it('turning notifications off unsubscribes the device and forgets its switches', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      setupService(current());
+      expect(service.enabled()).toBeTrue();
+      await service.setEnabled(false);
+      expect(unsubscribeCallCount).toBe(1);
+      expect(postCalls.map(call => call.url)).toContain(`${environment.apiBaseUrl}/unsubscribe`);
+      expect(service.enabled()).toBeFalse();
+      expect(service.preferences()).toBeNull();
+    });
+
+    it('changes one switch by naming this device, and shows what the server now holds', async () => {
+      setupService(current());
+      postResponse = { status: 'ok', preferences: { jobs: true, reminders: false, news: true } };
+      expect(await service.setPreferences({ news: true })).toBeTrue();
+      expect(postCalls[postCalls.length - 1]).toEqual({
+        url: `${environment.apiBaseUrl}/push/preferences`,
+        body: { endpoint: 'https://fcm.googleapis.com/fcm/send/current', news: true, timezone: deviceTimeZone },
+      });
+      expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
+    });
+
+    it('cannot change switches on a device that is not subscribed', async () => {
+      setupService(null);
+      expect(await service.setPreferences({ news: true })).toBeFalse();
+      expect(postCalls).toEqual([]);
+    });
+
+    it('signing out detaches the device from the account and switches its reminders off', async () => {
+      setupService(current());
+      postResponse = { preferences: { jobs: true, reminders: true, news: true } };
+      await service.setPreferences({});
+      postCalls = [];
+      await service.detachFromAccount();
+      expect(postCalls).toEqual([{ url: `${environment.apiBaseUrl}/push/detach`, body: { endpoint: 'https://fcm.googleapis.com/fcm/send/current' } }]);
+      expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
+    });
+
+    it('no longer asks the server to push from the page when a job finishes', () => {
+      setupService(current());
+      const get = spyOn(http, 'get').and.callThrough();
+      postCalls = [];
+      service.sendPushNotification();
+      expect(get).not.toHaveBeenCalled();
+      expect(postCalls).toEqual([]);
+    });
   });
 });
