@@ -38,4 +38,12 @@ describe('FaqComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('never signs anyone in from a code in the page address', () => {
+    // Sign-in codes are only accepted on /auth/callback, where the return is checked.
+    const login = spyOn(TestBed.inject(StableDiffusionService), 'discordLogin').and.callThrough();
+    (TestBed.inject(ActivatedRoute) as any).queryParams = of({ code: 'someone-elses-code' });
+    fixture.detectChanges();
+    expect(login).not.toHaveBeenCalled();
+  });
 });

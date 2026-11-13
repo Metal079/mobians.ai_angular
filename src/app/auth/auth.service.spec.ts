@@ -2,7 +2,7 @@ import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { SharedService } from '../shared.service';
 import { CurrentUserResponse, StableDiffusionService } from '../stable-diffusion.service';
-import { AuthService } from './auth.service';
+import { AuthService, safeReturnPath } from './auth.service';
 import { CompletedSignupTracker } from './signup-tracking';
 
 interface MutableSessionValidationDelays {
@@ -144,5 +144,117 @@ describe('AuthService', () => {
     expect(api.getCurrentUser).toHaveBeenCalledTimes(1);
     expect(shared.setUserData).toHaveBeenCalledWith(null);
     expect(localStorage.getItem('authToken')).toBeNull();
+  });
+
+  describe('sign-in round trip', () => {
+    let redirect: jasmine.Spy;
+    const sentTo = () => new URL(redirect.calls.mostRecent().args[0]);
+    const sentState = () => sentTo().searchParams.get('state')!;
+
+    beforeEach(() => {
+      redirect = spyOn(service as any, 'redirect');
+      localStorage.removeItem('pending-sign-in');
+    });
+    afterEach(() => localStorage.removeItem('pending-sign-in'));
+
+    it('sends a one-time value to the provider and comes back to the page the visitor was on', () => {
+      (router as any).url = '/video?ref=x#top';
+      service.startLogin('google', 'login', 'animate');
+      expect(sentTo().origin + sentTo().pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+      const state = new URLSearchParams(sentState());
+      expect(state.get('p')).toBe('google');
+      expect(state.get('m')).toBe('login');
+      expect(state.get('n')).toMatch(/^[0-9a-f]{32}$/);
+      expect(service.readSignInReturn(sentState())).toEqual(
+        { provider: 'google', link: false, verified: true, returnPath: '/video', cta: 'animate' });
+    });
+
+    it('uses a new value for every sign-in and accepts each return only once', () => {
+      service.startLogin('discord');
+      const first = sentState();
+      expect(sentTo().origin + sentTo().pathname).toBe('https://discord.com/api/oauth2/authorize');
+      service.startLogin('discord');
+      const second = sentState();
+      expect(first).not.toBe(second);
+      expect(service.readSignInReturn(first).verified).toBeFalse();       // replaced by the second attempt
+      service.startLogin('discord');
+      const third = sentState();
+      expect(service.readSignInReturn(third).verified).toBeTrue();
+      expect(service.readSignInReturn(third).verified).toBeFalse();       // already used
+    });
+
+    it('does not trust a return this browser did not start', () => {
+      const forged = service.readSignInReturn('p=discord&m=link&n=' + 'a'.repeat(32));
+      expect(forged).toEqual({ provider: 'discord', link: true, verified: false, returnPath: '/', cta: undefined });
+      expect(service.readSignInReturn(null)).toEqual(
+        { provider: 'discord', link: false, verified: false, returnPath: '/', cta: undefined });
+
+      // A real sign-in whose return was altered to ask for linking, or for the other provider.
+      service.startLogin('discord');
+      expect(service.readSignInReturn(sentState().replace('m=login', 'm=link'))).toEqual(
+        jasmine.objectContaining({ link: true, verified: false }));
+      service.startLogin('discord');
+      expect(service.readSignInReturn(sentState().replace('p=discord', 'p=google')).verified).toBeFalse();
+    });
+
+    it('confirms a link request only when this browser started it', () => {
+      (router as any).url = '/';
+      service.startLink('discord');
+      expect(new URLSearchParams(sentState()).get('m')).toBe('link');
+      expect(service.readSignInReturn(sentState())).toEqual(
+        { provider: 'discord', link: true, verified: true, returnPath: '/', cta: undefined });
+    });
+
+    it('stops trusting a sign-in that took longer than fifteen minutes', () => {
+      service.startLogin('google');
+      const state = sentState();
+      const pending = JSON.parse(localStorage.getItem('pending-sign-in')!);
+      localStorage.setItem('pending-sign-in', JSON.stringify({ ...pending, startedAt: Date.now() - 16 * 60 * 1000 }));
+      expect(service.readSignInReturn(state).verified).toBeFalse();
+    });
+
+    it('still lets a plain sign-in start when storage is unavailable', () => {
+      spyOn(Storage.prototype, 'setItem').and.throwError('blocked');
+      expect(() => service.startLogin('google')).not.toThrow();
+      expect(redirect).toHaveBeenCalled();
+    });
+
+    it('never returns to sign-in plumbing, the admin area or another site', () => {
+      const cases: [unknown, string][] = [
+        ['/video', '/video'], ['/characters/abc?x=1#y', '/characters/abc'], ['/', '/'],
+        ['/auth/callback?code=x', '/'], ['/admin', '/'], ['/admin/users', '/'],
+        ['//evil.example/path', '/'], ['https://evil.example/', '/'], ['/\\evil.example', '/'],
+        ['video', '/'], ['', '/'], [undefined, '/'], [null, '/'], [42, '/']
+      ];
+      for (const [path, expected] of cases) expect(safeReturnPath(path)).withContext(String(path)).toBe(expected);
+    });
+
+    it('reports the prompt and page behind a new sign-up, and announces the outcome once it completes', async () => {
+      const response = { status: 'success', is_new_user: true, user_id: 'new-user', token: 'new-token' };
+      api.googleLogin.and.returnValue(of(response));
+      expect(service.authOutcome()).toBeNull();
+      await service.exchangeCode('google', 'test-code', false, { cta: 'wait-screen', returnPath: '/video' });
+      expect(api.googleLogin).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+        code: 'test-code', link: false,
+        attribution: jasmine.objectContaining({ signup_cta: 'wait-screen', signup_path: '/video' })
+      }));
+      expect(service.authOutcome()).toEqual(
+        { provider: 'google', userId: 'new-user', isNewUser: true, linked: false, response });
+    });
+
+    it('does not announce a returning user or a linked sign-in method as a new account', async () => {
+      api.discordLogin.and.returnValue(of({ status: 'success', is_new_user: false, user_id: 'user-1', token: 't' }));
+      await service.exchangeCode('discord', 'test-code');
+      expect(service.authOutcome()).toEqual(jasmine.objectContaining({ isNewUser: false, linked: false }));
+      api.discordLogin.and.returnValue(of({ status: 'success', is_new_user: true, user_id: 'user-1', token: 't' }));
+      await service.exchangeCode('discord', 'link-code', true);
+      expect(service.authOutcome()).toEqual(jasmine.objectContaining({ isNewUser: false, linked: true }));
+    });
+
+    it('announces nothing when the exchange fails', async () => {
+      api.googleLogin.and.returnValue(throwError(() => ({ status: 400, error: { detail: 'Bad code' } })));
+      await expectAsync(service.exchangeCode('google', 'bad-code')).toBeRejected();
+      expect(service.authOutcome()).toBeNull();
+    });
   });
 });

@@ -2,10 +2,6 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { SharedService } from 'src/app/shared.service';
-import { ActivatedRoute } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { StableDiffusionService } from 'src/app/stable-diffusion.service';
-import { environment } from 'src/environments/environment';
 
 @Component({
     selector: 'app-faq',
@@ -15,8 +11,6 @@ import { environment } from 'src/environments/environment';
     imports: [CommonModule]
 })
 export class FaqComponent implements OnInit, OnDestroy {
-  private clientId = '1186062405168549949';
-  private redirectUri = encodeURIComponent(environment.discordRedirectUri);
   prompt!: string;
   serverMember: boolean = false;
   discordUserID: string = '';
@@ -36,24 +30,13 @@ export class FaqComponent implements OnInit, OnDestroy {
   
   private subscription: Subscription = new Subscription();
 
-  constructor(private sharedService: SharedService
-    , private route: ActivatedRoute
-    , private http: HttpClient
-    , private stableDiffusionService: StableDiffusionService) { }
+  constructor(private sharedService: SharedService) { }
 
   ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
       this.prompt = value;
     });
 
-
-    this.route.queryParams.subscribe(params => {
-      console.log('Query Params:', params); // Add this to check if queryParams are received
-      const code = params['code'];
-      if (code) {
-        this.exchangeCode(code);
-      }
-    });
 
     // Discord userdata check
     this.sharedService.getUserData().subscribe(userData => {
@@ -84,19 +67,4 @@ export class FaqComponent implements OnInit, OnDestroy {
   ngOnDestroy() { 
     this.subscription.unsubscribe();
   }
-
-  authenticateWithDiscord() {
-    window.location.href = `https://discord.com/api/oauth2/authorize?client_id=${this.clientId}&redirect_uri=${this.redirectUri}&response_type=code&scope=identify%20guilds`;
-  }
-
-  private exchangeCode(code: string) {
-    this.stableDiffusionService.discordLogin({ code: code })
-        .subscribe(response => {
-            console.log(response);
-            this.sharedService.setUserData(response); // Assuming response contains user data
-        }, error => {
-            console.error(error);
-        });
-}
-
 }

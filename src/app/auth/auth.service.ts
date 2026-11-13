@@ -1,9 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject, firstValueFrom } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SharedService } from '../shared.service';
 import {
+  AuthExchangeResponse,
   CurrentUserResponse,
   DailyBonusResponse,
   StableDiffusionService,
@@ -15,6 +16,56 @@ import { buildSignupAttribution } from '../first-touch';
 
 export type AuthProvider = 'discord' | 'google';
 type AuthMode = 'login' | 'link';
+
+// --- Sign-in round trip -------------------------------------------------------
+// Signing in leaves the site for Google or Discord and comes back to
+// /auth/callback. What the visitor was doing is remembered here across that trip,
+// tied to a one-time random value that also travels in the provider's `state`.
+// Only a return that carries the same value is trusted to (a) go back to the page
+// the visitor started from and (b) link a second sign-in method to the current
+// account. Without that check, a crafted link could attach someone else's Discord
+// or Google account to a signed-in visitor's account.
+const PENDING_SIGN_IN_KEY = 'pending-sign-in';
+const PENDING_SIGN_IN_MAX_AGE_MS = 15 * 60 * 1000;
+
+interface PendingSignIn {
+  nonce: string;
+  provider: AuthProvider;
+  mode: AuthMode;
+  returnPath: string;
+  /** Which prompt opened the sign-in, e.g. 'wait-screen'. */
+  cta?: string;
+  startedAt: number;
+}
+
+/** What the callback page learns from the provider's `state` plus the remembered trip. */
+export interface SignInReturn {
+  provider: AuthProvider;
+  /** The return asks to link a second sign-in method to the current account. */
+  link: boolean;
+  /** The return matches a sign-in this browser started in the last few minutes. */
+  verified: boolean;
+  /** Where to go afterwards; always a safe in-site path. */
+  returnPath: string;
+  cta?: string;
+}
+
+/** The result of the most recent completed sign-in, for one-time follow-ups such as the welcome message. */
+export interface AuthOutcome {
+  provider: AuthProvider;
+  userId: string | null;
+  isNewUser: boolean;
+  linked: boolean;
+  response: AuthExchangeResponse;
+}
+
+/** Only ever send a visitor to a page of this site, never to sign-in plumbing or the admin area. */
+export function safeReturnPath(path: unknown): string {
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return '/';
+  const clean = path.split(/[?#]/)[0];
+  if (clean.startsWith('/auth') || clean.startsWith('/admin')) return '/';
+  return clean;
+}
 
 export interface UserCredits {
   credits: number;
@@ -35,6 +86,9 @@ export class AuthService {
   // Subject to notify components that session is invalid and login is required
   private _sessionInvalid$ = new Subject<void>();
   public sessionInvalid$ = this._sessionInvalid$.asObservable();
+
+  /** Set once each time a sign-in completes; null until then. */
+  readonly authOutcome = signal<AuthOutcome | null>(null);
 
   constructor(
     private router: Router,
@@ -325,21 +379,30 @@ export class AuthService {
     return user?.user_id ? String(user.user_id) : null;
   }
 
-  startLogin(provider: AuthProvider, mode: AuthMode = 'login') {
-    const state = encodeURIComponent(`p=${provider}&m=${mode}`);
+  /**
+   * Leave for the provider's sign-in page. `cta` names the prompt that led here
+   * (kept for the sign-up report); the page the visitor is on is remembered so the
+   * callback can bring them back to it.
+   */
+  startLogin(provider: AuthProvider, mode: AuthMode = 'login', cta?: string) {
+    const nonce = this.newNonce();
+    this.rememberPendingSignIn({
+      nonce, provider, mode, cta,
+      returnPath: safeReturnPath(this.router.url),
+      startedAt: Date.now()
+    });
+    const state = encodeURIComponent(`p=${provider}&m=${mode}&n=${nonce}`);
     const redirectUri = encodeURIComponent(environment.oauthRedirectUri || environment.discordRedirectUri);
     if (provider === 'discord') {
       const clientId = environment.discordClientId || '';
       const scope = encodeURIComponent('identify guilds');
-      const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
-      window.location.href = url;
+      this.redirect(`https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`);
       return;
     }
     if (provider === 'google') {
       const clientId = environment.googleClientId || '';
       const scope = encodeURIComponent('openid email profile');
-      const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=online&include_granted_scopes=true&state=${state}`;
-      window.location.href = url;
+      this.redirect(`https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=online&include_granted_scopes=true&state=${state}`);
       return;
     }
   }
@@ -348,67 +411,101 @@ export class AuthService {
     this.startLogin(provider, 'link');
   }
 
-  async exchangeCode(provider: AuthProvider, code: string, link = false): Promise<void> {
+  /**
+   * Read the provider's `state` on the callback page and match it against the
+   * sign-in this browser started. The remembered trip is used up by this call.
+   */
+  readSignInReturn(state: string | null): SignInReturn {
+    const fields = new URLSearchParams(state || '');
+    const provider: AuthProvider = fields.get('p') === 'google' ? 'google' : 'discord';
+    const mode: AuthMode = fields.get('m') === 'link' ? 'link' : 'login';
+    const pending = this.takePendingSignIn();
+    const verified = !!pending && !!pending.nonce && pending.nonce === fields.get('n')
+      && pending.provider === provider && pending.mode === mode
+      && Date.now() - pending.startedAt <= PENDING_SIGN_IN_MAX_AGE_MS;
+    return {
+      provider,
+      link: mode === 'link',
+      verified,
+      returnPath: verified ? safeReturnPath(pending!.returnPath) : '/',
+      cta: verified ? pending!.cta : undefined
+    };
+  }
+
+  /** Complete a sign-in with the one-time code the provider sent back. */
+  async exchangeCode(
+    provider: AuthProvider,
+    code: string,
+    link = false,
+    context: Pick<SignInReturn, 'cta' | 'returnPath'> = { returnPath: '/' }
+  ): Promise<void> {
     const redirect_uri = environment.oauthRedirectUri || environment.discordRedirectUri;
     // Where this visitor came from; the backend stores it only if this creates a new account.
-    const attribution = link ? undefined : buildSignupAttribution();
-    if (provider === 'discord') {
-      return new Promise((resolve, reject) => {
-        this.api.discordLogin({ code, link, redirect_uri, attribution }).subscribe({
-          next: (resp) => {
-            this.shared.setUserData(resp);
-            // Store token separately for HTTP interceptor
-            if (resp.token) {
-              try {
-                localStorage.setItem('authToken', resp.token);
-              } catch {}
-            }
-            // Initialize credits - default canClaimDailyBonus to false, server will confirm
-            if (resp.credits !== undefined) {
-              this._credits$.next({
-                credits: resp.credits,
-                canClaimDailyBonus: false,
-                dailyBonusStreak: resp.daily_bonus_streak || 0
-              });
-              // Refresh from server to get accurate can_claim_daily_bonus
-              this.refreshCredits();
-            }
-            this.signupTracker.record(resp, provider, link);
-            resolve();
-          },
-          error: (err) => reject(err)
-        });
-      });
+    const attribution = link ? undefined : buildSignupAttribution({
+      signup_cta: context.cta,
+      signup_path: context.cta || context.returnPath !== '/' ? context.returnPath : undefined
+    });
+    const request = { code, link, redirect_uri, attribution };
+    const resp = await firstValueFrom(provider === 'google' ? this.api.googleLogin(request) : this.api.discordLogin(request));
+
+    this.shared.setUserData(resp);
+    // Store token separately for HTTP interceptor
+    if (resp.token) {
+      try {
+        localStorage.setItem('authToken', resp.token);
+      } catch {}
     }
-    if (provider === 'google') {
-      return new Promise((resolve, reject) => {
-        this.api.googleLogin({ code, link, redirect_uri, attribution }).subscribe({
-          next: (resp) => {
-            this.shared.setUserData(resp);
-            // Store token separately for HTTP interceptor
-            if (resp.token) {
-              try {
-                localStorage.setItem('authToken', resp.token);
-              } catch {}
-            }
-            // Initialize credits - default canClaimDailyBonus to false, server will confirm
-            if (resp.credits !== undefined) {
-              this._credits$.next({
-                credits: resp.credits,
-                canClaimDailyBonus: false,
-                dailyBonusStreak: resp.daily_bonus_streak || 0
-              });
-              // Refresh from server to get accurate can_claim_daily_bonus
-              this.refreshCredits();
-            }
-            this.signupTracker.record(resp, provider, link);
-            resolve();
-          },
-          error: (err) => reject(err)
-        });
+    // Initialize credits - default canClaimDailyBonus to false, server will confirm
+    if (resp.credits !== undefined) {
+      this._credits$.next({
+        credits: resp.credits,
+        canClaimDailyBonus: false,
+        dailyBonusStreak: resp.daily_bonus_streak || 0
       });
+      // Refresh from server to get accurate can_claim_daily_bonus
+      this.refreshCredits();
     }
-    return Promise.resolve();
+    this.signupTracker.record(resp, provider, link);
+    this.authOutcome.set({
+      provider,
+      userId: resp.user_id != null ? String(resp.user_id) : null,
+      isNewUser: !link && resp.is_new_user === true,
+      linked: link,
+      response: resp
+    });
+  }
+
+  /** Separate so tests can observe the destination without leaving the page. */
+  private redirect(url: string): void {
+    window.location.href = url;
+  }
+
+  private newNonce(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  // localStorage rather than sessionStorage: on phones the provider often returns
+  // in a new tab of the same browser, which does not share session storage.
+  private rememberPendingSignIn(pending: PendingSignIn): void {
+    try {
+      localStorage.setItem(PENDING_SIGN_IN_KEY, JSON.stringify(pending));
+    } catch {
+      // Without storage the return cannot be verified: a plain sign-in still
+      // works and lands on the home page; linking is refused.
+    }
+  }
+
+  private takePendingSignIn(): PendingSignIn | null {
+    try {
+      const stored = localStorage.getItem(PENDING_SIGN_IN_KEY);
+      localStorage.removeItem(PENDING_SIGN_IN_KEY);
+      const pending = stored ? JSON.parse(stored) : null;
+      return pending && typeof pending.nonce === 'string' && typeof pending.startedAt === 'number' ? pending : null;
+    } catch {
+      return null;
+    }
   }
 
   logout() {

@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 
-export type LoginCtaReason = 'priority' | 'upscale' | 'hires' | 'session-expired' | 'generic';
+// 'wait-screen', 'results' and 'animate' are the sign-up prompts shown to visitors with no account.
+export type LoginCtaReason = 'priority' | 'upscale' | 'hires' | 'session-expired' | 'generic'
+  | 'wait-screen' | 'results' | 'animate';
 
 export interface LoginCtaContext {
   reason?: LoginCtaReason;

@@ -40,8 +40,14 @@ export class LoginModalComponent {
         return `Sign in to use Hi-Res generation with your account credits.${creditCopy}`;
       case 'session-expired':
         return 'Your session expired. Sign in again to keep using credits, priority generation, and synced account features.';
+      case 'wait-screen':
+        return "Sign in free and get 200 credits: priority images in seconds, or your first video. The image you're waiting for keeps its place in line.";
+      case 'results':
+        return 'Sign in free to keep your images synced across devices, and get 200 credits for priority images or your first video.';
+      case 'animate':
+        return 'Sign in free to turn this image into a video. New accounts get 200 credits, enough for a first video.';
       default:
-        return 'Sign in to get credits, use priority generation, and keep your history synced across devices.';
+        return 'Sign in free and get 200 credits: priority images in seconds, or your first video. Your history stays synced across devices.';
     }
   }
 
@@ -50,7 +56,8 @@ export class LoginModalComponent {
     this.visibleChange.emit(false);
   }
 
-  loginDiscord() { this.auth.startLogin('discord'); }
-  loginGoogle() { this.auth.startLogin('google'); }
+  // The reason that opened this dialog travels with the sign-in so new accounts can be traced to a prompt.
+  loginDiscord() { this.auth.startLogin('discord', 'login', this.context?.reason); }
+  loginGoogle() { this.auth.startLogin('google', 'login', this.context?.reason); }
   loginAuth0() { this.auth.loginAuth0(); }
 }

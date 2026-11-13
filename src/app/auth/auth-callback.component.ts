@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AuthService, AuthProvider } from './auth.service';
+import { AuthService } from './auth.service';
 import { updateAnalyticsPageLocation } from './signup-tracking';
 
 @Component({
@@ -31,48 +31,40 @@ export class AuthCallbackComponent implements OnInit {
     await this.handleCallback();
   }
 
+  // The address of this page holds a one-time sign-in code: never log it.
   async handleCallback() {
-    console.log('AuthCallback: handleCallback started');
     const params = this.route.snapshot.queryParamMap;
     const code = params.get('code');
     const errorParam = params.get('error');
-    const errorDescription = params.get('error_description');
-    const state = params.get('state');
-    
-    console.log('AuthCallback: code =', code, 'state =', state);
-    
+
     // Handle OAuth error responses
     if (errorParam) {
-      this.error = errorDescription || `Login failed: ${errorParam}`;
-      console.log('AuthCallback: OAuth error', errorParam, errorDescription);
+      this.error = params.get('error_description') || `Login failed: ${errorParam}`;
+      return;
+    }
+    if (!code) {
+      this.error = 'No authorization code received. Please try signing in again.';
       return;
     }
 
-    let provider: AuthProvider = 'discord';
-    let link = false;
-    if (state) {
-      const s = decodeURIComponent(state);
-      if (s.includes('p=google')) provider = 'google';
-      if (s.includes('p=discord')) provider = 'discord';
-      if (s.includes('m=link')) link = true;
+    const signIn = this.auth.readSignInReturn(params.get('state'));
+    // Linking attaches a sign-in method to the account that is open in this
+    // browser, so it is only done for a request this browser itself started.
+    // A plain sign-in is still accepted without that proof (it then lands on the
+    // home page): on some phones the provider returns in a different browser.
+    if (signIn.link && !signIn.verified) {
+      this.error = "We couldn't confirm this request to connect a sign-in method. Please start again from the Account panel.";
+      return;
     }
-    
-    console.log('AuthCallback: provider =', provider, 'link =', link);
 
-    if (code) {
-      try {
-        console.log('AuthCallback: calling exchangeCode...');
-        await this.auth.exchangeCode(provider, code, link);
-        console.log('AuthCallback: exchangeCode succeeded, navigating home');
-        await this.router.navigateByUrl('/');
-        updateAnalyticsPageLocation();
-      } catch (e: any) {
-        console.error('Auth exchange failed:', e);
-        this.error = e?.message || 'Failed to complete sign in. Please try again.';
-      }
-    } else {
-      this.error = 'No authorization code received. Please try signing in again.';
-      console.log('AuthCallback: No code received');
+    try {
+      await this.auth.exchangeCode(signIn.provider, code, signIn.link, signIn);
+      await this.router.navigateByUrl(signIn.returnPath);
+      updateAnalyticsPageLocation();
+    } catch (e: any) {
+      console.error('Auth exchange failed:', e?.status ?? '', e?.error?.detail ?? e?.message ?? '');
+      const detail = e?.error?.detail;
+      this.error = (typeof detail === 'string' && detail) || 'Failed to complete sign in. Please try again.';
     }
   }
 
