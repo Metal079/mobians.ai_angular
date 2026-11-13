@@ -1,0 +1,19 @@
+<p-dialog [visible]="visible()" (visibleChange)="onVisibleChange($event)" [modal]="true" [closable]="true" [dismissableMask]="true"
+          [draggable]="false" [resizable]="false" [style]="{width: '90vw', maxWidth: '440px'}" header="Welcome to Mobians!">
+  <div class="welcome-content">
+    <p class="welcome-lead">You have <strong>{{ creditBalance }} credits</strong> to start with. Here is the best way to use the first ones:</p>
+
+    <button pButton type="button" class="p-button-lg w-full welcome-primary" icon="pi pi-video" label="Make your first video" (click)="makeVideo()"></button>
+    <p class="welcome-note">Turn any image into a short video. From 70 credits.</p>
+
+    <button pButton type="button" class="p-button-outlined w-full" icon="pi pi-gift" [disabled]="claiming() || claimed()"
+            [label]="claimed() ? 'Daily bonus claimed' : 'Claim today\'s bonus (+' + dailyBonusAmount + ')'" (click)="claimDailyBonus()"></button>
+    @if (claimMessage()) {
+      <p class="welcome-note" role="status">{{ claimMessage() }}</p>
+    } @else {
+      <p class="welcome-note">Free credits every day you visit. Credits also skip the queue for images.</p>
+    }
+
+    <button pButton type="button" label="Maybe later" class="p-button-text w-full" (click)="later()"></button>
+  </div>
+</p-dialog>

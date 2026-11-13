@@ -6,6 +6,8 @@
   [context]="loginCtaContext"
   (visibleChange)="onLoginModalVisibleChange($event)">
 </app-login-modal>
+<!-- One-time welcome for a new account (shown to half of them; see the component). -->
+<app-welcome-dialog></app-welcome-dialog>
 
 <app-credits-purchase
   [visible]="creditPurchaseVisible"
