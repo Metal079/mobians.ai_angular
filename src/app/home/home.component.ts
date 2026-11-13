@@ -14,12 +14,17 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { GenerationModeSwitchComponent } from '../generation-mode-switch/generation-mode-switch.component';
 import { ImageEditorService } from '../image-editor/image-editor.service';
 import { AccountCtaService } from '../auth/account-cta.service';
+import { trackEvent } from '../analytics';
 
 interface HeaderMessage {
   severity: 'success' | 'info' | 'warn' | 'error' | 'secondary' | 'contrast';
   summary: string;
   detail: string;
+  linkText: string;
+  linkUrl: string;
 }
+
+const DISCORD_INVITE_URL = 'https://discord.gg/mobians';
 
 @Component({
     selector: 'app-home',
@@ -51,7 +56,9 @@ export class HomeComponent {
   headerMessage: HeaderMessage[] = [{
     severity: 'info',
     summary: 'Welcome to Mobians!',
-    detail: 'Join the community on Discord and gain credits by participating in our weekly events! <a href="https://discord.gg/mobians" target="_blank">Click here to join.</a>',
+    detail: 'Join the community on Discord and gain credits by participating in our weekly events!',
+    linkText: 'Click here to join.',
+    linkUrl: DISCORD_INVITE_URL,
   }];
   loginInfo: any = null;
 
@@ -85,7 +92,9 @@ export class HomeComponent {
       this.headerMessage = [{
         severity: 'error',
         summary: '🥚 EGGMAN EMPIRE TAKEOVER',
-        detail: 'All generators have been commandeered by the Eggman Empire. Resistance is futile! <a href="https://discord.gg/mobians" target="_blank">Join the resistance on Discord.</a>',
+        detail: 'All generators have been commandeered by the Eggman Empire. Resistance is futile!',
+        linkText: 'Join the resistance on Discord.',
+        linkUrl: DISCORD_INVITE_URL,
       }];
     }
     // Discord userdata check
@@ -104,6 +113,10 @@ export class HomeComponent {
   // Example function after successful Discord login (no persistence)
   onDiscordLoginSuccess(userData: any) {
     // No localStorage persistence
+  }
+
+  onHeaderLinkClick(): void {
+    trackEvent('discord_link_click', { placement: 'home_banner' });
   }
 
   onImagesChange(images: string[]) {

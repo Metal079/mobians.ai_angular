@@ -1,8 +1,8 @@
 @if (!loginInfo) {
   @for (message of headerMessage; track message.summary) {
     <p-message [severity]="message.severity" [closable]="true" styleClass="mb-2">
-      <strong>{{ message.summary }}</strong>
-      <span [innerHTML]="message.detail"></span>
+      <strong>{{ message.summary }}</strong>&ngsp;
+      <span>{{ message.detail }} <a [href]="message.linkUrl" target="_blank" rel="noopener" (click)="onHeaderLinkClick()">{{ message.linkText }}</a></span>
     </p-message>
   }
 }

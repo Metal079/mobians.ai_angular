@@ -2212,7 +2212,7 @@ export class OptionsComponent implements OnInit {
 
   showError(error: any) {
     // Default error message
-    let errorMessage = 'There was an error attempting to generate your image. Website is possibly down. Try out generating on CivitAi as an alternative. https://civitai.com/models/1493';
+    let errorMessage = "We couldn't reach the generator. Please try again in a minute. If it keeps happening, check our Discord for updates: discord.gg/mobians";
 
     // If the error comes from the backend and has a 'detail' field, use it as the error message
     if (error && error.error && error.error.detail) {

@@ -47,6 +47,30 @@ describe('HomeComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('shows the Discord banner on every visit, with a link that opens Discord and is counted', () => {
+    const tag = jasmine.createSpy('gtag');
+    const originalTag = (window as any).gtag;
+    (window as any).gtag = tag;
+    try {
+      fixture.detectChanges();
+      const banner: HTMLElement = fixture.nativeElement.querySelector('p-message');
+      expect(banner.textContent).toContain('Welcome to Mobians! Join the community on Discord');
+      const link: HTMLAnchorElement = banner.querySelector('a')!;
+      expect(link.href).toBe('https://discord.gg/mobians');
+      expect(link.target).toBe('_blank');
+
+      link.addEventListener('click', event => event.preventDefault());
+      link.click();
+      expect(tag).toHaveBeenCalledOnceWith('event', 'discord_link_click',
+        { placement: 'home_banner', send_to: 'G-NQ1MYQTHLM' });
+      // Nothing is stored about the banner, so it is there again on the next visit.
+      expect(Object.keys(localStorage).some(key => key.includes('banner'))).toBeFalse();
+    } finally {
+      if (originalTag === undefined) delete (window as any).gtag;
+      else (window as any).gtag = originalTag;
+    }
+  });
+
   it('switches between Image sections without destroying the generator', async () => {
     fixture.detectChanges();
     const generator = fixture.nativeElement.querySelector('#generation-space');
