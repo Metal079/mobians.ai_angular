@@ -11,6 +11,7 @@ import {
 } from '../stable-diffusion.service';
 import { sessionInvalid$ } from './auth.interceptor';
 import { CompletedSignupTracker } from './signup-tracking';
+import { buildSignupAttribution } from '../first-touch';
 
 export type AuthProvider = 'discord' | 'google';
 type AuthMode = 'login' | 'link';
@@ -349,9 +350,11 @@ export class AuthService {
 
   async exchangeCode(provider: AuthProvider, code: string, link = false): Promise<void> {
     const redirect_uri = environment.oauthRedirectUri || environment.discordRedirectUri;
+    // Where this visitor came from; the backend stores it only if this creates a new account.
+    const attribution = link ? undefined : buildSignupAttribution();
     if (provider === 'discord') {
       return new Promise((resolve, reject) => {
-        this.api.discordLogin({ code, link, redirect_uri }).subscribe({
+        this.api.discordLogin({ code, link, redirect_uri, attribution }).subscribe({
           next: (resp) => {
             this.shared.setUserData(resp);
             // Store token separately for HTTP interceptor
@@ -379,7 +382,7 @@ export class AuthService {
     }
     if (provider === 'google') {
       return new Promise((resolve, reject) => {
-        this.api.googleLogin({ code, link, redirect_uri }).subscribe({
+        this.api.googleLogin({ code, link, redirect_uri, attribution }).subscribe({
           next: (resp) => {
             this.shared.setUserData(resp);
             // Store token separately for HTTP interceptor

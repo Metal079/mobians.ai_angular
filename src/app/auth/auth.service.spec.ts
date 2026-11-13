@@ -62,6 +62,23 @@ describe('AuthService', () => {
       expect(localStorage.getItem('authToken')).toBe('new-token');
     });
 
+    it(`sends where the visitor came from with a ${provider} sign-in`, async () => {
+      localStorage.setItem('first-touch', JSON.stringify({ utm_source: 'discord', landing_path: '/video', first_seen_at: '2026-11-01T10:00:00.000Z' }));
+      localStorage.setItem('notifications-user-id', 'browser-id-1234');
+      const login = provider === 'google' ? api.googleLogin : api.discordLogin;
+      login.and.returnValue(of({ status: 'success', is_new_user: true, user_id: 'new-user', token: 'new-token' }));
+      try {
+        await service.exchangeCode(provider, 'test-code');
+      } finally {
+        localStorage.removeItem('first-touch');
+        localStorage.removeItem('notifications-user-id');
+      }
+      expect(login).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+        code: 'test-code', link: false,
+        attribution: { utm_source: 'discord', landing_path: '/video', first_seen_at: '2026-11-01T10:00:00.000Z', client_id: 'browser-id-1234' }
+      }));
+    });
+
     it(`does not track a failed ${provider} exchange`, async () => {
       const record = spyOn(CompletedSignupTracker.prototype, 'record');
       const login = provider === 'google' ? api.googleLogin : api.discordLogin;
@@ -77,6 +94,8 @@ describe('AuthService', () => {
     api.googleLogin.and.returnValue(of(response));
     await service.exchangeCode('google', 'link-code', true);
     expect(record).toHaveBeenCalledOnceWith(response, 'google', true);
+    // Linking a second sign-in method is not a new arrival, so no source is sent.
+    expect(api.googleLogin).toHaveBeenCalledOnceWith(jasmine.objectContaining({ link: true, attribution: undefined }));
   });
 
   it('keeps stored auth state when startup session validation is temporarily unavailable', async () => {
