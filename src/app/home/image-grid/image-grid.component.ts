@@ -13,6 +13,7 @@ import { AprilFoolsService } from 'src/app/april-fools.service';
 import { RingGameComponent } from './ring-game/ring-game.component';
 import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.component';
 import { SignupNudgeComponent } from './signup-nudge/signup-nudge.component';
+import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 
 
 @Component({
@@ -25,6 +26,7 @@ import { SignupNudgeComponent } from './signup-nudge/signup-nudge.component';
 export class ImageGridComponent implements OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
   readonly imageEditor = inject(ImageEditorService);
+  private readonly videoHandoff = inject(VideoHandoffService);
   editWithAI(image: MobiansImage, event: Event) { event.stopPropagation(); this.imageEditor.open({ image }); }
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
@@ -461,6 +463,15 @@ export class ImageGridComponent implements OnDestroy {
     setTimeout(() => {
       try { URL.revokeObjectURL(url); } catch { /* no-op */ }
     }, 0);
+  }
+
+  /** Open the video page with this image as the first frame (signing in first if needed). */
+  async animateImage(image: MobiansImage, event?: Event): Promise<void> {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    await this.videoHandoff.animate(image, () => this.getDownloadBlob(image), 'image_grid');
   }
 
   private async getDownloadBlob(image: MobiansImage): Promise<Blob | null> {

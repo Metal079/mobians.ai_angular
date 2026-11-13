@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, NgZone } from '@angular/core';
 import { fakeAsync, tick, TestBed } from '@angular/core/testing';
 import { CharactersService } from '../characters/characters.service';
+import { VideoHandoffService } from './video-handoff.service';
 import { NEVER, of, Subject, throwError } from 'rxjs';
 import { AccountCtaService } from '../auth/account-cta.service';
 import { AuthService } from '../auth/auth.service';
@@ -16,6 +17,7 @@ describe('VideoComponent', () => {
   let changeDetector: jasmine.SpyObj<ChangeDetectorRef>;
   let accountCta: jasmine.SpyObj<AccountCtaService>;
   let zone: NgZone;
+  let handoff: { take: jasmine.Spy; takePickerRequest: jasmine.Spy };
 
   function createPngFile(name = 'frame.png'): File {
     const base64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -29,7 +31,11 @@ describe('VideoComponent', () => {
   }
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [{ provide: CharactersService, useValue: { takeVideoHandoff: () => null } }] });
+    handoff = { take: jasmine.createSpy('take').and.returnValue(null), takePickerRequest: jasmine.createSpy('takePickerRequest').and.returnValue(false) };
+    TestBed.configureTestingModule({ providers: [
+      { provide: CharactersService, useValue: { takeVideoHandoff: () => null } },
+      { provide: VideoHandoffService, useValue: handoff },
+    ] });
     videoService = jasmine.createSpyObj<VideoGenerationService>('VideoGenerationService', ['listJobs', 'submitJob', 'cancelJob', 'getQuote', 'getConfig']);
     changeDetector = jasmine.createSpyObj<ChangeDetectorRef>('ChangeDetectorRef', ['detectChanges', 'markForCheck']);
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['isLoggedIn', 'updateCredits']);
@@ -37,6 +43,29 @@ describe('VideoComponent', () => {
     zone = { run: (update: () => void) => update() } as NgZone;
 
     component = createComponent();
+  });
+
+  it('starts from an image handed over by the image page', () => {
+    const image = { UUID: 'grid-1', width: 512, height: 512, blob: new Blob(['png'], { type: 'image/png' }) };
+    handoff.take.and.returnValue(image);
+    const selected = spyOn(component, 'onHistoryImageSelected').and.resolveTo();
+    const picker = spyOn(component, 'openHistory');
+    component.acceptHandedImage();
+    expect(selected).toHaveBeenCalledOnceWith(image as any);
+    expect(picker).not.toHaveBeenCalled();
+  });
+
+  it('opens the image-history picker for someone who had to sign in on the way', () => {
+    const picker = spyOn(component, 'openHistory');
+    authService.isLoggedIn.and.returnValue(true);
+    component.acceptHandedImage();
+    expect(picker).not.toHaveBeenCalled();              // nothing was asked for
+    handoff.takePickerRequest.and.returnValue(true);
+    component.acceptHandedImage();
+    expect(picker).toHaveBeenCalledOnceWith('first');
+    authService.isLoggedIn.and.returnValue(false);      // still signed out: the sign-in wall shows instead
+    component.acceptHandedImage();
+    expect(picker).toHaveBeenCalledTimes(1);
   });
 
   it('preserves separate mode prompts and existing uploads when switching', () => {
@@ -719,6 +748,7 @@ describe('VideoComponent length slider rendering', () => {
       imports: [VideoComponent],
       providers: [provideRouter([]),
         { provide: CharactersService, useValue: { takeVideoHandoff: () => null } },
+        { provide: VideoHandoffService, useValue: { take: () => null, takePickerRequest: () => false } },
         { provide: VideoGenerationService, useValue: service },
         { provide: AuthService, useValue: { isLoggedIn: () => true } },
         { provide: AccountCtaService, useValue: {} },

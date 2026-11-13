@@ -7,6 +7,7 @@ import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { SharedService } from 'src/app/shared.service';
 
 import { ImageGridComponent } from './image-grid.component';
+import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 
 describe('ImageGridComponent', () => {
   let component: ImageGridComponent;
@@ -38,6 +39,7 @@ describe('ImageGridComponent', () => {
       providers: [
         { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
         { provide: CharactersService, useValue: { requestSave: () => {} } },
+        { provide: VideoHandoffService, useValue: { animate: jasmine.createSpy('animate').and.resolveTo('opened') } },
         {
           provide: SharedService,
           useValue: sharedServiceStub
@@ -144,6 +146,20 @@ describe('ImageGridComponent', () => {
     finish(new Blob(['png'], { type: 'image/png' }));
     await expansion;
     expect(setReference).not.toHaveBeenCalled();
+  });
+
+  it('hands an image to the video page without also expanding or downloading it', async () => {
+    const animate = TestBed.inject(VideoHandoffService).animate as jasmine.Spy;
+    const image = { UUID: 'grid-1', width: 512, height: 512, url: 'blob:grid-image' } as MobiansImage;
+    const click = new Event('click', { cancelable: true });
+    const stop = spyOn(click, 'stopPropagation');
+    await component.animateImage(image, click);
+    expect(stop).toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledOnceWith(image, jasmine.any(Function), 'image_grid');
+    // The loader it passes is the same one downloads use.
+    const blob = new Blob(['webp'], { type: 'image/webp' });
+    spyOn(window, 'fetch').and.resolveTo(new Response(blob));
+    expect((await animate.calls.mostRecent().args[1]()).type).toBe('image/webp');
   });
 
   it('getDownloadBlob should convert URL-backed WebP blobs to PNG when lossy downloads are disabled', async () => {

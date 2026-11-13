@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CharactersService } from '../characters/characters.service';
+import { VideoHandoffService } from './video-handoff.service';
 import { FormsModule } from '@angular/forms';
 import { Subscription, finalize, fromEvent, interval, merge, switchMap, timeout, timer } from 'rxjs';
 import { AccountCtaService } from '../auth/account-cta.service';
@@ -59,6 +60,7 @@ interface CameraMotionOption {
 })
 export class VideoComponent implements OnInit, OnDestroy {
   private readonly characters = inject(CharactersService);
+  private readonly videoHandoff = inject(VideoHandoffService);
   config: VideoConfig | null = null;
   jobs: VideoJob[] = [];
   firstFrame: SelectedFrame | null = null;
@@ -146,8 +148,7 @@ export class VideoComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const characterImage = this.characters.takeVideoHandoff();
-    if (characterImage) void this.onHistoryImageSelected(characterImage);
+    this.acceptHandedImage();
     this.creditsSubscription = this.authService.credits$.subscribe((credits) => {
       this.runInView(() => this.currentCredits = credits?.credits ?? 0);
     });
@@ -561,6 +562,15 @@ export class VideoComponent implements OnInit, OnDestroy {
     event.preventDefault();
     const file = event.dataTransfer?.files?.[0];
     if (file) await this.setFrame(file, target, 'upload');
+  }
+
+  /** Start from an image chosen with "make a video from this", on My Characters or the image page. */
+  acceptHandedImage(): void {
+    const handedImage = this.characters.takeVideoHandoff() ?? this.videoHandoff.take();
+    const wantsPicker = this.videoHandoff.takePickerRequest();
+    if (handedImage) void this.onHistoryImageSelected(handedImage);
+    // They had to sign in on the way, which dropped the image: offer their image history instead.
+    else if (wantsPicker && this.authService.isLoggedIn()) this.openHistory('first');
   }
 
   openHistory(target: FrameTarget | 'reference'): void {

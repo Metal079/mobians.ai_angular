@@ -57,7 +57,7 @@ export class LoginModalComponent {
   }
 
   // The reason that opened this dialog travels with the sign-in so new accounts can be traced to a prompt.
-  loginDiscord() { this.auth.startLogin('discord', 'login', this.context?.reason); }
-  loginGoogle() { this.auth.startLogin('google', 'login', this.context?.reason); }
+  loginDiscord() { this.auth.startLogin('discord', 'login', this.context?.reason, this.context?.returnPath); }
+  loginGoogle() { this.auth.startLogin('google', 'login', this.context?.reason, this.context?.returnPath); }
   loginAuth0() { this.auth.loginAuth0(); }
 }

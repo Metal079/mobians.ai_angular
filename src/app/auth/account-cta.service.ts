@@ -10,6 +10,8 @@ export interface LoginCtaContext {
   title?: string;
   message?: string;
   requiredCredits?: number;
+  /** Where to land after signing in, when it is not the page the visitor is on. */
+  returnPath?: string;
 }
 
 export type CreditPurchaseCtaReason = 'insufficient-credits' | 'profile-menu' | 'backend-402' | 'generic';

@@ -382,13 +382,13 @@ export class AuthService {
   /**
    * Leave for the provider's sign-in page. `cta` names the prompt that led here
    * (kept for the sign-up report); the page the visitor is on is remembered so the
-   * callback can bring them back to it.
+   * callback can bring them back to it, unless `returnPath` names another page.
    */
-  startLogin(provider: AuthProvider, mode: AuthMode = 'login', cta?: string) {
+  startLogin(provider: AuthProvider, mode: AuthMode = 'login', cta?: string, returnPath?: string) {
     const nonce = this.newNonce();
     this.rememberPendingSignIn({
       nonce, provider, mode, cta,
-      returnPath: safeReturnPath(this.router.url),
+      returnPath: safeReturnPath(returnPath ?? this.router.url),
       startedAt: Date.now()
     });
     const state = encodeURIComponent(`p=${provider}&m=${mode}&n=${nonce}`);

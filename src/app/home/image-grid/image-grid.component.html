@@ -47,7 +47,9 @@
                [attr.loading]="i === 0 ? 'eager' : 'lazy'" decoding="async"
                (click)="inpaintingEnabled || expandImage(i, $event)" [id]="'image' + i">
           <div class="image-actions">
-            <button type="button" class="image-action-btn" (click)="downloadImage(image, $event)"
+            <button type="button" class="image-action-btn" (click)="animateImage(image, $event)" title="Make a video from this image"
+                    [attr.aria-label]="'Make a video from image ' + (i + 1)"><i class="bi bi-camera-reels"></i></button>
+            <button type="button" class="image-action-btn" (click)="downloadImage(image, $event)" title="Download"
                     [attr.aria-label]="'Download image ' + (i + 1)"><i class="bi bi-download"></i></button>
           </div>
         } @else {
