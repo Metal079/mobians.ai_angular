@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Public pages only. Keep in step with the routes in app/app.routes.ts. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://mobians.ai/</loc></url>
+  <url><loc>https://mobians.ai/video</loc></url>
+  <url><loc>https://mobians.ai/characters</loc></url>
+  <url><loc>https://mobians.ai/faq</loc></url>
+</urlset>

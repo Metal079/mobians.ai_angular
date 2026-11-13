@@ -1,8 +1,9 @@
 {
-  "name": "mobians.ai",
-  "short_name": "mobians.ai",
-  "theme_color": "#1976d2",
-  "background_color": "#fafafa",
+  "name": "Mobians.ai",
+  "short_name": "Mobians",
+  "description": "Free AI generator for Sonic-style original characters, furry and anime art: images, edits and video.",
+  "theme_color": "#2fa5e9",
+  "background_color": "#2fa5e9",
   "display": "standalone",
   "scope": "./",
   "start_url": "./",

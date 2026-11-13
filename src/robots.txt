@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /auth/
+
+Sitemap: https://mobians.ai/sitemap.xml
