@@ -97,6 +97,15 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
     });
     this.subscriptions.push(creditsSub);
 
+    // On a phone this panel floats over the lower part of the picture area, where the queue status, the
+    // sign-up card and then the results appear. Make room when a generation starts; the pill reopens it.
+    this.subscriptions.push(this.shared.getGenerationStarted().subscribe(() => {
+      if (!this.isMinimized && this.isPhoneWidth()) {
+        this.isMinimized = true;
+        this.cdr.markForCheck();
+      }
+    }));
+
     // Refresh credits on init if logged in
     if (this.auth.isLoggedIn()) {
       setTimeout(() => {
@@ -171,6 +180,11 @@ export class ProfileMenuComponent implements OnInit, OnDestroy {
 
   toggleMinimize() {
     this.isMinimized = !this.isMinimized;
+  }
+
+  /** Narrow enough that the panel sits on top of the page's single column (its own method so tests can decide). */
+  isPhoneWidth(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
   }
 
   link(provider: 'google' | 'discord') {

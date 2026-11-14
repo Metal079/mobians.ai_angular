@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { GenerationRequest } from 'src/_shared/generation-request.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 
@@ -187,6 +187,17 @@ export class SharedService implements OnDestroy {
 
   getUserDataValue(): any {
     return this._userData.getValue();
+  }
+
+  // A generation was just started on the Image page (the floating Account panel makes room for it on phones).
+  private readonly _generationStarted = new Subject<void>();
+
+  notifyGenerationStarted(): void {
+    this._generationStarted.next();
+  }
+
+  getGenerationStarted(): Observable<void> {
+    return this._generationStarted.asObservable();
   }
 
   // Set the instructions to show/hide

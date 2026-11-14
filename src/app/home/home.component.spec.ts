@@ -15,9 +15,11 @@ describe('HomeComponent', () => {
   let fixture: ComponentFixture<HomeComponent>;
   let editor: any;
   let gridImages: BehaviorSubject<unknown[]>;
+  let generationsStarted: number;
 
   beforeEach(async () => {
     gridImages = new BehaviorSubject<unknown[]>([]);
+    generationsStarted = 0;
     editor = { presentation: signal('dialog'), available: signal(true), context: signal(null),
       refresh: jasmine.createSpy().and.resolveTo(), showInline: jasmine.createSpy().and.callFake(() => editor.presentation.set('inline')),
       showGenerator: jasmine.createSpy().and.callFake(() => editor.presentation.set('hidden')), leaveImagePage: jasmine.createSpy() };
@@ -34,6 +36,7 @@ describe('HomeComponent', () => {
           useValue: {
             getUserData: () => of(null),
             getImages: () => gridImages.asObservable(),
+            notifyGenerationStarted: () => { generationsStarted++; },
             getReferenceImageValue: () => null
           }
         }
@@ -94,6 +97,17 @@ describe('HomeComponent', () => {
     gridImages.next([]);                                        // images cleared
     fixture.detectChanges();
     expect(strip()).toBeNull();
+  });
+
+  it('announces each generation once when it starts (the Account panel makes room for it on phones)', () => {
+    fixture.detectChanges();
+    component.onShowLoadingChange(true);
+    component.onShowLoadingChange(true);                        // still the same job waiting
+    expect(generationsStarted).toBe(1);
+    component.onShowLoadingChange(false);
+    expect(generationsStarted).toBe(1);
+    component.onShowLoadingChange(true);                        // the next one
+    expect(generationsStarted).toBe(2);
   });
 
   it('switches between Image sections without destroying the generator', async () => {

@@ -131,6 +131,7 @@ export class HomeComponent {
   }
 
   onShowLoadingChange(showLoading: boolean) {
+    if (showLoading && !this.showLoading) this.sharedService.notifyGenerationStarted();
     this.showLoading = showLoading;
   }
 
