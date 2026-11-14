@@ -27,8 +27,10 @@ export const DISCORD_INVITE_URL = 'https://discord.gg/mobians';
         @if (shown === 'thanks') {
           <div class="heading"><i class="bi bi-discord" aria-hidden="true"></i> {{ amount() }} credits added</div>
           <p>Thanks for joining! See you in the server.</p>
-          @if (keptApart()) {
+          @if (keptApart() === 'has_own_account') {
             <p>Your Discord account stays with your other Mobians account; the two can't be merged.</p>
+          } @else if (keptApart() === 'different_connected') {
+            <p>This account keeps the Discord account it already had connected.</p>
           }
         } @else {
           <button type="button" class="heading toggle" [attr.aria-expanded]="isOpen()" (click)="open.set(!isOpen())">
@@ -38,7 +40,14 @@ export const DISCORD_INVITE_URL = 'https://discord.gg/mobians';
           @if (isOpen()) {
             <p>{{ hasDiscord() ? 'Join the server, then claim.' : 'Join the server and connect your Discord account.' }} One time only.</p>
             @if (shown === 'not-member') {
-              <p class="warn" role="status">We couldn't see you in the server yet. Join it, then claim again.</p>
+              <p class="warn" role="status">
+                @if (checkedName(); as name) {
+                  We couldn't see the Discord account <strong>{{ name }}</strong> in the server. Join it with that account
+                  (or pick the account you joined with when Discord asks), then claim again.
+                } @else {
+                  We couldn't see you in the server yet. Join it, then claim again.
+                }
+              </p>
             }
             <div class="steps">
               <a [href]="invite" target="_blank" rel="noopener" (click)="opened()">1. Open Discord</a>
@@ -88,7 +97,17 @@ export class DiscordRewardCardComponent {
    * its own Mobians account (the backend never merges accounts). Said once, so "Link Discord" still being
    * offered afterwards is not a surprise.
    */
-  readonly keptApart = computed(() => this.auth.authOutcome()?.response?.['linked'] === false);
+  readonly keptApart = computed(() => {
+    const response = this.auth.authOutcome()?.response;
+    if (response?.['linked'] !== false) return null;
+    return response['not_connected_reason'] === 'different_connected' ? 'different_connected' : 'has_own_account';
+  });
+
+  /** The Discord account Discord said they signed in with, so someone who picked the wrong one can tell. */
+  readonly checkedName = computed(() => {
+    const name = this.auth.authOutcome()?.response?.['discord_reward']?.discord_name;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
+  });
 
   /** What to show: nothing, the offer, the offer with "not in the server yet", or a thank-you. */
   readonly view = computed<'offer' | 'not-member' | 'thanks' | null>(() => {

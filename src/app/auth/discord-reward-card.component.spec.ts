@@ -93,6 +93,25 @@ describe('DiscordRewardCardComponent', () => {
     expect(fixture.nativeElement.querySelector('.steps')).toBeNull();
   });
 
+  it('thanks someone whose account already had another Discord connected, and says that one stays', () => {
+    credits.next(balance({ claimed: true, credits: 100 }));
+    const paid = signInResult('granted', { new_balance: 300 });
+    paid.response['linked'] = false;
+    paid.response['not_connected_reason'] = 'different_connected';
+    outcome.set(paid);
+    const fixture = create(true, true);
+    expect(text(fixture)).toContain('100 credits added');
+    expect(text(fixture)).toContain('This account keeps the Discord account it already had connected.');
+    expect(text(fixture)).not.toContain('other Mobians account');
+  });
+
+  it('names the Discord account that was checked when it is not in the server', () => {
+    outcome.set(signInResult('not_member', { discord_name: 'mrrandom2020' }));
+    const fixture = create(true, true);
+    expect(text(fixture)).toContain("We couldn't see the Discord account mrrandom2020 in the server.");
+    expect(text(fixture)).toContain('pick the account you joined with');
+  });
+
   it('appears when the panel learns the visitor is signed in after it first rendered', () => {
     const fixture = create(false);
     expect(text(fixture)).toBe('');
