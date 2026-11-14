@@ -43,7 +43,7 @@ export class NotificationService {
   public userId: string;
   private readonly apiBaseUrl = environment.apiBaseUrl;
 
-  /** Whether the person switched notifications on for this device (the Options checkbox and the wait screen share it). */
+  /** Whether the person switched notifications on for this device (Account panel, the wait screen's "Notify me", What's new). */
   readonly enabled = signal(this.readEnabled());
   /** The switches the server holds for this device; null until it has answered or when not subscribed. */
   readonly preferences = signal<PushPreferences | null>(null);
@@ -70,6 +70,7 @@ export class NotificationService {
         void this.sendSubscriptionToServer(subscription);
       }
     });
+    if (this.enabled()) void this.restore();
 
     this.swPush.notificationClicks.subscribe(({ action, notification }) => {
       const category = notification?.data?.category;
@@ -123,6 +124,27 @@ export class NotificationService {
       this.storeEnabled(false);
     }
     return subscribed;
+  }
+
+  /** Finished images and videos are switched on for this device (assumed on until the server has answered). */
+  jobsOn(): boolean {
+    return this.enabled() && (this.preferences()?.jobs ?? true);
+  }
+
+  /**
+   * On a visit: a device switched on here stays subscribed, and its switches stay
+   * as the person left them. A working subscription is re-posted by the
+   * constructor without any switches; this only replaces one the browser dropped
+   * or that was made with an old server key (a new subscription gets the
+   * server's defaults: finished jobs and news on, reminders off).
+   */
+  private async restore(): Promise<void> {
+    const existing = await firstValueFrom(this.swPush.subscription);
+    if (!this.enabled() || (existing && this.hasCurrentVapidPublicKey())) return;
+    if (!await this.subscribeToNotifications()) {
+      this.enabled.set(false);
+      this.storeEnabled(false);
+    }
   }
 
   /**

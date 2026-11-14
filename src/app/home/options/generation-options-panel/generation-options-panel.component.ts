@@ -50,9 +50,6 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Input() hiresEnabled = false;
   @Output() hiresEnabledChange = new EventEmitter<boolean>();
 
-  @Input() enableNotifications = false;
-  @Output() enableNotificationsChange = new EventEmitter<boolean>();
-
   @Input() isLoggedIn = false;
   @Input() referenceImage?: MobiansImage;
 
@@ -65,7 +62,6 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   @Output() saveSettings = new EventEmitter<void>();
   @Output() fastPassCodeChange = new EventEmitter<Event>();
   @Output() hiresToggleChange = new EventEmitter<boolean>();
-  @Output() enableNotification = new EventEmitter<void>();
   @Output() resetSessionStorage = new EventEmitter<void>();
   @Output() deleteAllImages = new EventEmitter<void>();
   @Output() downloadAllImages = new EventEmitter<void>();
@@ -128,12 +124,6 @@ export class GenerationOptionsPanelComponent implements OnInit, OnChanges {
   onHiresEnabledChange(enabled: boolean) {
     this.hiresEnabledChange.emit(enabled);
     this.hiresToggleChange.emit(enabled);
-  }
-
-  onEnableNotificationsChange(enabled: boolean) {
-    this.enableNotificationsChange.emit(enabled);
-    this.enableNotification.emit();
-    this.saveSettings.emit();
   }
 
   private ensureRegionalConfig() {

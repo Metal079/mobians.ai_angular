@@ -11,7 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { takeWhile, takeUntil, finalize, exhaustMap, tap, retryWhen, scan, delayWhen, timeout } from 'rxjs/operators';
 import { SharedService } from 'src/app/shared.service';
 import { MessageService } from 'primeng/api';
-import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
+import { v5 as uuidv5 } from 'uuid';
 import { NotificationService } from 'src/app/notification.service';
 import { SwPush } from '@angular/service-worker';
 import { environment } from 'src/environments/environment';
@@ -293,7 +293,6 @@ export class OptionsComponent implements OnInit {
   showStrength: boolean = false;
   showInpainting: boolean = false;
   showInpaintingCanvas: boolean = false;
-  enableNotifications: boolean = false;
   queuePosition?: number;
   images: MobiansImage[] = [];
   aspectRatio: AspectRatio = { width: 512, height: 512, model: "novaMobianXL_v20", aspectRatio: "square" };
@@ -424,12 +423,6 @@ export class OptionsComponent implements OnInit {
         this.showMigration = false;
       }
     );
-
-    // The wait screen's "Notify me" button and this page's checkbox are one switch.
-    effect(() => {
-      const on = this.notificationService.enabled();
-      if (on !== this.enableNotifications) this.enableNotifications = on;
-    });
 
     window.addEventListener('storage', this.onJobStorageChange);
     window.addEventListener('online', this.onRecoveryOpportunity);
@@ -1120,9 +1113,6 @@ export class OptionsComponent implements OnInit {
     localStorage.setItem("dark-input-fields", this.darkInputFields.toString());
     this.applyInputStyleToBody(this.darkInputFields);
 
-    // Save notifications toggle
-    localStorage.setItem("notifications-enabled", this.enableNotifications.toString());
-
     if (this.generationRequest.dynamic_prompting?.enabled) {
       localStorage.setItem("dynamic-prompting", JSON.stringify(this.generationRequest.dynamic_prompting));
     } else {
@@ -1182,15 +1172,6 @@ export class OptionsComponent implements OnInit {
       // Default for new users: WebP images enabled
       this.generationRequest.lossy_images = true;
     }
-    if (localStorage.getItem("notifications-enabled") != null) {
-      this.enableNotifications = localStorage.getItem("notifications-enabled") == 'true';
-      if (this.enableNotifications) {
-        // Restore userId and resubscribe
-        const storedId = localStorage.getItem('notifications-user-id');
-        if (storedId) this.notificationService.userId = storedId;
-        this.enableNotification();
-      }
-    }
     if (localStorage.getItem("dynamic-prompting") != null) {
       try {
         this.generationRequest.dynamic_prompting = this.normalizeDynamicPromptingConfig(
@@ -1232,8 +1213,8 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem('mobians:lora-sort');
     localStorage.removeItem('mobians:lora-favorites-only');
     localStorage.removeItem('lossy-images');
-    localStorage.removeItem('notifications-enabled');
-    localStorage.removeItem('notifications-user-id');
+    // Notifications are not reset here: they belong to the Account panel, and the browser id
+    // ('notifications-user-id') is what finds this browser's finished jobs and first visit.
     localStorage.removeItem('hires-enabled');
     localStorage.removeItem('dynamic-prompting');
     this.generationRequest.prompt = "";
@@ -1251,7 +1232,6 @@ export class OptionsComponent implements OnInit {
     this.generationRequest.lossy_images = true;
     this.generationRequest.regional_prompting = { enabled: false, regions: [] };
     this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig();
-    this.enableNotifications = false;
     this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
     this.loraResetToken += 1;
@@ -1892,7 +1872,7 @@ export class OptionsComponent implements OnInit {
             return;
           }
           // The push itself now comes from the server for everyone; the page only plays the sound.
-          if (this.enableNotifications) {
+          if (this.notificationService.jobsOn()) {
             this.notificationService.playDing();
           }
           if (jobComplete) {
@@ -2317,23 +2297,6 @@ export class OptionsComponent implements OnInit {
     else {
 
     }
-  }
-
-  enableNotification() {
-    if (this.enableNotifications) {
-      // Reuse existing userId or load from storage; generate if missing
-      let userId = this.notificationService.userId || localStorage.getItem('notifications-user-id');
-      if (!userId) {
-        userId = uuidv4();
-        localStorage.setItem('notifications-user-id', userId);
-      }
-      this.notificationService.userId = userId;
-    }
-    // The service owns the on/off state (the wait screen's "Notify me" button shares it):
-    // on subscribes this browser, off unsubscribes it and deletes the server-side row.
-    void this.notificationService.setEnabled(this.enableNotifications).then(subscribed => {
-      if (this.enableNotifications && !subscribed) this.enableNotifications = false;
-    });
   }
 
   openImageModal() {

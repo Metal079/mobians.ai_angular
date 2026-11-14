@@ -158,6 +158,7 @@ class NotificationServiceStub {
   enabled = signal(false);
   subscribeToNotifications() {}
   setEnabled(on: boolean) { this.enabled.set(on); return Promise.resolve(on); }
+  jobsOn() { return false; }
 }
 class SwPushStub {}
 class DialogServiceStub {}
@@ -1338,6 +1339,24 @@ describe('OptionsComponent', () => {
     expect(component.panelTheme).toBe('navy');
     expect(component.generationRequest.model).toBe('Anima-baseV1');
     expect(component.generationRequest.guidance_scale).toBe(6);
+  });
+
+  it('leaves notifications alone: loading, saving and resetting options never change them', async () => {
+    (component as any).modelSettings = [];
+    component.models_types = {};
+    const notifications = TestBed.inject(NotificationService) as unknown as NotificationServiceStub;
+    const setEnabled = spyOn(notifications, 'setEnabled').and.callThrough();
+    localStorage.setItem('notifications-enabled', 'true');
+    localStorage.setItem('notifications-user-id', 'browser-id-1234');
+
+    await component.loadSettings();
+    component.saveSettings();
+    spyOn(window, 'confirm').and.returnValue(true);
+    component.resetSessionStorage();
+
+    expect(setEnabled).not.toHaveBeenCalled();             // turning on again would re-tick switches the person turned off
+    expect(localStorage.getItem('notifications-enabled')).toBe('true');
+    expect(localStorage.getItem('notifications-user-id')).toBe('browser-id-1234');
   });
 
   it("restores 606's theme and applies it to the page", async () => {

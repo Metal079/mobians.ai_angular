@@ -326,14 +326,7 @@
               </div>
             }
 
-            <!-- Notifications -->
-            <div class="d-flex justify-content-start mb-3">
-              <div class="form-check me-3">
-                <input class="form-check-input" type="checkbox" [ngModel]="enableNotifications"
-                  (ngModelChange)="onEnableNotificationsChange($event)" id="notification">
-                  <label class="form-check-label" for="notification">Send Notification When Image Completes</label>
-                </div>
-              </div>
+              <!-- Notifications are switched on and off in the Account panel (app-notification-settings). -->
 
               <!-- Toggle to return webp images isntead of png, (much smaller image sizes!) -->
               <div class="d-flex justify-content-start mb-3">

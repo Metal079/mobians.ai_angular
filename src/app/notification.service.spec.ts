@@ -249,6 +249,51 @@ describe('NotificationService', () => {
       expect('preferences' in lastBody()).toBeFalse();
     });
 
+    it('a visit by a switched-on device leaves its switches as they were (none sent, nothing re-ticked)', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      postResponse = { preferences: { jobs: false, reminders: true, news: false } };
+      setupService(current(), postResponse);
+      await new Promise(resolve => setTimeout(resolve));
+      expect(postCalls.length).toBe(1);
+      expect('preferences' in lastBody()).toBeFalse();
+      expect(requestSubscriptionCalls).toEqual([]);
+      expect(service.enabled()).toBeTrue();
+      expect(service.preferences()).toEqual({ jobs: false, reminders: true, news: false });
+    });
+
+    it('a switched-on device whose subscription the browser dropped is subscribed again, without sending switches', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      setupService(null);
+      requestSubscriptionResult = current();
+      await new Promise(resolve => setTimeout(resolve));
+      expect(requestSubscriptionCalls.length).toBe(1);
+      expect(postCalls.map(call => call.url)).toEqual([`${environment.apiBaseUrl}/subscribe`]);
+      expect('preferences' in lastBody()).toBeFalse();       // the server's defaults, same as turning on
+      expect(service.enabled()).toBeTrue();
+    });
+
+    it('a switched-on device that cannot be subscribed again shows as off', async () => {
+      localStorage.setItem('notifications-enabled', 'true');
+      spyOn(console, 'error');
+      setupService(null);                                   // requestSubscription will throw
+      await new Promise(resolve => setTimeout(resolve));
+      expect(service.enabled()).toBeFalse();
+      expect(localStorage.getItem('notifications-enabled')).toBe('false');
+    });
+
+    it('jobsOn follows the finished-jobs switch, and is off when notifications are off', () => {
+      setupService(null);
+      expect(service.jobsOn()).toBeFalse();
+      service.enabled.set(true);
+      expect(service.jobsOn()).toBeTrue();                  // assumed on until the server answers
+      service.preferences.set({ jobs: false, reminders: false, news: true });
+      expect(service.jobsOn()).toBeFalse();
+      service.preferences.set({ jobs: true, reminders: false, news: false });
+      expect(service.jobsOn()).toBeTrue();
+    });
+
     it('does not claim to be on when the browser refuses permission', async () => {
       setupService(null);                                   // requestSubscription will throw
       spyOn(console, 'error');
