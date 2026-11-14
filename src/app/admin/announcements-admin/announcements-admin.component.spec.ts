@@ -99,7 +99,7 @@ describe('AnnouncementsAdminComponent', () => {
     await start();
     buttons('Publish')[0].click();
     fixture.detectChanges();
-    expect(text()).toContain('Reaches the 12 devices that asked for news');
+    expect(text()).toContain('Reaches the 12 devices with "New features" switched on');
     expect(component.alsoPush).toBeFalse();
     expect(component.alsoDiscord).toBeFalse();
     api.adminPublish.and.resolveTo({ announcement: post(1, { status: 'published' }), push: 'not_requested', discord: 'not_requested' });
@@ -108,7 +108,7 @@ describe('AnnouncementsAdminComponent', () => {
     expect(api.adminPublish).toHaveBeenCalledOnceWith(1, { send_push: false, post_to_discord: false });
     expect(text()).toContain('Published on the site.');
     expect(text()).not.toContain('push is going out');
-    expect(api.refresh).toHaveBeenCalled();
+    expect(api.refresh).toHaveBeenCalledWith(true);          // skipping the browser's stored copy of the list
   });
 
   it('reports a queued push and a Discord post', async () => {

@@ -5,7 +5,7 @@ import { AdminAnnouncement, AnnouncementDraft, WhatsNewService } from 'src/app/w
 
 /**
  * Admin tab for "What's new": write a post, keep it as a draft, publish it to
- * the site, and optionally push it to devices that asked for news and post it
+ * the site, and optionally push it to devices with news switched on and post it
  * to the Discord announcements channel. The backend refuses a second news push
  * within 72 hours and only ever posts to Discord once per post.
  */
@@ -106,7 +106,7 @@ export class AnnouncementsAdminComponent implements OnInit {
     await this.run(async () => {
       const result = await this.whatsNew.adminPublish(post.id, { send_push: this.alsoPush, post_to_discord: this.alsoDiscord });
       const parts = ['Published on the site.'];
-      if (result.push === 'queued') parts.push(`A push is going out to devices that asked for news (${this.newsDevices()} right now), in their daytime.`);
+      if (result.push === 'queued') parts.push(`A push is going out to devices with "New features" switched on (${this.newsDevices()} right now): within about 10 minutes for those in their daytime, the rest when their morning comes.`);
       if (result.discord === 'posted') parts.push('Posted to Discord.');
       if (result.discord === 'already_posted') parts.push('It was already on Discord, so it was not posted again.');
       if (result.discord === 'not_configured') parts.push('Discord posting is not set up on the server, so nothing was posted there.');
@@ -114,7 +114,7 @@ export class AnnouncementsAdminComponent implements OnInit {
         result.discord === 'failed' ? parts.join(' ') + ' Discord did not accept the post; you can publish again to retry.' : parts.join(' '));
       this.publishing.set(null);
       await this.reload();
-      await this.whatsNew.refresh();
+      await this.whatsNew.refresh(true);
     }, "Couldn't publish the post.");
   }
 
@@ -123,7 +123,7 @@ export class AnnouncementsAdminComponent implements OnInit {
       await this.whatsNew.adminArchive(post.id);
       this.say('ok', 'Taken off the site. It is kept here and can be published again.');
       await this.reload();
-      await this.whatsNew.refresh();
+      await this.whatsNew.refresh(true);
     }, "Couldn't archive the post.");
   }
 
@@ -138,7 +138,7 @@ export class AnnouncementsAdminComponent implements OnInit {
       if (this.editingId() === post.id) this.startNew();
       this.say('ok', 'Deleted.');
       await this.reload();
-      await this.whatsNew.refresh();
+      await this.whatsNew.refresh(true);
     }, "Couldn't delete the post.");
   }
 

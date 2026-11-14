@@ -32,7 +32,7 @@ export interface AdminAnnouncement extends Announcement {
 
 export interface AdminAnnouncementList {
   announcements: AdminAnnouncement[];
-  /** Devices that asked for news notifications: how far a push would reach. */
+  /** Devices with news notifications switched on: how far a push would reach. */
   news_devices: number;
   discord_configured: boolean;
 }
@@ -70,11 +70,18 @@ export class WhatsNewService {
     void this.refresh();
   }
 
-  async refresh(): Promise<void> {
+  /**
+   * Fetch the published posts. The list is public and the same for everyone, sent without credentials, and
+   * the server lets browsers reuse it for five minutes. `afterChange` is for the admin who has just
+   * published or removed a post: it skips the browser's stored copy and replaces it, so the change shows at
+   * once in their own browser (and stays shown if they reload).
+   */
+  async refresh(afterChange = false): Promise<void> {
     try {
-      // Public and the same for everyone: no credentials, so the browser can cache it.
-      const response = await firstValueFrom(this.http.get<{ announcements: Announcement[] }>(
-        `${this.base}/announcements`, { context: new HttpContext().set(SKIP_AUTH, true) }));
+      const url = `${this.base}/announcements`;
+      const response: { announcements: Announcement[] } | null = afterChange
+        ? await (await fetch(url, { cache: 'reload' })).json()
+        : await firstValueFrom(this.http.get<{ announcements: Announcement[] }>(url, { context: new HttpContext().set(SKIP_AUTH, true) }));
       this.posts.set(Array.isArray(response?.announcements) ? response.announcements : []);
     } catch {
       this.loadStarted = false;      // allow another try on the next page

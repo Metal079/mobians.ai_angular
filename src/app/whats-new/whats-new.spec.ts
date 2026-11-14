@@ -81,6 +81,16 @@ describe("What's new", () => {
       nextHttp.verify();
     });
 
+    it("after an admin's change, fetches past the browser's stored copy and replaces it", async () => {
+      const fresh = [{ id: 9, title: 'Just published', body: 'Now', link_url: null, link_label: null, published_at: '2026-11-13T00:00:00Z' }];
+      const fetched = spyOn(window, 'fetch').and.resolveTo(new Response(JSON.stringify({ announcements: fresh }), { headers: { 'content-type': 'application/json' } }));
+      const service = TestBed.inject(WhatsNewService);
+      await service.refresh(true);
+      expect(fetched).toHaveBeenCalledOnceWith(`${environment.apiBaseUrl}/announcements`, { cache: 'reload' });
+      expect(service.posts().map(post => post.title)).toEqual(['Just published']);
+      http.expectNone(`${environment.apiBaseUrl}/announcements`);            // the ordinary, cacheable request was not used
+    });
+
     it('shows nothing and can try again when the request fails', async () => {
       service.load();
       http.expectOne(url).flush('down', { status: 503, statusText: 'Unavailable' });

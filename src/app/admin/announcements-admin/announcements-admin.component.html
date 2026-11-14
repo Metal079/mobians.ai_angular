@@ -43,7 +43,7 @@
       <label class="check">
         <input type="checkbox" name="alsoPush" [(ngModel)]="alsoPush">
         <span>Also send a push notification
-          <small>Reaches the {{ newsDevices() }} device{{ newsDevices() === 1 ? '' : 's' }} that asked for news, in their daytime. Not allowed within 72 hours of the last one.</small>
+          <small>Reaches the {{ newsDevices() }} device{{ newsDevices() === 1 ? '' : 's' }} with "New features" switched on, in their daytime. Not allowed within 72 hours of the last one.</small>
         </span>
       </label>
       <label class="check" [class.unavailable]="!discordConfigured()">
