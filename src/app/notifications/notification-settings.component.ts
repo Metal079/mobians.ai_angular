@@ -12,6 +12,16 @@ import { NotificationService, PushPreferences } from '../notification.service';
  * It is one line until opened, so it does not make the floating panel taller for
  * people who never touch it.
  */
+const OFFER_DISMISSED_KEY = 'reminder-offer-dismissed';
+
+function readOfferDismissed(): boolean {
+  try {
+    return localStorage.getItem(OFFER_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
@@ -50,10 +60,11 @@ import { NotificationService, PushPreferences } from '../notification.service';
         }
 
         <!-- Shown without opening the section: it is offered at the one moment it is relevant. -->
-        @if (offerReminder && signedIn && !value('reminders') && !notifications.blockedByBrowser) {
+        @if (offerReminder && signedIn && !value('reminders') && !notifications.blockedByBrowser && !offerDismissed()) {
           <div class="offer" role="status">
             <span>Don't lose your streak.</span>
-            <button type="button" [disabled]="busy()" (click)="remindMe()">Remind me before it resets</button>
+            <button type="button" class="remind" [disabled]="busy()" (click)="remindMe()">Remind me before it resets</button>
+            <button type="button" class="dismiss" aria-label="No thanks" title="No thanks" (click)="dismissOffer()"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
           </div>
         }
         @if (message()) { <p class="note" role="status">{{ message() }}</p> }
@@ -70,8 +81,11 @@ import { NotificationService, PushPreferences } from '../notification.service';
     .switch-row input { margin-top: .2rem; flex: none; width: 1rem; height: 1rem; }
     .switch-row small { display: block; font-size: .72rem; opacity: .75; line-height: 1.3; }
     .switch-row.unavailable { cursor: default; opacity: .7; }
-    .turn-on, .offer button { justify-self: start; padding: .3rem .7rem; border-radius: 6px; border: 1px solid #0f9d6b; background: #10b981; color: #fff; font-weight: 600; cursor: pointer; }
-    .offer { display: grid; gap: .3rem; padding: .45rem .55rem; border-radius: 8px; background: rgb(16 185 129 / 12%); }
+    .turn-on, .offer .remind { justify-self: start; padding: .3rem .7rem; border-radius: 6px; border: 1px solid #0f9d6b; background: #10b981; color: #fff; font-weight: 600; cursor: pointer; }
+    .offer { position: relative; display: grid; gap: .3rem; padding: .45rem 2rem .45rem .55rem; border-radius: 8px; background: rgb(16 185 129 / 12%); }
+    .offer .dismiss { position: absolute; top: .2rem; right: .2rem; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; padding: 0;
+      border: 0; border-radius: 6px; background: none; color: inherit; font-size: .75rem; opacity: .6; cursor: pointer; }
+    .offer .dismiss:hover { opacity: 1; background: rgb(0 0 0 / 6%); }
     button:disabled { opacity: .6; cursor: default; }
     button:focus-visible, input:focus-visible { outline: 2px solid #0f9d6b; outline-offset: 2px; }
   `]
@@ -86,6 +100,8 @@ export class NotificationSettingsComponent {
   readonly expanded = signal(false);
   readonly busy = signal(false);
   readonly message = signal('');
+  /** The person closed the reminder offer. Remembered in this browser, because it would otherwise come back after every claim. */
+  readonly offerDismissed = signal(readOfferDismissed());
 
   /** Until the server has answered, a subscribed device is assumed to have what every device starts with. */
   value(name: keyof PushPreferences): boolean {
@@ -127,6 +143,15 @@ export class NotificationSettingsComponent {
         : await this.notifications.setEnabled(true, { reminders: true });
       this.message.set(done ? "Done. We'll remind you at most once a day." : this.refusedMessage());
     });
+  }
+
+  dismissOffer(): void {
+    this.offerDismissed.set(true);
+    try {
+      localStorage.setItem(OFFER_DISMISSED_KEY, '1');
+    } catch {
+      // Storage unavailable: it stays closed for this visit only.
+    }
   }
 
   private refusedMessage(): string {

@@ -40,6 +40,7 @@ class FakeNotifications {
 }
 
 describe('notification controls', () => {
+  afterAll(() => localStorage.removeItem('reminder-offer-dismissed'));
   let notifications: FakeNotifications;
   let router: jasmine.SpyObj<Router>;
   let whatsNew: jasmine.SpyObj<WhatsNewService>;
@@ -47,6 +48,7 @@ describe('notification controls', () => {
   const settle = async (fixture: ComponentFixture<unknown>) => { await fixture.whenStable(); fixture.detectChanges(); };
 
   beforeEach(() => {
+    localStorage.removeItem('reminder-offer-dismissed');
     notifications = new FakeNotifications();
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
@@ -186,6 +188,21 @@ describe('notification controls', () => {
       notifications.enabled.set(true);
       notifications.preferences.set({ jobs: true, reminders: true, news: false });
       expect(create(true, true).nativeElement.querySelector('.offer')).toBeNull();
+    });
+
+    it('the reminder offer can be closed, and stays closed after later claims in this browser', async () => {
+      const fixture = create(true, true);
+      fixture.nativeElement.querySelector('.offer .dismiss').click();
+      await settle(fixture);
+      expect(fixture.nativeElement.querySelector('.offer')).toBeNull();
+      expect(notifications.asked).toEqual([]);                                  // closing it changes no setting
+      expect(localStorage.getItem('reminder-offer-dismissed')).toBe('1');
+      expect(create(true, true).nativeElement.querySelector('.offer')).toBeNull();  // the next claim, or a reload
+      notifications.enabled.set(true);
+      notifications.preferences.set({ jobs: true, reminders: false, news: true });
+      const opened = create(true, true, true);
+      expect(opened.nativeElement.querySelector('.offer')).toBeNull();
+      expect(text(opened)).toContain('Daily bonus reminder');                    // the switch is still there
     });
   });
 
