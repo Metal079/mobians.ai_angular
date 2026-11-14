@@ -1,19 +1,20 @@
 import { Component, OnInit, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { MutableCategory, NotificationService } from '../notification.service';
+import { WhatsNewService } from '../whats-new/whats-new.service';
 
 /**
- * The way out for browsers whose notifications have no buttons (Safari, iOS and
- * some others). Reminder and news notifications normally carry a "Turn off"
- * button; where that is not shown, tapping the notification brings the site
- * forward and this bar offers the same thing in one tap. A tap that opens a new
- * tab arrives with ?push=reminders or ?push=news; a tap while the site is
+ * What happens when a reminder or news notification is tapped. A tap that opens
+ * a new tab arrives with ?push=reminders or ?push=news; a tap while the site is
  * already open is reported by the service worker (NotificationService.openedFrom).
+ *
+ * - News: the What's new dialog opens with the posts (its own switch turns news off).
+ * - Reminders: this bar, the way out for browsers whose notifications have no
+ *   "Turn off" button (Safari, iOS and some others), offers it in one tap.
  */
-type Category = MutableCategory;
+type Category = 'reminders';
 const WORDING: Record<Category, { question: string; action: string; done: string }> = {
-  reminders: { question: 'You opened a daily bonus reminder.', action: 'Turn off these reminders', done: 'Daily bonus reminders are off on this device.' },
-  news: { question: 'You opened a news notification.', action: 'Turn off news notifications', done: 'News notifications are off on this device.' }
+  reminders: { question: 'You opened a daily bonus reminder.', action: 'Turn off these reminders', done: 'Daily bonus reminders are off on this device.' }
 };
 
 @Component({
@@ -44,6 +45,7 @@ const WORDING: Record<Category, { question: string; action: string; done: string
 })
 export class PushOptOutComponent implements OnInit {
   private readonly notifications = inject(NotificationService);
+  private readonly whatsNew = inject(WhatsNewService);
   private readonly router = inject(Router);
   readonly category = signal<Category | null>(null);
   readonly busy = signal(false);
@@ -53,14 +55,24 @@ export class PushOptOutComponent implements OnInit {
     effect(() => {
       const tapped = this.notifications.openedFrom();
       if (!tapped) return;
-      this.finished.set('');
-      this.category.set(tapped);
+      this.arrivedFrom(tapped);
     });
   }
 
   ngOnInit(): void {
     const asked = new URLSearchParams(this.addressQuery()).get('push');
-    if (asked === 'reminders' || asked === 'news') this.category.set(asked);
+    if (asked === 'reminders' || asked === 'news') this.arrivedFrom(asked);
+  }
+
+  private arrivedFrom(tapped: MutableCategory): void {
+    if (tapped === 'news') {
+      this.notifications.openedFrom.set(null);
+      this.forgetAddress();
+      void this.whatsNew.openFromNotification();
+      return;
+    }
+    this.finished.set('');
+    this.category.set(tapped);
   }
 
   /** The query string the page was opened with (its own method so tests can supply one). */

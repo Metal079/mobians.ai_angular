@@ -5,6 +5,7 @@ import { MutableCategory, NotificationService, PushPreferences } from '../notifi
 import { NotificationSettingsComponent } from './notification-settings.component';
 import { NotifyMeComponent } from './notify-me.component';
 import { PushOptOutComponent } from './push-opt-out.component';
+import { WhatsNewService } from '../whats-new/whats-new.service';
 
 /** Stands in for the service: records what the UI asked for and lets a test decide the outcome. */
 class FakeNotifications {
@@ -41,6 +42,7 @@ class FakeNotifications {
 describe('notification controls', () => {
   let notifications: FakeNotifications;
   let router: jasmine.SpyObj<Router>;
+  let whatsNew: jasmine.SpyObj<WhatsNewService>;
   const text = (fixture: ComponentFixture<unknown>) => (fixture.nativeElement as HTMLElement).textContent!.replace(/\s+/g, ' ').trim();
   const settle = async (fixture: ComponentFixture<unknown>) => { await fixture.whenStable(); fixture.detectChanges(); };
 
@@ -48,8 +50,11 @@ describe('notification controls', () => {
     notifications = new FakeNotifications();
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
+    whatsNew = jasmine.createSpyObj<WhatsNewService>('WhatsNewService', ['openFromNotification']);
+    whatsNew.openFromNotification.and.resolveTo();
     TestBed.configureTestingModule({
-      providers: [{ provide: NotificationService, useValue: notifications }, { provide: Router, useValue: router }]
+      providers: [{ provide: NotificationService, useValue: notifications }, { provide: Router, useValue: router },
+        { provide: WhatsNewService, useValue: whatsNew }]
     });
   });
 
@@ -242,32 +247,33 @@ describe('notification controls', () => {
       expect(router.navigate).toHaveBeenCalledWith([], { queryParams: { push: null }, queryParamsHandling: 'merge', replaceUrl: true });
     });
 
-    it('also appears when a notification is tapped while the site is already open', async () => {
+    it('also appears when a reminder is tapped while the site is already open, and can simply be closed', async () => {
       const fixture = arrive('');
       expect(text(fixture)).toBe('');
-      notifications.openedFrom.set('news');                  // reported by the service worker
-      fixture.detectChanges();
-      expect(text(fixture)).toContain('You opened a news notification.');
-      fixture.nativeElement.querySelector('.act').click();
-      await settle(fixture);
-      expect(notifications.asked).toEqual([['setPreferences', { news: false }]]);
-      fixture.nativeElement.querySelector('.close').click();
-      await settle(fixture);
-      expect(text(fixture)).toBe('');
-      expect(notifications.openedFrom()).toBeNull();
-      notifications.openedFrom.set('reminders');             // a later tap brings it back, with fresh wording
+      notifications.openedFrom.set('reminders');             // reported by the service worker
       fixture.detectChanges();
       expect(text(fixture)).toContain('You opened a daily bonus reminder.');
-    });
-
-    it('does the same for news, and can simply be closed', async () => {
-      const fixture = arrive('?push=news');
-      expect(text(fixture)).toContain('Turn off news notifications');
       fixture.nativeElement.querySelector('.close').click();
       await settle(fixture);
       expect(text(fixture)).toBe('');
       expect(notifications.asked).toEqual([]);
-      expect(router.navigate).toHaveBeenCalled();
+      expect(notifications.openedFrom()).toBeNull();
+      notifications.openedFrom.set('reminders');             // a later tap brings it back
+      fixture.detectChanges();
+      expect(text(fixture)).toContain('You opened a daily bonus reminder.');
+    });
+
+    it('a news notification opens the posts instead of the bar, from a new tab or an open one', async () => {
+      const fixture = arrive('?push=news');
+      expect(text(fixture)).toBe('');
+      expect(whatsNew.openFromNotification).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledWith([], { queryParams: { push: null }, queryParamsHandling: 'merge', replaceUrl: true });
+      notifications.openedFrom.set('news');                  // a later tap while the site is open
+      fixture.detectChanges();
+      expect(text(fixture)).toBe('');
+      expect(whatsNew.openFromNotification).toHaveBeenCalledTimes(2);
+      expect(notifications.openedFrom()).toBeNull();
+      expect(notifications.asked).toEqual([]);
     });
   });
 });

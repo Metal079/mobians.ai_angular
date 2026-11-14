@@ -33,7 +33,7 @@ import { Announcement, WhatsNewService } from './whats-new.service';
             }
           </article>
         } @empty {
-          <p class="body">Nothing new yet.</p>
+          <p class="body">{{ whatsNew.loading() ? 'Loading…' : 'Nothing new yet.' }}</p>
         }
 
         @if (notifications.supported && !notifications.blockedByBrowser) {

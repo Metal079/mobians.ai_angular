@@ -61,6 +61,8 @@ export class WhatsNewService {
 
   readonly posts = signal<Announcement[]>([]);
   readonly isOpen = signal(false);
+  /** True while the list is being fetched, so an empty dialog says "Loading" rather than "Nothing new yet". */
+  readonly loading = signal(false);
   readonly hasUnread = computed(() => this.newestId() > this.lastSeenId());
 
   /** Fetch the published posts once per visit. Failing quietly just means no bell. */
@@ -77,6 +79,7 @@ export class WhatsNewService {
    * once in their own browser (and stays shown if they reload).
    */
   async refresh(afterChange = false): Promise<void> {
+    this.loading.set(true);
     try {
       const url = `${this.base}/announcements`;
       const response: { announcements: Announcement[] } | null = afterChange
@@ -85,12 +88,25 @@ export class WhatsNewService {
       this.posts.set(Array.isArray(response?.announcements) ? response.announcements : []);
     } catch {
       this.loadStarted = false;      // allow another try on the next page
+    } finally {
+      this.loading.set(false);
     }
   }
 
   open(): void {
     this.isOpen.set(true);
     this.markSeen();
+  }
+
+  /**
+   * A news notification was tapped: show the posts straight away. The list is fetched fresh, because the
+   * browser may hold a copy from before the post the notification is about was published.
+   */
+  async openFromNotification(): Promise<void> {
+    this.loadStarted = true;
+    this.isOpen.set(true);
+    await this.refresh(true);
+    if (this.isOpen()) this.markSeen();
   }
 
   close(): void {

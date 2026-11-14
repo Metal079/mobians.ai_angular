@@ -91,6 +91,23 @@ describe("What's new", () => {
       http.expectNone(`${environment.apiBaseUrl}/announcements`);            // the ordinary, cacheable request was not used
     });
 
+    it('a tapped news notification opens the list at once, fetched fresh, and clears the dot', async () => {
+      localStorage.setItem('whats-new:last-seen-id', '3');
+      const fresh = [post(4), post(3)];            // 4 is the post the notification was about
+      spyOn(window, 'fetch').and.resolveTo(new Response(JSON.stringify({ announcements: fresh }), { headers: { 'content-type': 'application/json' } }));
+      const service = TestBed.inject(WhatsNewService);
+      const opening = service.openFromNotification();
+      expect(service.isOpen()).toBeTrue();
+      expect(service.loading()).toBeTrue();
+      await opening;
+      expect(service.loading()).toBeFalse();
+      expect(service.posts().map(p => p.id)).toEqual([4, 3]);
+      expect(service.hasUnread()).toBeFalse();
+      expect(localStorage.getItem('whats-new:last-seen-id')).toBe('4');
+      service.load();                              // the bell's ordinary load does not fetch a second time
+      http.expectNone(url);
+    });
+
     it('shows nothing and can try again when the request fails', async () => {
       service.load();
       http.expectOne(url).flush('down', { status: 503, statusText: 'Unavailable' });
