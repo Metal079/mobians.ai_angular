@@ -27,6 +27,9 @@ export const DISCORD_INVITE_URL = 'https://discord.gg/mobians';
         @if (shown === 'thanks') {
           <div class="heading"><i class="bi bi-discord" aria-hidden="true"></i> {{ amount() }} credits added</div>
           <p>Thanks for joining! See you in the server.</p>
+          @if (keptApart()) {
+            <p>Your Discord account stays with your other Mobians account; the two can't be merged.</p>
+          }
         } @else {
           <button type="button" class="heading toggle" [attr.aria-expanded]="isOpen()" (click)="open.set(!isOpen())">
             <span><i class="bi bi-discord" aria-hidden="true"></i> Join our Discord: +{{ amount() }} credits</span>
@@ -79,6 +82,13 @@ export class DiscordRewardCardComponent {
 
   readonly amount = computed(() => this.auth.authOutcome()?.response?.['discord_reward']?.credits
     ?? this.credits()?.discordJoinReward?.credits ?? 100);
+
+  /**
+   * The reward was paid here although Discord was not connected: this person's Discord account already has
+   * its own Mobians account (the backend never merges accounts). Said once, so "Link Discord" still being
+   * offered afterwards is not a surprise.
+   */
+  readonly keptApart = computed(() => this.auth.authOutcome()?.response?.['linked'] === false);
 
   /** What to show: nothing, the offer, the offer with "not in the server yet", or a thank-you. */
   readonly view = computed<'offer' | 'not-member' | 'thanks' | null>(() => {
