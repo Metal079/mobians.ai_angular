@@ -3,9 +3,11 @@ import { NotificationService, PushPreferences } from '../notification.service';
 
 /**
  * "Notifications on this device": the three switches a person controls, shown in
- * the Account panel. Finished jobs is what turning notifications on has always
- * meant; the daily-bonus reminder and news are separate, off until chosen, and
- * each can be switched off again here or from the notification itself.
+ * the Account panel. Turning notifications on starts a device with finished jobs
+ * and news about new features (NotificationService.ON_WHEN_TURNED_ON); the
+ * daily-bonus reminder is off until chosen. Each can be switched off here or
+ * from the notification itself, and switching the last one off turns
+ * notifications off for the device: there is no separate "turn all off".
  *
  * It is one line until opened, so it does not make the floating panel taller for
  * people who never touch it.
@@ -17,7 +19,7 @@ import { NotificationService, PushPreferences } from '../notification.service';
     @if (notifications.supported) {
       <section class="notification-settings" aria-label="Notifications on this device">
         <button type="button" class="heading" [attr.aria-expanded]="expanded()" (click)="expanded.set(!expanded())">
-          <span><i class="bi bi-bell" aria-hidden="true"></i> Notifications <small>{{ notifications.enabled() ? 'On' : 'Off' }}</small></span>
+          <span><i class="bi bi-bell" aria-hidden="true"></i> Notifications <small>{{ anyOn() ? 'On' : 'Off' }}</small></span>
           <i class="bi" [class.bi-chevron-up]="expanded()" [class.bi-chevron-down]="!expanded()" aria-hidden="true"></i>
         </button>
 
@@ -27,7 +29,7 @@ import { NotificationService, PushPreferences } from '../notification.service';
               <p class="note">Notifications are blocked for this site in your browser's settings.</p>
             } @else {
               <button type="button" class="turn-on" [disabled]="busy()" (click)="turnOn()">Turn on for this device</button>
-              <p class="note">Get told when your image or video is ready, even with the tab closed.</p>
+              <p class="note">Get told when your image or video is ready, even with the tab closed, and about big new features.</p>
             }
           } @else {
             <label class="switch-row">
@@ -44,7 +46,6 @@ import { NotificationService, PushPreferences } from '../notification.service';
               <input type="checkbox" [checked]="value('news')" [disabled]="busy()" (change)="set('news', $event)">
               <span>New features <small>Only for bigger announcements.</small></span>
             </label>
-            <button type="button" class="turn-off" [disabled]="busy()" (click)="turnOff()">Turn all off on this device</button>
           }
         }
 
@@ -70,7 +71,6 @@ import { NotificationService, PushPreferences } from '../notification.service';
     .switch-row small { display: block; font-size: .72rem; opacity: .75; line-height: 1.3; }
     .switch-row.unavailable { cursor: default; opacity: .7; }
     .turn-on, .offer button { justify-self: start; padding: .3rem .7rem; border-radius: 6px; border: 1px solid #0f9d6b; background: #10b981; color: #fff; font-weight: 600; cursor: pointer; }
-    .turn-off { justify-self: start; padding: 0; border: 0; background: none; color: inherit; font-size: .75rem; text-decoration: underline; opacity: .75; cursor: pointer; }
     .offer { display: grid; gap: .3rem; padding: .45rem .55rem; border-radius: 8px; background: rgb(16 185 129 / 12%); }
     button:disabled { opacity: .6; cursor: default; }
     button:focus-visible, input:focus-visible { outline: 2px solid #0f9d6b; outline-offset: 2px; }
@@ -93,17 +93,15 @@ export class NotificationSettingsComponent {
     return preferences ? preferences[name] : name === 'jobs';
   }
 
-  async turnOn(): Promise<void> {
-    await this.run(async () => {
-      const subscribed = await this.notifications.setEnabled(true, { jobs: true });
-      this.message.set(subscribed ? '' : this.refusedMessage());
-    });
+  /** Something is actually switched on for this device (a subscribed device with every switch off counts as off). */
+  anyOn(): boolean {
+    return this.notifications.enabled() && (this.value('jobs') || (this.signedIn && this.value('reminders')) || this.value('news'));
   }
 
-  async turnOff(): Promise<void> {
+  async turnOn(): Promise<void> {
     await this.run(async () => {
-      await this.notifications.setEnabled(false);
-      this.message.set('Notifications are off on this device.');
+      const subscribed = await this.notifications.setEnabled(true);
+      this.message.set(subscribed ? '' : this.refusedMessage());
     });
   }
 
@@ -116,7 +114,8 @@ export class NotificationSettingsComponent {
         checkbox.checked = !wanted;
         this.message.set("That didn't save. Please try again.");
       } else {
-        this.message.set('');
+        // Unticking the last switch turns notifications off for this device (the service does it).
+        this.message.set(this.notifications.enabled() ? '' : 'Notifications are off on this device.');
       }
     });
   }
@@ -125,7 +124,7 @@ export class NotificationSettingsComponent {
     await this.run(async () => {
       const done = this.notifications.enabled()
         ? await this.notifications.setPreferences({ reminders: true })
-        : await this.notifications.setEnabled(true, { jobs: true, reminders: true });
+        : await this.notifications.setEnabled(true, { reminders: true });
       this.message.set(done ? "Done. We'll remind you at most once a day." : this.refusedMessage());
     });
   }

@@ -21,13 +21,19 @@ class FakeNotifications {
     this.asked.push(['setEnabled', on, chosen]);
     const result = on && this.subscribeSucceeds;
     this.enabled.set(result);
-    this.preferences.set(result ? { jobs: true, reminders: !!chosen?.reminders, news: !!chosen?.news } : null);
+    // Like the real service: a device that is turned on starts with finished jobs and new features.
+    this.preferences.set(result ? { jobs: true, reminders: !!chosen?.reminders, news: true } : null);
     return result;
   }
 
   async setPreferences(changes: Partial<PushPreferences>): Promise<boolean> {
     this.asked.push(['setPreferences', changes]);
-    if (this.saveSucceeds) this.preferences.set({ ...(this.preferences() ?? { jobs: true, reminders: false, news: false }), ...changes });
+    if (this.saveSucceeds) {
+      const now = { ...(this.preferences() ?? { jobs: true, reminders: false, news: false }), ...changes };
+      this.preferences.set(now);
+      // Like the real service: with the last switch off, the device is off.
+      if (!now.jobs && !now.reminders && !now.news) { this.enabled.set(false); this.preferences.set(null); }
+    }
     return this.saveSucceeds;
   }
 }
@@ -83,13 +89,14 @@ describe('notification controls', () => {
       expect(text(create())).toBe('');
     });
 
-    it('starts with a single Turn on button, which enables finished-job notifications only', async () => {
+    it('starts with a single Turn on button, which says what it turns on: finished jobs and new features', async () => {
       const fixture = create();
       expect(boxes(fixture).length).toBe(0);
+      expect(text(fixture)).toContain('and about big new features');
       fixture.nativeElement.querySelector('.turn-on').click();
       await settle(fixture);
-      expect(notifications.asked).toEqual([['setEnabled', true, { jobs: true }]]);
-      expect(boxes(fixture).map(box => box.checked)).toEqual([true, false, false]);   // jobs on; reminders and news stay off
+      expect(notifications.asked).toEqual([['setEnabled', true, undefined]]);          // the service decides what "on" starts with
+      expect(boxes(fixture).map(box => box.checked)).toEqual([true, false, true]);     // jobs and new features on; reminders stay off
     });
 
     it('says so when the browser blocks notifications instead of offering a button that cannot work', () => {
@@ -126,20 +133,38 @@ describe('notification controls', () => {
       expect(text(fixture)).toContain('Sign in to use this.');
     });
 
-    it('turns everything off on this device in one step', async () => {
+    it('has no separate turn-all-off button: unticking the last switch turns notifications off', async () => {
       notifications.enabled.set(true);
+      notifications.preferences.set({ jobs: true, reminders: false, news: true });
       const fixture = create();
-      fixture.nativeElement.querySelector('.turn-off').click();
+      expect(text(fixture)).not.toContain('Turn all off');
+      expect(fixture.nativeElement.querySelector('.turn-off')).toBeNull();
+
+      boxes(fixture)[2].click();                                   // new features off: finished jobs is still on
       await settle(fixture);
-      expect(notifications.asked).toEqual([['setEnabled', false, undefined]]);
+      expect(notifications.enabled()).toBeTrue();
+      expect(text(fixture)).not.toContain('Notifications are off');
+
+      boxes(fixture)[0].click();                                   // the last one
+      await settle(fixture);
+      expect(notifications.asked).toEqual([['setPreferences', { news: false }], ['setPreferences', { jobs: false }]]);
+      expect(text(fixture)).toContain('Notifications Off');
       expect(text(fixture)).toContain('Notifications are off on this device.');
+      expect(fixture.nativeElement.querySelector('.turn-on')).not.toBeNull();        // and can be turned on again
+      expect(boxes(fixture).length).toBe(0);
+    });
+
+    it('says Off for a device that is subscribed with every switch off', () => {
+      notifications.enabled.set(true);
+      notifications.preferences.set({ jobs: false, reminders: false, news: false });
+      expect(text(create(true, false, false))).toBe('Notifications Off');
     });
 
     it('after a daily claim offers a reminder, turning notifications on with it if needed', async () => {
       const fresh = create(true, true);
       fresh.nativeElement.querySelector('.offer button').click();
       await settle(fresh);
-      expect(notifications.asked).toEqual([['setEnabled', true, { jobs: true, reminders: true }]]);
+      expect(notifications.asked).toEqual([['setEnabled', true, { reminders: true }]]);
       expect(text(fresh)).toContain('at most once a day');
       expect(fresh.nativeElement.querySelector('.offer')).toBeNull();          // already on: no longer offered
 
@@ -168,7 +193,7 @@ describe('notification controls', () => {
       fixture.nativeElement.querySelector('.notify-me').click();
       await settle(fixture);
       expect(behind).not.toHaveBeenCalled();
-      expect(notifications.asked).toEqual([['setEnabled', true, { jobs: true }]]);
+      expect(notifications.asked).toEqual([['setEnabled', true, undefined]]);
       expect(text(fixture)).toContain("We'll notify you when it's ready");
     });
 

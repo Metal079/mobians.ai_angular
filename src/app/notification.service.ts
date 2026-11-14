@@ -77,7 +77,7 @@ export class NotificationService {
       if (action === 'mute') {
         // "Turn off" was pressed on the notification: the API has switched it off; show that here too.
         const current = this.preferences();
-        if (current) this.preferences.set({ ...current, [category]: false });
+        if (current) void this.adoptPreferences({ ...current, [category]: false });
       } else {
         this.openedFrom.set(category);
       }
@@ -95,10 +95,18 @@ export class NotificationService {
   }
 
   /**
+   * What a device gets when the person turns notifications on: finished jobs and
+   * news about new features (rare: an admin decides, at most one push in 72
+   * hours, each with its own "Turn off" button). The daily-bonus reminder stays
+   * off until asked for. Devices that were subscribed before are not changed.
+   */
+  static readonly ON_WHEN_TURNED_ON: Partial<PushPreferences> = { jobs: true, news: true };
+
+  /**
    * Switch notifications on or off for this device. Turning them on asks the
-   * browser for permission if needed; `preferences` are the switches the person
-   * just chose (left out, the device keeps what it had, or starts with finished
-   * jobs only). Returns whether the device ends up subscribed.
+   * browser for permission if needed and starts the device with
+   * ON_WHEN_TURNED_ON plus whatever else the person just chose in `preferences`.
+   * Returns whether the device ends up subscribed.
    */
   async setEnabled(on: boolean, preferences?: Partial<PushPreferences>): Promise<boolean> {
     this.enabled.set(on);
@@ -108,7 +116,7 @@ export class NotificationService {
       this.preferences.set(null);
       return false;
     }
-    const subscribed = await this.subscribeToNotifications(preferences);
+    const subscribed = await this.subscribeToNotifications({ ...NotificationService.ON_WHEN_TURNED_ON, ...preferences });
     if (!subscribed) {
       // Permission refused or unsupported: do not pretend it is on.
       this.enabled.set(false);
@@ -117,7 +125,23 @@ export class NotificationService {
     return subscribed;
   }
 
-  /** Change one or more switches on this device. Returns false if the device is not subscribed or the call failed. */
+  /**
+   * Take in the switches this device now has. There is no separate "turn all
+   * off": a device with nothing switched on is simply off, so when the last
+   * switch goes, the browser is unsubscribed and its row deleted.
+   */
+  private async adoptPreferences(preferences: PushPreferences): Promise<void> {
+    this.preferences.set(preferences);
+    if (!preferences.jobs && !preferences.reminders && !preferences.news) {
+      await this.setEnabled(false);
+    }
+  }
+
+  /**
+   * Change one or more switches on this device. Returns false if the device is
+   * not subscribed or the call failed. Switching the last one off turns
+   * notifications off for the device (`enabled` becomes false).
+   */
   async setPreferences(changes: Partial<PushPreferences>): Promise<boolean> {
     if (!this.swPush.isEnabled) return false;
     try {
@@ -126,7 +150,7 @@ export class NotificationService {
       const response = await firstValueFrom(this.http.post<SubscribeResponse>(`${this.apiBaseUrl}/push/preferences`, {
         endpoint: subscription.endpoint, ...changes, timezone: this.timeZone()
       }));
-      if (response?.preferences) this.preferences.set(response.preferences);
+      if (response?.preferences) await this.adoptPreferences(response.preferences);
       return true;
     } catch (error) {
       console.error('Error changing notification preferences:', error);
@@ -142,7 +166,7 @@ export class NotificationService {
       if (!subscription?.endpoint) return;
       await firstValueFrom(this.http.post(`${this.apiBaseUrl}/push/detach`, { endpoint: subscription.endpoint }));
       const current = this.preferences();
-      if (current) this.preferences.set({ ...current, reminders: false });
+      if (current) await this.adoptPreferences({ ...current, reminders: false });
     } catch (error) {
       console.error('Error detaching push subscription:', error);
     }
@@ -242,7 +266,7 @@ export class NotificationService {
     try {
       const response = await firstValueFrom(this.http.post<SubscribeResponse>(`${this.apiBaseUrl}/subscribe`, data));
       this.storeCurrentVapidPublicKey();
-      if (response?.preferences) this.preferences.set(response.preferences);
+      if (response?.preferences) await this.adoptPreferences(response.preferences);
       return true;
     } catch (error) {
       console.error('Error sending subscription to server:', error);

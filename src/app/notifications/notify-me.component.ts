@@ -39,7 +39,7 @@ export class NotifyMeComponent {
     event.stopPropagation();
     if (this.busy()) return;
     this.busy.set(true);
-    const subscribed = await this.notifications.setEnabled(true, { jobs: true });
+    const subscribed = await this.notifications.setEnabled(true);
     this.busy.set(false);
     this.justEnabled.set(subscribed);
   }

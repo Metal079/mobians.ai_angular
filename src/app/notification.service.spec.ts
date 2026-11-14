@@ -49,14 +49,15 @@ describe('NotificationService', () => {
     } as unknown as PushSubscription;
   }
 
-  function setupService(subscription: PushSubscription | null): void {
+  /** `firstResponse` is what the server answers while the service starts up (it re-registers an existing device). */
+  function setupService(subscription: PushSubscription | null, firstResponse: unknown = {}): void {
     TestBed.resetTestingModule();
 
     postCalls = [];
     requestSubscriptionCalls = [];
     unsubscribeCallCount = 0;
     requestSubscriptionResult = null;
-    postResponse = {};
+    postResponse = firstResponse;
 
     http = {
       get: (..._args: unknown[]) => of({}),
@@ -200,6 +201,16 @@ describe('NotificationService', () => {
       expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
       expect(service.openedFrom()).toBeNull();
     });
+
+    it('pressing Turn off on the only kind that was on turns notifications off for the device', async () => {
+      localStorage.setItem('notifications-enabled', 'true');
+      setupService(null);
+      service.preferences.set({ jobs: false, reminders: false, news: true });
+      tap('mute', 'news');
+      await new Promise(resolve => setTimeout(resolve));
+      expect(service.enabled()).toBeFalse();
+      expect(service.preferences()).toBeNull();
+    });
   });
 
   describe('switches for this device', () => {
@@ -212,13 +223,22 @@ describe('NotificationService', () => {
       postResponse = { preferences: { jobs: true, reminders: true, news: false } };
       expect(service.enabled()).toBeFalse();
 
-      expect(await service.setEnabled(true, { jobs: true, reminders: true })).toBeTrue();
+      expect(await service.setEnabled(true, { reminders: true })).toBeTrue();
 
-      expect(lastBody().preferences).toEqual({ jobs: true, reminders: true });
+      expect(lastBody().preferences).toEqual({ jobs: true, news: true, reminders: true });
       expect(lastBody().timezone).toBe(deviceTimeZone);
       expect(service.enabled()).toBeTrue();
       expect(localStorage.getItem('notifications-enabled')).toBe('true');
       expect(service.preferences()).toEqual({ jobs: true, reminders: true, news: false });
+    });
+
+    it('turning notifications on with nothing else chosen starts with finished jobs and new features, not reminders', async () => {
+      setupService(null);
+      requestSubscriptionResult = current();
+      postResponse = { preferences: { jobs: true, reminders: false, news: true } };
+      expect(await service.setEnabled(true)).toBeTrue();
+      expect(lastBody().preferences).toEqual({ jobs: true, news: true });
+      expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
     });
 
     it('an ordinary page load re-registers the device without sending any switches', () => {
@@ -258,6 +278,33 @@ describe('NotificationService', () => {
         body: { endpoint: 'https://fcm.googleapis.com/fcm/send/current', news: true, timezone: deviceTimeZone },
       });
       expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
+    });
+
+    it('switching the last switch off turns notifications off for the device', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      postResponse = { preferences: { jobs: false, reminders: false, news: true } };
+      setupService(current());
+      expect(service.enabled()).toBeTrue();
+      postResponse = { status: 'ok', preferences: { jobs: false, reminders: false, news: false } };
+
+      expect(await service.setPreferences({ news: false })).toBeTrue();
+
+      expect(unsubscribeCallCount).toBe(1);
+      expect(postCalls[postCalls.length - 1].url).toBe(`${environment.apiBaseUrl}/unsubscribe`);
+      expect(service.enabled()).toBeFalse();
+      expect(localStorage.getItem('notifications-enabled')).toBe('false');
+      expect(service.preferences()).toBeNull();
+    });
+
+    it('a visit that finds every switch already off (turned off from the notifications) turns the device off', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      setupService(current(), { preferences: { jobs: false, reminders: false, news: false } });
+      await new Promise(resolve => setTimeout(resolve));
+      expect(unsubscribeCallCount).toBe(1);
+      expect(service.enabled()).toBeFalse();
+      expect(service.preferences()).toBeNull();
     });
 
     it('cannot change switches on a device that is not subscribed', async () => {
