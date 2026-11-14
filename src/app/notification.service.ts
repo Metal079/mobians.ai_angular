@@ -11,13 +11,21 @@ import { trackEvent } from './analytics';
  * `reminders` is the once-a-day bonus reminder; `news` is a "What's new" post an
  * admin chose to push. The backend keeps these per device
  * (push_preferences.py) and every reminder or news push carries its own
- * "Turn off" button, handled in notification-sw.js.
+ * "Turn off" button.
+ *
+ * Taps are handled by Angular's service worker, which does what the
+ * notification itself says (`data.onActionClick`, written by the backend): a
+ * tap brings the site forward, "Turn off" asks the API to stop that kind for
+ * this device. It then tells any open tab what was tapped, which is what
+ * `openedFrom` and the switch update below listen to.
  */
 export interface PushPreferences {
   jobs: boolean;
   reminders: boolean;
   news: boolean;
 }
+
+export type MutableCategory = 'reminders' | 'news';
 
 interface SubscribeResponse {
   preferences?: PushPreferences | null;
@@ -39,6 +47,8 @@ export class NotificationService {
   readonly enabled = signal(this.readEnabled());
   /** The switches the server holds for this device; null until it has answered or when not subscribed. */
   readonly preferences = signal<PushPreferences | null>(null);
+  /** Set when the person tapped a reminder or news notification while the site was open: the opt-out bar shows for it. */
+  readonly openedFrom = signal<MutableCategory | null>(null);
 
   constructor(private http: HttpClient, private swPush: SwPush) {
     // Persist the anonymous id across reloads so the backend can keep
@@ -58,6 +68,18 @@ export class NotificationService {
     this.swPush.subscription.subscribe(subscription => {
       if (subscription && this.hasCurrentVapidPublicKey()) {
         void this.sendSubscriptionToServer(subscription);
+      }
+    });
+
+    this.swPush.notificationClicks.subscribe(({ action, notification }) => {
+      const category = notification?.data?.category;
+      if (category !== 'reminders' && category !== 'news') return;
+      if (action === 'mute') {
+        // "Turn off" was pressed on the notification: the API has switched it off; show that here too.
+        const current = this.preferences();
+        if (current) this.preferences.set({ ...current, [category]: false });
+      } else {
+        this.openedFrom.set(category);
       }
     });
   }

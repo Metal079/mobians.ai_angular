@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { NotificationService, PushPreferences } from '../notification.service';
+import { MutableCategory, NotificationService, PushPreferences } from '../notification.service';
 import { NotificationSettingsComponent } from './notification-settings.component';
 import { NotifyMeComponent } from './notify-me.component';
 import { PushOptOutComponent } from './push-opt-out.component';
@@ -12,6 +12,7 @@ class FakeNotifications {
   blockedByBrowser = false;
   enabled = signal(false);
   preferences = signal<PushPreferences | null>(null);
+  openedFrom = signal<MutableCategory | null>(null);
   subscribeSucceeds = true;
   saveSucceeds = true;
   asked: unknown[] = [];
@@ -214,6 +215,24 @@ describe('notification controls', () => {
       expect(notifications.asked).toEqual([['setPreferences', { reminders: false }]]);
       expect(text(fixture)).toContain('Daily bonus reminders are off on this device.');
       expect(router.navigate).toHaveBeenCalledWith([], { queryParams: { push: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    });
+
+    it('also appears when a notification is tapped while the site is already open', async () => {
+      const fixture = arrive('');
+      expect(text(fixture)).toBe('');
+      notifications.openedFrom.set('news');                  // reported by the service worker
+      fixture.detectChanges();
+      expect(text(fixture)).toContain('You opened a news notification.');
+      fixture.nativeElement.querySelector('.act').click();
+      await settle(fixture);
+      expect(notifications.asked).toEqual([['setPreferences', { news: false }]]);
+      fixture.nativeElement.querySelector('.close').click();
+      await settle(fixture);
+      expect(text(fixture)).toBe('');
+      expect(notifications.openedFrom()).toBeNull();
+      notifications.openedFrom.set('reminders');             // a later tap brings it back, with fresh wording
+      fixture.detectChanges();
+      expect(text(fixture)).toContain('You opened a daily bonus reminder.');
     });
 
     it('does the same for news, and can simply be closed', async () => {

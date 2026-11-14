@@ -1,14 +1,16 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { NotificationService } from '../notification.service';
+import { MutableCategory, NotificationService } from '../notification.service';
 
 /**
  * The way out for browsers whose notifications have no buttons (Safari, iOS and
  * some others). Reminder and news notifications normally carry a "Turn off"
- * button; where that is not shown, tapping the notification opens the site with
- * ?push=reminders or ?push=news, and this bar offers the same thing in one tap.
+ * button; where that is not shown, tapping the notification brings the site
+ * forward and this bar offers the same thing in one tap. A tap that opens a new
+ * tab arrives with ?push=reminders or ?push=news; a tap while the site is
+ * already open is reported by the service worker (NotificationService.openedFrom).
  */
-type Category = 'reminders' | 'news';
+type Category = MutableCategory;
 const WORDING: Record<Category, { question: string; action: string; done: string }> = {
   reminders: { question: 'You opened a daily bonus reminder.', action: 'Turn off these reminders', done: 'Daily bonus reminders are off on this device.' },
   news: { question: 'You opened a news notification.', action: 'Turn off news notifications', done: 'News notifications are off on this device.' }
@@ -47,6 +49,15 @@ export class PushOptOutComponent implements OnInit {
   readonly busy = signal(false);
   readonly finished = signal('');
 
+  constructor() {
+    effect(() => {
+      const tapped = this.notifications.openedFrom();
+      if (!tapped) return;
+      this.finished.set('');
+      this.category.set(tapped);
+    });
+  }
+
   ngOnInit(): void {
     const asked = new URLSearchParams(this.addressQuery()).get('push');
     if (asked === 'reminders' || asked === 'news') this.category.set(asked);
@@ -71,6 +82,7 @@ export class PushOptOutComponent implements OnInit {
 
   close(): void {
     this.category.set(null);
+    this.notifications.openedFrom.set(null);
     this.forgetAddress();
   }
 

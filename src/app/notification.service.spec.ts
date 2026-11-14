@@ -3,7 +3,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
-import { Observable, of } from 'rxjs';
+import { Observable, Subject, of } from 'rxjs';
 
 import { NotificationService } from './notification.service';
 import { environment } from '../environments/environment';
@@ -17,6 +17,7 @@ describe('NotificationService', () => {
   let swPush: {
     isEnabled: boolean;
     subscription: Observable<PushSubscription | null>;
+    notificationClicks: Subject<{ action: string; notification: any }>;
     requestSubscription: (options: { serverPublicKey: string }) => Promise<PushSubscription>;
     unsubscribe: () => Promise<void>;
   };
@@ -69,6 +70,7 @@ describe('NotificationService', () => {
     swPush = {
       isEnabled: true,
       subscription: of(subscription),
+      notificationClicks: new Subject(),
       requestSubscription: async (options: { serverPublicKey: string }) => {
         requestSubscriptionCalls.push(options);
         if (!requestSubscriptionResult) {
@@ -175,6 +177,29 @@ describe('NotificationService', () => {
         },
       },
     ]);
+  });
+
+  describe('taps reported by the service worker', () => {
+    const tap = (action: string, category?: string) => swPush.notificationClicks.next({ action, notification: { title: 't', data: category ? { category } : undefined } });
+
+    it('a tapped reminder or news notification asks for the opt-out bar; a finished-job one does not', () => {
+      setupService(null);
+      tap('', undefined);
+      tap('', 'jobs');
+      expect(service.openedFrom()).toBeNull();
+      tap('', 'news');
+      expect(service.openedFrom()).toBe('news');
+      tap('default', 'reminders');
+      expect(service.openedFrom()).toBe('reminders');
+    });
+
+    it('pressing Turn off on a notification shows as off in the open site, without asking for the bar', () => {
+      setupService(null);
+      service.preferences.set({ jobs: true, reminders: true, news: true });
+      tap('mute', 'reminders');
+      expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
+      expect(service.openedFrom()).toBeNull();
+    });
   });
 
   describe('switches for this device', () => {
