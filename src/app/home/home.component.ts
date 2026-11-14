@@ -1,5 +1,6 @@
 import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { ImageModalComponent } from '../home/image-modal/image-modal.component';
 
@@ -45,6 +46,11 @@ export class HomeComponent {
   title = 'The best Sonic OC generator';
 
   images: string[] = [];
+  /**
+   * Whether the grid is showing generated images. Read from the grid's own source: a finished job
+   * publishes its images there and does not emit `imagesChange`, so `images` above stays empty.
+   */
+  readonly hasResults = toSignal(inject(SharedService).getImages().pipe(map(images => images.length > 0)), { initialValue: false });
   showLoading: boolean = false;
   aspectRatio: AspectRatio = {width: 512, height: 512, model: "test", aspectRatio: "square"};
   inpaintingEnabled: boolean = false;

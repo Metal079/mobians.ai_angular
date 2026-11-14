@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { SharedService } from 'src/app/shared.service';
 import { ImageEditorService } from '../image-editor/image-editor.service';
@@ -14,8 +14,10 @@ describe('HomeComponent', () => {
   let component: HomeComponent;
   let fixture: ComponentFixture<HomeComponent>;
   let editor: any;
+  let gridImages: BehaviorSubject<unknown[]>;
 
   beforeEach(async () => {
+    gridImages = new BehaviorSubject<unknown[]>([]);
     editor = { presentation: signal('dialog'), available: signal(true), context: signal(null),
       refresh: jasmine.createSpy().and.resolveTo(), showInline: jasmine.createSpy().and.callFake(() => editor.presentation.set('inline')),
       showGenerator: jasmine.createSpy().and.callFake(() => editor.presentation.set('hidden')), leaveImagePage: jasmine.createSpy() };
@@ -31,6 +33,7 @@ describe('HomeComponent', () => {
           provide: SharedService,
           useValue: {
             getUserData: () => of(null),
+            getImages: () => gridImages.asObservable(),
             getReferenceImageValue: () => null
           }
         }
@@ -69,6 +72,28 @@ describe('HomeComponent', () => {
       if (originalTag === undefined) delete (window as any).gtag;
       else (window as any).gtag = originalTag;
     }
+  });
+
+  it('puts the sign-up strip under finished images, which arrive through the grid and not through imagesChange', () => {
+    fixture.detectChanges();
+    const strip = () => fixture.nativeElement.querySelector('app-signup-nudge');
+    expect(strip()).toBeNull();                                 // nothing generated yet
+
+    component.onShowLoadingChange(true);
+    fixture.detectChanges();
+    component.onShowLoadingChange(false);                       // what a finished job does: stop loading, publish to the grid
+    gridImages.next([{ UUID: 'a' }, { UUID: 'b' }]);
+    fixture.detectChanges();
+    expect(component.images).toEqual([]);                       // imagesChange was never emitted
+    expect(strip()?.getAttribute('variant')).toBe('result');
+
+    component.onShowLoadingChange(true);                        // the next job is waiting: the wait card takes over
+    fixture.detectChanges();
+    expect(strip()).toBeNull();
+    component.onShowLoadingChange(false);
+    gridImages.next([]);                                        // images cleared
+    fixture.detectChanges();
+    expect(strip()).toBeNull();
   });
 
   it('switches between Image sections without destroying the generator', async () => {
