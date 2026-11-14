@@ -9,6 +9,7 @@ import { StableDiffusionService } from '../stable-diffusion.service';
 import { GenerationLockService } from '../generation-lock.service';
 import { SharedService } from '../shared.service';
 import { AuthService } from '../auth/auth.service';
+import { NotificationService } from '../notification.service';
 import { CharactersService, CharacterChoice } from '../characters/characters.service';
 import { CharacterBrowserComponent } from '../characters/character-browser.component';
 import { ImageHistoryPanelComponent } from '../home/options/image-history-panel/image-history-panel.component';
@@ -37,6 +38,7 @@ export class ImageEditorComponent {
   private readonly lock = inject(GenerationLockService);
   private readonly shared = inject(SharedService);
   private readonly auth = inject(AuthService);
+  private readonly notifications = inject(NotificationService);
   readonly credits = signal(0);
   queueType: 'free' | 'priority' = 'free';
   get insufficientCredits(): boolean { return this.queueType === 'priority' && this.credits() < (this.editor.priorityCreditCost() ?? Infinity); }
@@ -189,6 +191,8 @@ export class ImageEditorComponent {
       reference_image_uuids: this.refs().map(ref => ref.image.UUID),
       steps: this.editor.defaultSteps(), guidance_scale: 1, negative_prompt: '', loras: [], scheduler: 0, batch_size: 1, strength: null,
       width, height, seed, lossy_images: false, queue_type: this.queueType, is_dev_job: false,
+      // This browser's id: the "your image is ready" notification goes only to the device that has the result.
+      client_id: this.notifications.userId,
       expected_credit_cost: this.queueType === 'priority' ? this.editor.priorityCreditCost() : undefined,
       character_id: this.context.characterId, character_look_id: this.context.lookId,
       parent_image_uuid: base?.image.UUID, root_image_uuid: base?.image.editProvenance?.root_image_uuid || base?.image.UUID };

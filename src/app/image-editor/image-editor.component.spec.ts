@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { BehaviorSubject, of, throwError } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { NotificationService } from '../notification.service';
 import { ImageEditorComponent } from './image-editor.component';
 import { ImageEditorService, IMAGE_EDIT_MODEL } from './image-editor.service';
 import { StableDiffusionService } from '../stable-diffusion.service';
@@ -39,6 +40,7 @@ describe('Image editing workflows', () => {
       { provide: CharactersService, useValue: characters }, { provide: GenerationLockService, useValue: lock },
       { provide: SharedService, useValue: { getUserData: () => user } },
       { provide: AuthService, useValue: auth },
+      { provide: NotificationService, useValue: { userId: 'this-browser' } },
     ] }).overrideComponent(ImageEditorComponent, { set: { template: '', imports: [] } }).compileComponents();
     fixture = TestBed.createComponent(ImageEditorComponent); component = fixture.componentInstance;
     const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 96;
@@ -82,6 +84,7 @@ describe('Image editing workflows', () => {
     expect(request.model).toBe(IMAGE_EDIT_MODEL); expect(request.batch_size).toBe(1);
     expect(request.is_dev_job).toBeFalse();
     expect(request.job_type).toBe('instruction_edit'); expect(request.steps).toBe(4);
+    expect(request.client_id).toBe('this-browser');   // so only this device is told when the edit is ready
     expect(request.reference_images).toEqual(component.refs().map(ref => ref.data));
     expect(request.reference_images.length).toBe(2); expect(request.character_look_id).toBe('look');
     await component.cancel();
