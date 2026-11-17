@@ -292,6 +292,12 @@
   opacity: 0.8;
 }
 
+/* Region layout picture and "Reuse layout" (regional-editor/regional-minimap.component.ts). */
+.info-layout { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--theme-border); }
+.info-layout-map { flex: none; }
+.info-layout-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.info-layout-reuse { flex: none; min-height: 40px; font-weight: 600; }
+
 .no-images-message {
   text-align: center;
   padding: 20px;

@@ -1465,6 +1465,173 @@ describe('OptionsComponent', () => {
     expect(component.generationRequest.regional_prompting.regions.length).toBe(1);
   });
 
+  describe('regional prompting v2', () => {
+    const working = () => ({
+      enabled: true, version: 2, separation: 'strict', layout_hints: false,
+      regions: [
+        { id: 'r-1', name: 'Left', prompt: ' sonic ', negative_prompt: 'shadow', x: 0, y: 0, width: 0.5, height: 1, strength: 0.8, feather: 30, inherit_base_prompt: true, denoise_strength: 0.8, opacity: 1 },
+        { id: 'r-2', prompt: '', x: 0.5, y: 0, width: 0.5, height: 1, strength: 1, feather: 24, inherit_base_prompt: true, denoise_strength: 1, opacity: 1 },
+      ],
+    });
+
+    it('saves the regions with the other settings and restores them after a reload', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = working();
+      component.saveSettings();
+      const stored = JSON.parse(localStorage.getItem('regional-prompting')!);
+      expect(stored.regions.length).toBe(2);
+      component.generationRequest.regional_prompting = { enabled: false, regions: [] };
+      await component.loadSettings();
+      expect(component.generationRequest.regional_prompting.enabled).toBeTrue();
+      expect(component.generationRequest.regional_prompting.separation).toBe('strict');
+      expect(component.generationRequest.regional_prompting.regions.map((r: any) => r.id)).toEqual(['r-1', 'r-2']);
+    });
+
+    it('upgrades saved version 1 regions when loading', async () => {
+      localStorage.setItem('regional-prompting', JSON.stringify({ enabled: true, regions: [{ id: 'old', prompt: 'amy', x: 0, y: 0, width: 0.5, height: 1, denoise_strength: 0.5, opacity: 1, feather: 32 }] }));
+      await component.loadSettings();
+      const config = component.generationRequest.regional_prompting;
+      expect(config.version).toBe(2);
+      expect(config.layout_hints).toBeFalse();
+      expect(config.regions[0]).toEqual(jasmine.objectContaining({ strength: 0.5, inherit_base_prompt: true }));
+    });
+
+    it('pauses on an unsupported model and resumes on a supported one without losing the switch', () => {
+      component.generationRequest.regional_prompting = working();
+      component.changeModel('sonicDiffusionV4');
+      expect(component.generationRequest.regional_prompting.enabled).toBeTrue();
+      expect(component.regionalChipStatus.kind).toBe('paused');
+      component.changeModel('novaMobianXL_v20');
+      expect(component.regionalChipStatus.kind).toBe('warning');
+      expect(component.regionalChipStatus.label).toBe('Regions on · 1');
+    });
+
+    it('sends the version 2 payload, skips empty regions and keeps the working regions', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = working();
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({ job_id: 'regional-job' }));
+      spyOn(component, 'getJob');
+      const messages = TestBed.inject(MessageService) as any;
+      spyOn(messages, 'add');
+
+      await component.submitJob();
+
+      const sent = sd.submitJob.calls.mostRecent().args[0].regional_prompting;
+      expect(sent).toEqual({
+        enabled: true, version: 2, separation: 'strict', layout_hints: false,
+        regions: [{ id: 'r-1', prompt: 'sonic', negative_prompt: 'shadow', x: 0, y: 0, width: 0.5, height: 1, strength: 0.8, feather: 30, inherit_base_prompt: true, denoise_strength: 0.8, opacity: 1 }],
+      });
+      expect(messages.add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Some regions were skipped' }));
+      expect((component as any).getPendingJob().request.regional_prompting).toEqual(sent);
+      expect(component.generationRequest.regional_prompting.regions.length).toBe(2);
+    });
+
+    it('warns when the server reports that the regions were not applied', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = { ...working(), regions: [working().regions[0]] };
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({ job_id: 'regional-job', regional: { applied: false, regions: 0, removed_empty: 0 } }));
+      spyOn(component, 'getJob');
+      const messages = TestBed.inject(MessageService) as any;
+      spyOn(messages, 'add');
+      await component.submitJob();
+      expect(messages.add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Regions not applied' }));
+    });
+
+    it('records the region text the server queued after expanding dynamic prompts', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = { ...working(), regions: [{ ...working().regions[0], prompt: '{sonic|tails}' }] };
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({
+        job_id: 'regional-job',
+        regional: { applied: true, regions: 1, removed_empty: 0, expanded_regions: [{ id: 'r-1', prompt: 'tails', negative_prompt: 'shadow' }] },
+      }));
+      spyOn(component, 'getJob');
+      await component.submitJob();
+      expect(sd.submitJob.calls.mostRecent().args[0].regional_prompting.regions[0].prompt).toBe('{sonic|tails}');
+      expect((component as any).getPendingJob().request.regional_prompting.regions[0].prompt).toBe('tails');
+      expect(component.generationRequest.regional_prompting.regions[0].prompt).toBe('{sonic|tails}');
+    });
+
+    it('sends regions switched off for an unsupported model', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = working();
+      component.changeModel('sonicDiffusionV4');
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({ job_id: 'plain-job' }));
+      spyOn(component, 'getJob');
+      await component.submitJob();
+      expect(sd.submitJob.calls.mostRecent().args[0].regional_prompting).toEqual({ enabled: false, regions: [] });
+    });
+
+    it('charges region LoRAs like job LoRAs, sends them with their region and pauses them on other models', async () => {
+      await component.loadSettings();
+      const regional = {
+        supported: true, max_regions: 8, negative_prompts: true, layout_hints: false,
+        job_types: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], region_loras: true, max_region_loras: 2, max_total_loras: 3,
+      };
+      (component as any).setModelSettings(testModelSettings.map(model => model.model_id === 'novaMobianXL_v20' ? { ...model, regional } : model), 'novaMobianXL_v20');
+      component.changeModel('novaMobianXL_v20');
+      component.generationRequest.loras = [{ id: 21, version_id: 2101, name: 'Style', version: 'v1', base_model: 'Illustrious' }];
+      const amy = { id: 11, version_id: 1101, name: 'Amy Rose', version: 'v2', strength: 0.7, base_model: 'Illustrious' };
+      component.generationRequest.regional_prompting = { ...working(), regions: [{ ...working().regions[0], loras: [amy] }] };
+      component.saveSettings();
+      expect(component.creditCost).toBe(15 + 2 * 5);
+      expect(component.hiresCreditCost).toBe((15 + 2 * 5) * 4);
+      expect(JSON.parse(localStorage.getItem('regional-prompting')!).regions[0].loras[0]).toEqual(amy);
+
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({
+        job_id: 'regional-job', regional: { applied: true, regions: 1, removed_empty: 0, region_loras: 1 },
+      }));
+      spyOn(component, 'getJob');
+      await component.submitJob();
+      const sent = sd.submitJob.calls.mostRecent().args[0].regional_prompting;
+      expect(sent.regions[0].loras).toEqual([{ id: 11, version_id: 1101, name: 'Amy Rose', version: 'v2', strength: 0.7 }]);
+      expect((component as any).getPendingJob().request.regional_prompting.regions[0].loras.length).toBe(1);
+
+      // A model without LoRAs per region: kept in the editor, not sent, not charged.
+      component.changeModel('Anima-baseV1');
+      expect(component.creditCost).toBe(20 + 5);
+      expect(component.generationRequest.regional_prompting.regions[0].loras.length).toBe(1);
+      expect(component.regionalChipStatus.warnings.join(' ')).toContain('does not use LoRAs per region');
+    });
+
+    it('tells the user when the server dropped region LoRAs', async () => {
+      await component.loadSettings();
+      component.generationRequest.regional_prompting = { ...working(), regions: [working().regions[0]] };
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      sd.submitJob = jasmine.createSpy().and.returnValue(of({
+        job_id: 'regional-job',
+        regional: {
+          applied: true, regions: 1, removed_empty: 0, region_loras: 0, region_loras_dropped: 'model_not_supported',
+          region_lora_duplicates: [{ region: 1, name: 'Amy Rose', reason: 'job_lora' }],
+        },
+      }));
+      spyOn(component, 'getJob');
+      const messages = TestBed.inject(MessageService) as any;
+      spyOn(messages, 'add');
+      await component.submitJob();
+      expect(messages.add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Region LoRAs not used' }));
+      expect(messages.add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Region LoRA used once', detail: jasmine.stringMatching(/Amy Rose/) }));
+    });
+
+    it('reuses a layout from history through the regional editor', async () => {
+      await component.loadSettings();
+      const store = component.regionalEditor;
+      // ngOnInit subscribes this handler to store.reuseRequests$ (the history menu, info dialog and LoRA prompt call requestReuse).
+      (component as any).reuseRegionalLayout({ regional: { enabled: true, regions: [{ id: 'h', prompt: 'tails', x: 0.1, y: 0.1, width: 0.3, height: 0.3, denoise_strength: 1, opacity: 1, feather: 6, loras: [{ id: 12, version_id: 1201, name: 'Shadow', version: 'v1', strength: 0.9 }] }] }, openEditor: false });
+      const config = component.generationRequest.regional_prompting;
+      expect(config.enabled).toBeTrue();
+      expect(config.regions[0]).toEqual(jasmine.objectContaining({ id: 'h', prompt: 'tails', feather: 6 }));
+      expect(config.regions[0].loras).toEqual([{ id: 12, version_id: 1201, name: 'Shadow', version: 'v1', strength: 0.9 }]);   // region LoRAs come back too
+      expect(JSON.parse(localStorage.getItem('regional-prompting')!).regions[0].prompt).toBe('tails');
+      expect(store.undo(config)).toBeTrue();
+      expect(config.regions.length).toBe(0);
+    });
+  });
+
   it('auto-enables dynamic prompting for typed variant syntax', () => {
     component.generationRequest.prompt = 'A {heroic|playful|dramatic} Sonic-style portrait';
     component.generationRequest.dynamic_prompting = { enabled: false };

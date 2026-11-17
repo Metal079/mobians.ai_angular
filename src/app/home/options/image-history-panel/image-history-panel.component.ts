@@ -23,13 +23,15 @@ import { TabsModule } from 'primeng/tabs';
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 import { supportsLocalHistory, unsupportedHistoryError } from 'src/app/history-storage';
+import { RegionalEditorService } from '../regional-editor/regional-editor.service';
+import { RegionalMinimapComponent } from '../regional-editor/regional-minimap.component';
 
 @Component({
     selector: 'app-image-history-panel',
     templateUrl: './image-history-panel.component.html',
     styleUrls: ['./image-history-panel.component.css'],
     standalone: true,
-    imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule, MenuModule]
+    imports: [CommonModule, FormsModule, TabsModule, InputTextModule, DialogModule, MenuModule, RegionalMinimapComponent]
 })
 export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
   get localHistorySupported(): boolean { return supportsLocalHistory(); }
@@ -56,6 +58,18 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
     if (result === 'failed') {
       this.messageService.add({ severity: 'warn', summary: 'Image unavailable', detail: 'Open this image from history and try again.' });
     }
+  }
+  private readonly regionalEditor = inject(RegionalEditorService);
+  /** True when the image was made with regions that can be loaded back into the regional editor. */
+  hasRegionalLayout(image: MobiansImage | null | undefined): boolean {
+    const regional = image?.regional_prompting;
+    return !!regional?.enabled && Array.isArray(regional.regions) && regional.regions.length > 0;
+  }
+  /** "Reuse layout": loads this image's regions into the regional editor without making it a reference image. */
+  reuseRegionalLayout(image: MobiansImage): void {
+    if (!this.hasRegionalLayout(image)) return;
+    this.infoImage = null;
+    this.regionalEditor.requestReuse(image.regional_prompting, true);
   }
   private readonly destroyRef = inject(DestroyRef);
   private readonly historyEvents = inject(ImageHistoryEventsService);
@@ -818,11 +832,14 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
 
     const rp = image.regional_prompting;
     if (rp?.enabled && Array.isArray(rp.regions) && rp.regions.length > 0) {
+      if (rp.version === 2) meta['regional_settings'] = `separation=${rp.separation ?? 'balanced'}, layout_hints=${rp.layout_hints === true}`;
       meta['regional_prompting'] = rp.regions.map((r: any, i: number) => {
-        const parts = [`Region ${i + 1}: prompt="${r.prompt || ''}"`];
+        const parts = [`Region ${i + 1}${r.name ? ` (${r.name})` : ''}: prompt="${r.prompt || ''}"`];
         if (r.negative_prompt) parts.push(`negative_prompt="${r.negative_prompt}"`);
         parts.push(`x=${r.x ?? 0}, y=${r.y ?? 0}, w=${r.width ?? 0}, h=${r.height ?? 0}`);
-        parts.push(`denoise=${r.denoise_strength ?? 0}, feather=${r.feather ?? 0}, opacity=${r.opacity ?? 0}`);
+        // Version 2 strength; version 1 entries meant denoise_strength x opacity.
+        const strength = r.strength ?? (r.denoise_strength ?? 1) * (r.opacity ?? 1);
+        parts.push(`strength=${strength}, feather=${r.feather ?? 0}`);
         if (r.inherit_base_prompt) parts.push('inherit_base_prompt=true');
         return parts.join(', ');
       }).join('\n');
@@ -892,6 +909,8 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
         { label: 'Save character', icon: 'bi bi-bookmark-heart', command: () => { void this.saveCharacter(image); } },
         { label: 'Download', icon: 'bi bi-download', command: () => { void this.downloadImage(image); } },
         { label: 'Image info', icon: 'bi bi-info-circle', command: () => { this.infoImage = image; } },
+        { label: 'Reuse layout', icon: 'bi bi-bounding-box', visible: !this.pickerMode && this.hasRegionalLayout(image),
+          command: () => this.reuseRegionalLayout(image) },
         { label: 'Edit tags', icon: 'bi bi-tags', command: () => { void this.openTagAssignDialog([image.UUID], 'edit'); } },
       ];
       this.imageActionMenus.set(image, items);

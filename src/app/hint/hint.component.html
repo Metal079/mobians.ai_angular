@@ -6,6 +6,8 @@
     [class.hint-icon-regional]="variant === 'regional'"
     [class.active]="showPopup"
     (click)="onIconClick($event)"
+    (keydown.enter)="onIconClick($event)"
+    (keydown.space)="onIconClick($event)"
     role="button"
     aria-label="Show hint"
     tabindex="0">?</span>

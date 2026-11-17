@@ -8,7 +8,7 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { SharedService } from 'src/app/shared.service';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
-import { RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
+import { RegionalEditorService } from '../regional-editor/regional-editor.service';
 import { AddLorasComponent } from '../../add-loras/add-loras.component';
 import { HistoryLoadRequest, LoraHistoryPromptService } from '../lora-history-prompt.service';
 import { loraThumbnailUrl, resolveLoraImageUrl } from 'src/_shared/lora-image';
@@ -37,6 +37,7 @@ type LoraSortOption = 'most-used' | 'last-used' | 'recently-added' | 'alphabetic
 })
 export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterViewInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly regionalEditor = inject(RegionalEditorService);
 
   @Input({ required: true }) generationRequest!: any;
   @Input({ required: true }) modelsTypes: { [model: string]: string } = {};
@@ -668,7 +669,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
       return;
     }
 
-    this.generationRequest.regional_prompting = this.normalizeRegionalPrompting(image.regional_prompting);
+    this.regionalEditor.requestReuse(image.regional_prompting, false);
     this.emitLorasChanged();
   }
 
@@ -691,7 +692,7 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     }
 
     if (shouldLoadRegional && image.regional_prompting) {
-      this.generationRequest.regional_prompting = this.normalizeRegionalPrompting(image.regional_prompting);
+      this.regionalEditor.requestReuse(image.regional_prompting, false);
     }
 
     this.emitLorasChanged();
@@ -706,19 +707,6 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.pendingLoraLoadImage = null;
     this.pendingLoadHasLoras = false;
     this.pendingLoadHasRegionalPrompting = false;
-  }
-
-  private normalizeRegionalPrompting(input: any): RegionalPromptingConfig {
-    if (!input || typeof input !== 'object') {
-      return { enabled: false, regions: [] };
-    }
-    const regions = Array.isArray(input.regions)
-      ? input.regions.map((region: any) => ({ ...region }))
-      : [];
-    return {
-      enabled: !!input.enabled && regions.length > 0,
-      regions,
-    };
   }
 
   private resolveHistoryLoras(historyLoras?: any[]): any[] {

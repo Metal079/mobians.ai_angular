@@ -1,0 +1,247 @@
+/* Regional layout canvas. The canvas is its own dark surface in every theme, so the region palette
+   (regional-state.ts REGION_COLORS) reads the same on Sonic, Navy, 606 and Eggman. */
+:host {
+  display: block;
+  --rc-canvas: #131a29;
+  --rc-max-h: min(440px, 58vh);
+}
+
+.rc-shell.rc-size-dialog {
+  --rc-max-h: var(--rc-dialog-max-h, calc(100dvh - 260px));
+}
+
+.rc-frame {
+  position: relative;
+  margin-inline: auto;
+  aspect-ratio: var(--rc-ratio, 1);
+  width: min(100%, calc(var(--rc-max-h) * var(--rc-ratio, 1)));
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 7px, transparent 7px 16px),
+    var(--rc-canvas);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 10px 26px rgba(0, 0, 0, 0.28);
+  cursor: crosshair;
+  /* Vertical page scrolling stays possible over the canvas; drawing and the selected box opt out. */
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.rc-frame:focus-visible {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 5px #111827, 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+.rc-frame.rc-drawing { touch-action: none; }
+.rc-frame.rc-full:not(.rc-drawing) { cursor: default; }
+
+.rc-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+/* The area only the main prompt paints stays dimmed and hatched over the image. */
+.rc-bg-dim {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0 7px, transparent 7px 16px), rgba(10, 14, 24, 0.55);
+  pointer-events: none;
+}
+
+.rc-box {
+  position: absolute;
+  box-sizing: border-box;
+  container-type: size;
+  border: 2px solid var(--rc);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--rc) 24%, var(--rc-canvas));
+  cursor: grab;
+  touch-action: pan-y pinch-zoom;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.rc-has-bg .rc-box {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.rc-has-bg .rc-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--rc) 14%, transparent);
+  pointer-events: none;
+}
+.rc-drawing .rc-box { cursor: crosshair; }
+
+.rc-box.rc-selected {
+  background: color-mix(in srgb, var(--rc) 38%, var(--rc-canvas));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
+  cursor: move;
+  touch-action: none;
+}
+
+.rc-has-bg .rc-box.rc-selected { background-color: transparent; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 10px color-mix(in srgb, var(--rc) 55%, transparent); }
+.rc-has-bg .rc-box.rc-selected::after { background: color-mix(in srgb, var(--rc) 24%, transparent); }
+.rc-box.rc-empty { border-style: dashed; }
+.rc-box.rc-off { opacity: 0.45; }
+
+.rc-label {
+  position: absolute;
+  z-index: 1;
+  left: 4px;
+  top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: calc(100% - 8px);
+  padding: 2px 7px 2px 2px;
+  border-radius: 999px;
+  background: rgba(8, 11, 20, 0.8);
+  color: #f5f8ff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.rc-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--rc);
+  color: #0b0f19;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.rc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-empty .rc-text { font-style: italic; opacity: 0.85; }
+
+@container (max-width: 70px) {
+  .rc-label { padding-right: 2px; }
+  .rc-text { display: none; }
+}
+
+.rc-ghost {
+  position: absolute;
+  z-index: 40;
+  box-sizing: border-box;
+  border: 2px dashed #ffffff;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+/* The selection frame sits above every box, so a selected box under another one keeps reachable handles. */
+.rc-selection {
+  position: absolute;
+  z-index: 50;
+  box-sizing: border-box;
+  border: 1.5px dashed rgba(255, 255, 255, 0.95);
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.rc-handle {
+  --rc-hs: 26px;
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: var(--rc-hs);
+  height: var(--rc-hs);
+  margin: calc(var(--rc-hs) / -2) 0 0 calc(var(--rc-hs) / -2);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* The frame clips its content, so handles on an edge of the image move inside it and keep their whole hit area
+   (template boxes always touch the edges). */
+.rc-at-left :is(.rc-h-nw, .rc-h-w, .rc-h-sw) { margin-left: 0; justify-items: start; }
+.rc-at-right :is(.rc-h-ne, .rc-h-e, .rc-h-se) { margin-left: calc(var(--rc-hs) * -1); justify-items: end; }
+.rc-at-top :is(.rc-h-nw, .rc-h-n, .rc-h-ne) { margin-top: 0; align-items: start; }
+.rc-at-bottom :is(.rc-h-sw, .rc-h-s, .rc-h-se) { margin-top: calc(var(--rc-hs) * -1); align-items: end; }
+
+.rc-handle::after {
+  content: '';
+  width: 11px;
+  height: 11px;
+  box-sizing: border-box;
+  border: 2px solid var(--rc);
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.rc-h-nw { left: 0; top: 0; cursor: nwse-resize; }
+.rc-h-n { left: 50%; top: 0; cursor: ns-resize; }
+.rc-h-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.rc-h-e { left: 100%; top: 50%; cursor: ew-resize; }
+.rc-h-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.rc-h-s { left: 50%; top: 100%; cursor: ns-resize; }
+.rc-h-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.rc-h-w { left: 0; top: 50%; cursor: ew-resize; }
+
+@media (pointer: coarse) {
+  .rc-handle { --rc-hs: 40px; }
+  .rc-handle::after { width: 16px; height: 16px; border-radius: 50%; }
+}
+
+.rc-guide {
+  position: absolute;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.rc-guide-v { top: 0; bottom: 0; width: 0; border-left: 1px dashed #ffd43b; }
+.rc-guide-h { left: 0; right: 0; height: 0; border-top: 1px dashed #ffd43b; }
+
+.rc-empty-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: rgba(235, 241, 255, 0.82);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+
+.rc-empty-hint i { font-size: 1.8rem; opacity: 0.8; }
+
+.rc-draw-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  z-index: 70;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(8, 11, 20, 0.82);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}

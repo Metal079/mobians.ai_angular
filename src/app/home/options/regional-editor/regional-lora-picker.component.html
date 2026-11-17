@@ -1,0 +1,98 @@
+<div class="rl" role="group" [attr.aria-labelledby]="uid + '-loras-title'">
+  <div class="rl-head">
+    <span class="rl-title" [id]="uid + '-loras-title'">LoRAs for this box</span>
+    <app-hint variant="regional" text="A LoRA added here works inside this box only, for example a character LoRA for the character in this box. Each one costs the same as a LoRA in the LoRA panel."></app-hint>
+    <span class="rl-count" [attr.title]="'LoRAs in this box, out of ' + perRegion">{{ loras.length }}/{{ perRegion }}</span>
+  </div>
+
+  @for (lora of loras; track $index; let li = $index) {
+    @let source = entry(lora);
+    @let paused = pausedReason(lora);
+    <div class="rl-chip" [class.rl-chip-paused]="!!paused">
+      <div class="rl-chip-top">
+        @if (thumb(source); as url) {
+          <img class="rl-thumb" [src]="url" alt="" loading="lazy" decoding="async">
+        } @else {
+          <span class="rl-thumb rl-thumb-empty" aria-hidden="true"><i class="bi bi-stars"></i></span>
+        }
+        <span class="rl-chip-text">
+          <span class="rl-chip-name">{{ lora.name || source?.name || 'LoRA' }}</span>
+          @if (lora.version || source?.version) { <span class="rl-chip-version">{{ lora.version || source?.version }}</span> }
+        </span>
+        <button type="button" class="rl-icon-btn" (click)="remove(li)"
+          [attr.aria-label]="'Remove ' + (lora.name || 'this LoRA') + ' from this box'" title="Remove">
+          <i class="bi bi-x-lg" aria-hidden="true"></i></button>
+      </div>
+      @if (paused) { <p class="rl-note"><i class="bi bi-pause-circle" aria-hidden="true"></i> {{ paused }}</p> }
+      <div class="rl-strength">
+        <label [for]="uid + '-lora-strength-' + li">Strength</label>
+        <input type="range" class="form-range rl-range" [id]="uid + '-lora-strength-' + li"
+          [min]="minStrength" [max]="maxStrength" step="0.05" [value]="lora.strength"
+          (input)="onStrength(li, $event)" (change)="sealHistory()">
+        <output [attr.for]="uid + '-lora-strength-' + li">{{ lora.strength | number: '1.2-2' }}</output>
+      </div>
+      @let triggers = missingTriggers(lora);
+      @if (triggers.length) {
+        <button type="button" class="rl-trigger" (click)="addTriggers(lora)" [title]="'Adds: ' + triggers.join(', ')">
+          <i class="bi bi-plus-circle" aria-hidden="true"></i>
+          <span class="rl-trigger-text">Add trigger words to this box's prompt</span>
+          <span class="rl-trigger-words">{{ triggers.join(', ') }}</span>
+        </button>
+      }
+    </div>
+  }
+
+  @if (searchOpen) {
+    <div class="rl-search">
+      <div class="rl-search-row">
+        <i class="bi bi-search rl-search-icon" aria-hidden="true"></i>
+        <input type="search" class="form-control form-control-sm rl-search-input" [id]="uid + '-lora-search'"
+          [value]="query" (input)="onQuery($event)" (keydown.enter)="onSearchEnter($event)" (keydown.escape)="closeSearch()"
+          [placeholder]="'Search ' + (baseModel || '') + ' LoRAs'" autocomplete="off" spellcheck="false"
+          [attr.aria-controls]="uid + '-lora-results'" aria-label="Search LoRAs for this box">
+        <button type="button" class="rl-icon-btn" (click)="closeSearch()" aria-label="Close the LoRA search" title="Close">
+          <i class="bi bi-x-lg" aria-hidden="true"></i></button>
+      </div>
+      @if (loraCatalog.loading()) {
+        <p class="rl-hint">Loading LoRAs…</p>
+      } @else if (loraCatalog.failed()) {
+        <p class="rl-hint">The LoRA list could not be loaded.
+          <button type="button" class="rl-link" (click)="loraCatalog.ensureLoaded()">Try again</button></p>
+      } @else {
+        @let found = results;
+        @if (found.results.length) {
+          <ul class="rl-results" [id]="uid + '-lora-results'" aria-label="Matching LoRAs">
+            @for (option of found.results; track key(option)) {
+              <li>
+                <button type="button" class="rl-result" (click)="add(option)">
+                  @if (thumb(option); as url) {
+                    <img class="rl-thumb rl-thumb-sm" [src]="url" alt="" loading="lazy" decoding="async">
+                  } @else {
+                    <span class="rl-thumb rl-thumb-sm rl-thumb-empty" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                  }
+                  <span class="rl-chip-text">
+                    <span class="rl-chip-name">{{ option.name }}</span>
+                    <span class="rl-chip-version">{{ option.version }}</span>
+                  </span>
+                  <i class="bi bi-plus-lg rl-result-add" aria-hidden="true"></i>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <p class="rl-hint" aria-live="polite">
+          @if (found.total > found.results.length) {
+            {{ found.results.length }} of {{ found.total }} {{ query ? 'matches' : baseModel + ' LoRAs, most used first' }}. Type to narrow the list.
+          } @else if (!found.total) {
+            {{ query ? 'No LoRA matches "' + query + '".' : 'No ' + baseModel + ' LoRAs to add.' }}
+          }
+        </p>
+      }
+    </div>
+  } @else if (canAdd) {
+    <button type="button" class="rl-add" (click)="openSearch()">
+      <i class="bi bi-plus-lg" aria-hidden="true"></i><span>{{ loras.length ? 'Add another LoRA' : 'Add a LoRA' }}</span></button>
+  } @else if (loras.length < perRegion) {
+    <p class="rl-hint">{{ limitText }}</p>
+  }
+</div>

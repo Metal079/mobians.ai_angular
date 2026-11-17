@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { defer, map, Observable, shareReplay, tap } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { SKIP_AUTH } from './auth/auth.interceptor';
+import { RegionalLora, RegionalModelCapability, RegionalSeparation } from 'src/_shared/regional-prompting.interface';
 
 export interface CreditPackageResponseItem {
   id: string;
@@ -37,6 +38,8 @@ export interface GenerationModelSettings {
   lora_credit_cost: number;
   supports_sdxl_resolution: boolean;
   supports_regional_prompting: boolean;
+  /** Regional capability object (SPEC 4.6); older backends omit it and the editor falls back from base_model. */
+  regional?: RegionalModelCapability | null;
   supports_upscale: boolean;
   is_active: boolean;
   is_default: boolean;
@@ -94,23 +97,30 @@ export interface DailyBonusResponse {
   credits_awarded: number;
 }
 
+/** Preset region; `name` and `strength` are version 2 fields (SPEC 1, 4.7). */
 export interface RegionalPromptPresetRegion {
   id: string;
+  name?: string;
   prompt: string;
   negative_prompt: string;
   x: number;
   y: number;
   width: number;
   height: number;
+  strength?: number;
   denoise_strength: number;
   feather: number;
   opacity: number;
   inherit_base_prompt: boolean;
+  /** LoRAs per region: catalog references {id, version_id, name, version, strength}. */
+  loras?: RegionalLora[];
 }
 
 export interface RegionalPromptPreset {
   id?: string;
   name: string;
+  separation?: RegionalSeparation;
+  layout_hints?: boolean;
   regions: RegionalPromptPresetRegion[];
 }
 
@@ -148,6 +158,21 @@ export interface SubmitJobResponse {
   expanded_prompt?: string;
   credits_used?: number;
   credits_remaining?: number;
+  /**
+   * Whether the regions were applied (SPEC 4.5); older backends omit it. `reason`, `removed_off` and
+   * `expanded_regions` (text of regions whose dynamic prompts were expanded) are additive backend fields.
+   */
+  regional?: {
+    applied: boolean; regions: number; removed_empty: number;
+    reason?: string; removed_off?: number;
+    expanded_regions?: Array<{ id: string; prompt: string; negative_prompt?: string }>;
+    /** Region-LoRA entries applied (and charged); present when the request had region LoRAs. */
+    region_loras?: number;
+    /** Why every region LoRA was dropped, e.g. "model_not_supported". */
+    region_loras_dropped?: string;
+    /** Region copies of job LoRAs (or repeats) the server dropped. */
+    region_lora_duplicates?: Array<{ region: number; region_id?: string; id?: number; version_id?: number; name?: string; reason?: string }>;
+  };
 }
 
 export type DynamicPromptMode = 'random' | 'combinatorial';

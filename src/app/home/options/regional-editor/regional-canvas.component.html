@@ -1,0 +1,79 @@
+<div class="rc-shell" [class.rc-size-dialog]="size === 'dialog'">
+  <div #frame class="rc-frame"
+    [class.rc-has-bg]="!!backgroundUrl"
+    [class.rc-drawing]="drawMode"
+    [class.rc-full]="full"
+    [style.--rc-ratio]="ratio"
+    tabindex="0"
+    role="group"
+    aria-roledescription="region layout editor"
+    aria-label="Region layout"
+    [attr.aria-describedby]="helpId"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (pointercancel)="onPointerUp($event, true)"
+    (click)="onFrameClick($event)"
+    (keydown)="onKeyDown($event)">
+    @if (backgroundUrl) {
+      <img class="rc-bg" [src]="backgroundUrl" alt="" draggable="false">
+      <span class="rc-bg-dim" aria-hidden="true"></span>
+    }
+
+    @for (region of regions; track region.id; let i = $index) {
+      <div class="rc-box"
+        [attr.data-region-id]="region.id"
+        [class.rc-selected]="region.id === selectedId"
+        [class.rc-empty]="!region.prompt.trim()"
+        [class.rc-off]="(region.strength ?? 1) <= 0"
+        [style.left.%]="region.x * 100"
+        [style.top.%]="region.y * 100"
+        [style.width.%]="region.width * 100"
+        [style.height.%]="region.height * 100"
+        [style.z-index]="i + 1"
+        [style.--rc]="color(i)"
+        [style.background-image]="backgroundCss"
+        [style.background-size]="backgroundUrl ? backgroundSize(region) : null"
+        [style.background-position]="backgroundUrl ? backgroundPosition(region) : null"
+        [attr.aria-label]="boxAriaLabel(region, i)"
+        role="img">
+        <span class="rc-label"><span class="rc-num">{{ i + 1 }}</span><span class="rc-text">{{ label(region) }}</span></span>
+      </div>
+    }
+
+    @if (ghost) {
+      <div class="rc-ghost" [style.left.%]="ghost.x * 100" [style.top.%]="ghost.y * 100"
+        [style.width.%]="ghost.width * 100" [style.height.%]="ghost.height * 100"></div>
+    }
+
+    @if (selected; as region) {
+      <div class="rc-selection" [style.left.%]="region.x * 100" [style.top.%]="region.y * 100"
+        [style.width.%]="region.width * 100" [style.height.%]="region.height * 100"
+        [class.rc-at-left]="region.x <= 0.002" [class.rc-at-top]="region.y <= 0.002"
+        [class.rc-at-right]="region.x + region.width >= 0.998" [class.rc-at-bottom]="region.y + region.height >= 0.998"
+        [style.--rc]="color(selectedIndex)">
+        @for (handle of handles; track handle) {
+          <span [class]="'rc-handle rc-h-' + handle" [attr.data-handle]="handle" aria-hidden="true"></span>
+        }
+      </div>
+    }
+
+    @for (gx of guides.x; track $index) {
+      <span class="rc-guide rc-guide-v" [style.left.%]="gx * 100" aria-hidden="true"></span>
+    }
+    @for (gy of guides.y; track $index) {
+      <span class="rc-guide rc-guide-h" [style.top.%]="gy * 100" aria-hidden="true"></span>
+    }
+
+    @if (!regions.length && !ghost) {
+      <div class="rc-empty-hint" aria-hidden="true">
+        <i class="bi bi-bounding-box"></i>
+        <span>{{ coarsePointer && !drawMode ? 'Pick a layout, or tap Draw and drag here' : 'Drag here to draw a region' }}</span>
+      </div>
+    } @else if (drawMode && !ghost) {
+      <div class="rc-draw-hint" aria-hidden="true">Drag to draw a new region</div>
+    }
+  </div>
+  <span class="visually-hidden" [id]="helpId">Arrow keys move the selected region, Shift moves it further. Tab picks the next region. Delete removes it, Control D duplicates it, Control Z undoes.</span>
+  <span class="visually-hidden" aria-live="polite">{{ announcement }}</span>
+</div>

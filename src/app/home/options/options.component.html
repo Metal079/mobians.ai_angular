@@ -62,7 +62,10 @@
   <div class="prompt-editor">
     <div class="prompt-header">
       <label for="prompt-input">Prompt</label>
-      <app-character-picker [disabled]="hasPendingJob || !modelSettings.length" [loadedName]="loadedCharacterName" [canUndo]="canUndoCharacter" (undo)="undoCharacter()" (detach)="dismissCharacter()"></app-character-picker>
+      <div class="prompt-header-tools">
+        <app-regional-status-chip [status]="regionalChipStatus" [disabled]="!modelSettings.length" (open)="openRegionalEditor()"></app-regional-status-chip>
+        <app-character-picker [disabled]="hasPendingJob || !modelSettings.length" [loadedName]="loadedCharacterName" [canUndo]="canUndoCharacter" (undo)="undoCharacter()" (detach)="dismissCharacter()"></app-character-picker>
+      </div>
       <span class="visually-hidden" role="status">{{ loadedCharacterName ? loadedCharacterName + ' loaded' : '' }}</span>
     </div>
   <div id="prompt-input-box" class="input-group d-flex align-items-stretch flex-grow-1" [class.dynamic-prompt-input-active]="isDynamicPromptActive()">
@@ -211,6 +214,7 @@
   [isLoggedIn]="isLoggedIn"
   [referenceImage]="referenceImage"
   [hiresTooltip]="getHiresTooltip()"
+  [regionalJobType]="regionalJobType"
   [downloadAllInProgress]="downloadAllInProgress"
   (panelThemeChange)="panelTheme = $event"
   (darkInputFieldsChange)="onDarkInputFieldsChange($event)"

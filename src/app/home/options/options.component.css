@@ -342,6 +342,8 @@
 .prompt-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; margin-bottom: .25rem; color: var(--theme-surface-text); }
 .prompt-header label { margin: 0; flex-shrink: 0; font-size: .85rem; font-weight: 700; }
 .prompt-header app-character-picker { min-width: 0; }
+.prompt-header-tools { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; min-width: 0; }
+.prompt-header-tools app-regional-status-chip { flex: 0 1 auto; }
 
 .history-recovery {
   width: 100%;

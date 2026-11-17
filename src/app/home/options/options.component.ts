@@ -3,7 +3,7 @@ import { SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
-import { GenerationModelSettings, StableDiffusionService } from 'src/app/stable-diffusion.service';
+import { GenerationModelSettings, StableDiffusionService, SubmitJobResponse } from 'src/app/stable-diffusion.service';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
 import { firstValueFrom, of, Subject, Subscription, timer } from 'rxjs';
@@ -20,7 +20,16 @@ import { DestroyRef, inject } from '@angular/core';
 import { GenerationLockService } from 'src/app/generation-lock.service';
 import { AuthService } from 'src/app/auth/auth.service';
 import { DynamicPromptingConfig } from 'src/_shared/generation-request.interface';
-import { RegionalPromptRegion, RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
+import { RegionalPromptingConfig } from 'src/_shared/regional-prompting.interface';
+import { RegionalEditorService, RegionalReuseRequest } from './regional-editor/regional-editor.service';
+import { RegionalStatusChipComponent } from './regional-editor/regional-status-chip.component';
+import { RegionalLoraCatalogService } from './regional-editor/regional-lora-catalog.service';
+import { findCatalogLora, loraKeys } from './regional-editor/regional-loras';
+import {
+  buildRegionalPayload, describeRegionLoraSkips, describeRegionNumbers, emptyRegionalConfig, normaliseRegionalConfig,
+  RegionalPayloadOptions, RegionalPayloadReport, regionalJobLabel, regionalStatus, RegionalStatus, resolveRegionalCapability,
+  restoreRegionalConfig,
+} from './regional-editor/regional-state';
 import { ImageHistoryPanelComponent } from './image-history-panel/image-history-panel.component';
 import { GenerationOptionsPanelComponent } from './generation-options-panel/generation-options-panel.component';
 import { LorasPanelComponent } from './loras-panel/loras-panel.component';
@@ -70,7 +79,8 @@ interface PendingGenerationJob {
       ImageHistoryPanelComponent,
       LorasPanelComponent,
       DynamicPromptHelperComponent,
-      CharacterPickerComponent
+      CharacterPickerComponent,
+      RegionalStatusChipComponent
     ]
 })
 export class OptionsComponent implements OnInit {
@@ -235,21 +245,215 @@ export class OptionsComponent implements OnInit {
     return this.getModelSetting(modelId)?.supports_regional_prompting === true;
   }
 
+  // ---- Regional prompting (editor and helpers: ./regional-editor/) ------------------------------------------
+  readonly regionalEditor = inject(RegionalEditorService);
+  private readonly regionalLoraCatalog = inject(RegionalLoraCatalogService);
+  private readonly regionalSettingsKey = 'regional-prompting';
+  /** True when this browser had saved regions; they win over the copy stored with a pending job. */
+  private regionalStateRestored = false;
+  private regionalStatusCache: { key: string; value: RegionalStatus } | null = null;
+
+  private regionalCapabilityFor(modelId: unknown) {
+    return resolveRegionalCapability(this.getModelSetting(modelId));
+  }
+
+  /**
+   * What decides which region LoRAs are sent: the job's LoRAs (LoRA panel) count toward the per-image limit and are
+   * not repeated per region; a region LoRA made for another base model than the model's is paused.
+   */
+  private regionalPayloadOptions(modelId: unknown, jobLoras: unknown = this.generationRequest?.loras): RegionalPayloadOptions {
+    return {
+      jobLoras: Array.isArray(jobLoras) ? jobLoras : [],
+      baseModel: this.getModelSetting(modelId)?.base_model ?? null,
+      loraBaseModel: lora => findCatalogLora(this.regionalLoraCatalog.catalog(), lora)?.base_model,
+    };
+  }
+
+  /** The version 2 payload for a job (SPEC 1): empty, paused and over-limit regions are left out. */
+  private buildRegionalPayloadFor(input: unknown, modelId: unknown, jobType?: string, jobLoras?: unknown): RegionalPromptingConfig {
+    return buildRegionalPayload(input as RegionalPromptingConfig, this.regionalCapabilityFor(modelId), jobType,
+      this.regionalPayloadOptions(modelId, jobLoras ?? this.generationRequest?.loras)).payload;
+  }
+
+  /** Region-LoRA entries the next job sends; each one is charged like a job LoRA. */
+  private regionLoraCountForCost(): number {
+    const config = this.generationRequest?.regional_prompting;
+    if (!config?.enabled || !config.regions?.some((region: any) => region?.loras?.length)) return 0;
+    const modelId = this.generationRequest.model;
+    return buildRegionalPayload(config, this.regionalCapabilityFor(modelId), this.regionalJobType,
+      this.regionalPayloadOptions(modelId)).regionLoras;
+  }
+
+  /** Regions are paused, never switched off, on models without regional support. */
+  private ensureRegionalConfig(): void {
+    const current = this.generationRequest?.regional_prompting;
+    if (!current || current.version !== 2 || !Array.isArray(current.regions)) {
+      this.generationRequest.regional_prompting = normaliseRegionalConfig(current);
+    }
+  }
+
+  /** The job type the next Generate press sends (Enhanced Quality turns txt2img into txt2img_upscale). */
+  get regionalJobType(): string {
+    const jobType = this.generationRequest?.job_type || 'txt2img';
+    if (jobType === 'txt2img' && this.hiresEligible && this.queueType === 'priority' && this.authService.isLoggedIn()) {
+      return 'txt2img_upscale';
+    }
+    return jobType;
+  }
+
+  get regionalChipStatus(): RegionalStatus {
+    const model = this.selectedModelSettings;
+    const config = this.generationRequest?.regional_prompting;
+    const jobType = this.regionalJobType;
+    const jobLoras = Array.isArray(this.generationRequest?.loras) ? this.generationRequest.loras : [];
+    const loraKey = `${jobLoras.flatMap((lora: any) => loraKeys(lora)).join(',')}|${this.regionalLoraCatalog.catalog().length}`;
+    const key = `${model?.model_id}|${jobType}|${this.isTextOnlyModel}|${loraKey}|${JSON.stringify(config ?? null)}`;
+    if (this.regionalStatusCache?.key === key) return this.regionalStatusCache.value;
+    const value: RegionalStatus = this.isTextOnlyModel || !model
+      ? { kind: 'hidden', label: '', detail: '', count: 0, warnings: [] }
+      : regionalStatus(config, resolveRegionalCapability(model), jobType, model.display_name || model.model_id,
+        this.regionalPayloadOptions(model.model_id));
+    this.regionalStatusCache = { key, value };
+    return value;
+  }
+
+  openRegionalEditor(): void {
+    this.ensureRegionalConfig();
+    this.regionalEditor.openDialog();
+  }
+
+  private saveRegionalSettings(): void {
+    const config = this.generationRequest?.regional_prompting;
+    // Region LoRAs change the price shown on Generate.
+    this.computeCreditCosts();
+    try {
+      if (config && (config.enabled || config.regions?.length)) {
+        localStorage.setItem(this.regionalSettingsKey, JSON.stringify(normaliseRegionalConfig(config)));
+      } else {
+        localStorage.removeItem(this.regionalSettingsKey);
+      }
+    } catch {
+      // Storage full or blocked: the regions stay for this visit.
+    }
+  }
+
+  private loadRegionalSettings(): void {
+    this.regionalStateRestored = false;
+    try {
+      const raw = localStorage.getItem(this.regionalSettingsKey);
+      if (raw) {
+        this.generationRequest.regional_prompting = normaliseRegionalConfig(JSON.parse(raw));
+        this.regionalStateRestored = true;
+        return;
+      }
+    } catch {
+      try { localStorage.removeItem(this.regionalSettingsKey); } catch { /* ignore */ }
+    }
+    this.ensureRegionalConfig();
+  }
+
+  /** Tells the user when a model switch pauses or resumes their regions. */
+  private notifyRegionalModelSwitch(previousModelId: unknown, nextModelId: string): void {
+    const config = this.generationRequest?.regional_prompting;
+    if (!config?.enabled || !config.regions?.length || previousModelId === nextModelId) return;
+    const before = this.regionalCapabilityFor(previousModelId).supported;
+    const after = this.regionalCapabilityFor(nextModelId).supported;
+    const name = this.getModelSetting(nextModelId)?.display_name || nextModelId;
+    if (before && !after) {
+      this.messageService.add({ severity: 'info', summary: 'Regions paused', detail: `${name} does not support regional prompting. Your regions are kept and come back when you switch to a supported model.`, life: 6000 });
+    } else if (!before && after) {
+      const count = config.regions.length;
+      this.messageService.add({ severity: 'success', summary: 'Regions resumed', detail: `${count} ${count === 1 ? 'region is' : 'regions are'} used again with ${name}.`, life: 4000 });
+    }
+  }
+
+  /** "Reuse layout" from the image history (menu, info dialog or the history-settings prompt). */
+  private reuseRegionalLayout(request: RegionalReuseRequest): void {
+    const loaded = normaliseRegionalConfig(request.regional);
+    if (!loaded.regions.length) {
+      this.messageService.add({ severity: 'warn', summary: 'No regions to reuse', detail: 'This image was made without regions.', life: 4000 });
+      return;
+    }
+    this.ensureRegionalConfig();
+    const config = this.generationRequest.regional_prompting as RegionalPromptingConfig;
+    this.regionalEditor.checkpoint(config);
+    restoreRegionalConfig(config, { ...loaded, enabled: true });
+    this.regionalEditor.selectedId.set(loaded.regions[0].id);
+    this.saveSettings();
+    const count = loaded.regions.length;
+    const name = this.selectedModelSettings?.display_name || this.generationRequest.model;
+    if (this.regionalCapabilityFor(this.generationRequest.model).supported) {
+      this.messageService.add({ severity: 'success', summary: 'Layout reused', detail: `${count} ${count === 1 ? 'region was' : 'regions were'} loaded. Undo in the region editor brings back your previous regions.`, life: 4000 });
+    } else {
+      this.messageService.add({ severity: 'info', summary: 'Layout reused, regions paused', detail: `${name} does not support regional prompting. The regions are kept and used when you switch to a supported model.`, life: 6000 });
+    }
+    if (request.openEditor && !this.isTextOnlyModel) this.regionalEditor.openDialog();
+    this.cdr.markForCheck();
+  }
+
+  /** Says what was left out of the regional payload of a job that is being sent. */
+  private reportRegionalPayload(report: RegionalPayloadReport, modelId: unknown, jobType: string): void {
+    const name = this.getModelSetting(modelId)?.display_name || String(modelId || 'This model');
+    if (report.status === 'sent') {
+      const notes: string[] = [];
+      if (report.emptyRegions.length) {
+        const many = report.emptyRegions.length > 1;
+        notes.push(`${describeRegionNumbers(report.emptyRegions)} ${many ? 'have' : 'has'} no prompt and ${many ? 'were' : 'was'} skipped.`);
+      }
+      if (report.overLimit > 0) {
+        notes.push(`${name} uses up to ${this.regionalCapabilityFor(modelId).max_regions} regions; ${report.overLimit} more ${report.overLimit === 1 ? 'was' : 'were'} skipped.`);
+      }
+      if (notes.length) this.messageService.add({ severity: 'warn', summary: 'Some regions were skipped', detail: notes.join(' '), life: 6000 });
+      const loraNotes = describeRegionLoraSkips(report, this.regionalCapabilityFor(modelId), name, this.getModelSetting(modelId)?.base_model);
+      if (loraNotes.length) this.messageService.add({ severity: 'warn', summary: 'Some region LoRAs were not used', detail: loraNotes.join(' '), life: 7000 });
+    } else if (report.status === 'no-prompts') {
+      this.messageService.add({ severity: 'warn', summary: 'Regions not used', detail: 'No region has a prompt yet, so the main prompt was used for the whole image.', life: 6000 });
+    } else if (report.status === 'all-off') {
+      this.messageService.add({ severity: 'warn', summary: 'Regions not used', detail: 'Every region with a prompt is at 0% strength, so the main prompt was used for the whole image.', life: 6000 });
+    } else if (report.status === 'paused-job') {
+      this.messageService.add({ severity: 'info', summary: 'Regions not used', detail: `${name} does not use regions for ${regionalJobLabel(jobType)}.`, life: 5000 });
+    }
+    // 'paused-model' is shown by the status chip; no toast on every image.
+  }
+
+  /** What the server says about region LoRAs it did not use (the site already leaves out what it can predict). */
+  private reportRegionLoraResponse(regional: SubmitJobResponse['regional']): void {
+    if (!regional) return;
+    if (regional.region_loras_dropped === 'model_not_supported') {
+      this.messageService.add({ severity: 'info', summary: 'Region LoRAs not used', detail: 'This model does not use LoRAs per region, so they were left out and not charged.', life: 6000 });
+    }
+    // Copies of job LoRAs (a repeat inside one box cannot come from the editor, which keeps each LoRA once per box).
+    const duplicates = (Array.isArray(regional.region_lora_duplicates) ? regional.region_lora_duplicates : [])
+      .filter(item => !item.reason || item.reason === 'job_lora');
+    if (duplicates.length) {
+      const names = duplicates.map(item => `"${item.name || 'LoRA'}" (Region ${item.region})`).join(', ');
+      this.messageService.add({ severity: 'info', summary: 'Region LoRA used once', detail: `${names} ${duplicates.length > 1 ? 'are' : 'is'} already used for the whole image, so the region copy was left out.`, life: 6000 });
+    }
+  }
+
+  /**
+   * The regions as queued: the server returns the expanded text of regions whose dynamic-prompt syntax it expanded
+   * (`regional.expanded_regions`), so history records what was generated, as it does for the main prompt.
+   */
+  private withExpandedRegions(sent: RegionalPromptingConfig, expanded?: Array<{ id: string; prompt: string; negative_prompt?: string }>): RegionalPromptingConfig {
+    if (!sent?.enabled || !Array.isArray(sent.regions) || !Array.isArray(expanded) || !expanded.length) return sent;
+    const byId = new Map(expanded.filter(item => item && typeof item.id === 'string').map(item => [item.id, item]));
+    return {
+      ...sent,
+      regions: sent.regions.map(region => {
+        const item = byId.get(region.id);
+        if (!item || typeof item.prompt !== 'string') return region;
+        return { ...region, prompt: item.prompt, negative_prompt: typeof item.negative_prompt === 'string' ? item.negative_prompt : region.negative_prompt };
+      }),
+    };
+  }
+
   supportsUpscale(modelId: unknown): boolean {
     return this.getModelSetting(modelId)?.supports_upscale !== false;
   }
 
   private getModelType(modelId: unknown): string {
     return this.getModelSetting(modelId)?.base_model || 'SD 1.5';
-  }
-
-  private disableRegionalPromptingForUnsupportedModel(modelId: unknown): void {
-    if (this.supportsRegionalPrompting(modelId)) return;
-    if (!this.generationRequest?.regional_prompting) {
-      this.generationRequest.regional_prompting = { enabled: false, regions: [] };
-      return;
-    }
-    this.generationRequest.regional_prompting.enabled = false;
   }
 
   private ensureValidModelSelected(persist: boolean = true): void {
@@ -262,7 +466,7 @@ export class OptionsComponent implements OnInit {
     const normalized = this.normalizeModelId(previous);
     this.generationRequest.model = normalized;
     this.applyModelDefaultsIfChanged(previous, normalized);
-    this.disableRegionalPromptingForUnsupportedModel(normalized);
+    this.ensureRegionalConfig();
 
     // Keep aspect ratio config in sync with the selected model.
     if (this.aspectRatio) this.aspectRatio.model = normalized;
@@ -317,10 +521,7 @@ export class OptionsComponent implements OnInit {
     is_dev_job: environment.isDevJob,
     loras: [],
     lossy_images: true,
-    regional_prompting: {
-      enabled: false,
-      regions: [],
-    },
+    regional_prompting: emptyRegionalConfig(),
     dynamic_prompting: {
       enabled: false,
     },
@@ -517,6 +718,8 @@ export class OptionsComponent implements OnInit {
       this.generationRequest.prompt = value;
     });
 
+    this.regionalEditor.reuseRequests$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(request => this.reuseRegionalLayout(request));
+
     // Subscribe to credits changes
     this.authService.credits$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async creditsData => {
       if (creditsData) {
@@ -609,12 +812,6 @@ export class OptionsComponent implements OnInit {
             this.generationRequest.loras = this.snapshotLoras(pending.request.loras);
             this.updateCreditCost();
           }
-          if (pending.request.regional_prompting) {
-            this.generationRequest.regional_prompting = this.sanitizeRegionalPrompting(
-              pending.request.regional_prompting,
-              pending.request.model
-            );
-          }
         }
 
         // Pending job restore can also carry stale/invalid model values.
@@ -673,7 +870,9 @@ export class OptionsComponent implements OnInit {
       guidance_scale: recipe.model ? recipe.guidance_scale : this.generationRequest.guidance_scale,
       loras: this.snapshotLoras(recipe.model ? recipe.loras : currentLoras), seed: undefined,
       image: undefined, image_UUID: undefined, mask_image: undefined, color_inpaint: undefined,
-      regional_prompting: { enabled: false, regions: [] }, dynamic_prompting: { enabled: false },
+      // Keep the user's regions (switched off) instead of discarding them with the old recipe.
+      regional_prompting: { ...normaliseRegionalConfig(this.generationRequest.regional_prompting), enabled: false },
+      dynamic_prompting: { enabled: false },
       job_type: 'txt2img', strength: 0.35,
     };
     if (recipe.model) {
@@ -758,8 +957,10 @@ export class OptionsComponent implements OnInit {
       ? modelSelection
       : (modelSelection.target as HTMLSelectElement | null)?.value;
     const selectedModelId = this.normalizeModelId(rawModelId);
+    const previousModelId = this.generationRequest.model;
     this.generationRequest.model = selectedModelId;
-    this.disableRegionalPromptingForUnsupportedModel(selectedModelId);
+    this.ensureRegionalConfig();
+    this.notifyRegionalModelSwitch(previousModelId, selectedModelId);
 
     this.generationRequest.guidance_scale = this.getDefaultCfgForModel(selectedModelId);
     if (this.isTextOnlyModel) {
@@ -779,18 +980,26 @@ export class OptionsComponent implements OnInit {
 
   // Queue type and credit cost methods
   updateCreditCost() {
-    const modelSetting = this.getModelSetting(this.generationRequest.model);
+    this.computeCreditCosts();
+    this.enforceHiresConstraints();
+    // Model and balance responses arrive outside template events. Notify zoneless
+    // change detection so prices and account state render as soon as they arrive.
+    this.cdr.markForCheck();
+  }
+
+  /** The prices only (no side effects): model cost plus the per-LoRA cost for job LoRAs and region LoRAs. */
+  private computeCreditCosts(): void {
+    const modelSetting = this.getModelSetting(this.generationRequest?.model);
     const baseCost = Number(modelSetting?.credit_cost ?? 0);
-    const loraCount = Array.isArray(this.generationRequest?.loras) ? this.generationRequest.loras.length : 0;
+    // Region-LoRA entries are charged exactly like job LoRAs (backend _calculate_model_credit_cost).
+    const loraCount = (Array.isArray(this.generationRequest?.loras) ? this.generationRequest.loras.length : 0)
+      + this.regionLoraCountForCost();
     const perLoraCost = Number(modelSetting?.lora_credit_cost ?? 0);
     const loraTotalCost = loraCount * perLoraCost;
     this.creditCost = baseCost + loraTotalCost;
     // LoRAs have 3x cost for upscale and 4x cost for enhanced generation
     this.upscaleCreditCost = (baseCost * 3) + (loraTotalCost * 3);
     this.hiresCreditCost = (baseCost * 4) + (loraTotalCost * 4);
-    this.enforceHiresConstraints();
-    // Model and balance responses arrive outside template events. Notify zoneless
-    // change detection so prices and account state render as soon as they arrive.
     this.cdr.markForCheck();
   }
 
@@ -1119,6 +1328,8 @@ export class OptionsComponent implements OnInit {
       localStorage.removeItem("dynamic-prompting");
     }
 
+    this.saveRegionalSettings();
+
     // Save hi-res toggle (only when logged in)
     if (this.hiresEnabled && this.authService.isLoggedIn()) {
       localStorage.setItem("hires-enabled", "true");
@@ -1187,6 +1398,7 @@ export class OptionsComponent implements OnInit {
     if (localStorage.getItem("hires-enabled") != null) {
       this.hiresEnabled = localStorage.getItem("hires-enabled") == 'true';
     }
+    this.loadRegionalSettings();
 
     this.updateCreditCost();
     this.settingsHydrated = true;
@@ -1217,6 +1429,7 @@ export class OptionsComponent implements OnInit {
     // ('notifications-user-id') is what finds this browser's finished jobs and first visit.
     localStorage.removeItem('hires-enabled');
     localStorage.removeItem('dynamic-prompting');
+    localStorage.removeItem(this.regionalSettingsKey);
     this.generationRequest.prompt = "";
     this.generationRequest.negative_prompt = this.defaultNegativePrompt;
     this.generationRequest.strength = 0.8;
@@ -1230,7 +1443,7 @@ export class OptionsComponent implements OnInit {
     this.applyInputStyleToBody(this.darkInputFields);
     // Default after reset: WebP images enabled
     this.generationRequest.lossy_images = true;
-    this.generationRequest.regional_prompting = { enabled: false, regions: [] };
+    this.generationRequest.regional_prompting = emptyRegionalConfig();
     this.generationRequest.dynamic_prompting = this.createDisabledDynamicPromptingConfig();
     this.hiresEnabled = false;
     this.changeAspectRatio("portrait");
@@ -1250,45 +1463,6 @@ export class OptionsComponent implements OnInit {
       ...lora,
       strength: typeof lora?.strength === 'number' ? lora.strength : 1.0,
     }));
-  }
-
-  private sanitizeRegionalPrompting(
-    input: any,
-    modelId: unknown = this.generationRequest?.model
-  ): { enabled: boolean; regions: RegionalPromptRegion[] } {
-    const empty = { enabled: false, regions: [] as RegionalPromptRegion[] };
-    if (!input || typeof input !== "object") return empty;
-    if (!this.supportsRegionalPrompting(modelId)) return empty;
-
-    const regions: RegionalPromptRegion[] = (Array.isArray(input.regions) ? input.regions : [])
-      .map((region: any) => ({
-        id: String(region?.id ?? `${Date.now()}-${Math.floor(Math.random() * 1000)}`),
-        prompt: String(region?.prompt ?? "").trim(),
-        negative_prompt: String(region?.negative_prompt ?? "").trim(),
-        x: Math.min(1, Math.max(0, Number(region?.x ?? 0))),
-        y: Math.min(1, Math.max(0, Number(region?.y ?? 0))),
-        width: Math.min(1, Math.max(0.05, Number(region?.width ?? 0.25))),
-        height: Math.min(1, Math.max(0.05, Number(region?.height ?? 0.25))),
-        denoise_strength: Math.min(1, Math.max(0, Number(region?.denoise_strength ?? 1))),
-        feather: Math.min(96, Math.max(0, Math.round(Number(region?.feather ?? 32)))),
-        opacity: Math.min(1, Math.max(0, Number(region?.opacity ?? 1))),
-        inherit_base_prompt: region?.inherit_base_prompt === true,
-      }))
-      .filter((region: RegionalPromptRegion) => region.prompt.length > 0)
-      .map((region: RegionalPromptRegion) => {
-        if (region.x + region.width > 1) {
-          region.x = Math.max(0, 1 - region.width);
-        }
-        if (region.y + region.height > 1) {
-          region.y = Math.max(0, 1 - region.height);
-        }
-        return region;
-      });
-
-    return {
-      enabled: !!input.enabled && regions.length > 0,
-      regions,
-    };
   }
 
   private createDisabledDynamicPromptingConfig(template?: string): DynamicPromptingConfig {
@@ -1488,9 +1662,9 @@ export class OptionsComponent implements OnInit {
   private getHistoryRegionalPromptingSnapshot(): RegionalPromptingConfig {
     const pending = this.getPendingJob();
     if (pending?.request?.regional_prompting) {
-      return this.sanitizeRegionalPrompting(pending.request.regional_prompting, pending.request.model);
+      return this.buildRegionalPayloadFor(pending.request.regional_prompting, pending.request.model, undefined, pending.request.loras);
     }
-    return this.sanitizeRegionalPrompting(this.generationRequest?.regional_prompting, this.generationRequest?.model);
+    return this.buildRegionalPayloadFor(this.generationRequest?.regional_prompting, this.generationRequest?.model, this.regionalJobType);
   }
 
   // Send job to django api and retrieve job id.
@@ -1509,6 +1683,7 @@ export class OptionsComponent implements OnInit {
     const isUpscaleJob = effectiveMode === 'upscale';
     const isHiresJob = effectiveMode === 'hires';
     const queueTypeForRequest: 'free' | 'priority' = (isUpscaleJob || isHiresJob) ? 'priority' : this.queueType;
+    this.computeCreditCosts();
     const creditCostForRequest = isUpscaleJob ? this.upscaleCreditCost : (isHiresJob ? this.hiresCreditCost : this.creditCost);
     const jobTypeForRequest = isUpscaleJob ? 'upscale' : (isHiresJob ? 'txt2img_upscale' : this.generationRequest.job_type);
     this.lastSubmittedCreditCost = creditCostForRequest;
@@ -1613,6 +1788,10 @@ export class OptionsComponent implements OnInit {
 
     const activeCharacter = this.characters.activeCharacter();
     const characterOwner = this.sharedService.getUserDataValue()?.user_id;
+    const regionalReport = buildRegionalPayload(
+      this.generationRequest.regional_prompting, this.regionalCapabilityFor(this.generationRequest.model), jobTypeForRequest,
+      this.regionalPayloadOptions(this.generationRequest.model));
+    this.reportRegionalPayload(regionalReport, this.generationRequest.model, jobTypeForRequest);
     const requestToSend = this.applyModelRequestCapabilities({
       ...this.generationRequest,
       seed: seedForRequest,
@@ -1620,7 +1799,7 @@ export class OptionsComponent implements OnInit {
       character_look_id: activeCharacter?.imageId || undefined,
       job_type: jobTypeForRequest,
       queue_type: queueTypeForRequest,
-      regional_prompting: this.sanitizeRegionalPrompting(this.generationRequest.regional_prompting, this.generationRequest.model),
+      regional_prompting: regionalReport.payload,
       dynamic_prompting: dynamicPromptingForRequest,
     });
 
@@ -1648,6 +1827,17 @@ export class OptionsComponent implements OnInit {
             });
           }
 
+          if (requestToSend.regional_prompting?.enabled && response.regional?.applied === false) {
+            this.messageService.add({
+              severity: 'warn', summary: 'Regions not applied',
+              detail: 'The server did not apply your regions to this image, so it uses the main prompt everywhere.', life: 6000,
+            });
+          } else if (response.regional?.removed_empty) {
+            const removed = response.regional.removed_empty;
+            this.messageService.add({ severity: 'warn', summary: 'Some regions were skipped', detail: `${removed} ${removed === 1 ? 'region had' : 'regions had'} no usable prompt.`, life: 5000 });
+          }
+          this.reportRegionLoraResponse(response.regional);
+
           // Persist pending job so we can resume after refresh
           this.savePendingJob(response.job_id, {
             character_id: response.character_id,
@@ -1667,7 +1857,7 @@ export class OptionsComponent implements OnInit {
             client_id: requestToSend.client_id,
             queue_type: requestToSend.queue_type,
             loras: this.snapshotLoras(requestToSend.loras),
-            regional_prompting: this.sanitizeRegionalPrompting(requestToSend.regional_prompting, requestToSend.model),
+            regional_prompting: this.withExpandedRegions(requestToSend.regional_prompting, response.regional?.expanded_regions),
             dynamic_prompting: requestToSend.dynamic_prompting,
           });
 
@@ -2579,9 +2769,14 @@ export class OptionsComponent implements OnInit {
     this.currentSeed = request.seed;
     // They also hold the negative prompt as sent, which is empty for models that
     // do not accept one. The saved text is already loaded; do not overwrite it.
+    // The job also holds the regions as sent (empty ones left out); the editor's saved regions win when present.
+    const workingRegional = this.generationRequest.regional_prompting;
     this.generationRequest = {
       ...this.generationRequest, ...request,
       seed: this.generationRequest.seed, negative_prompt: this.generationRequest.negative_prompt,
+      regional_prompting: this.regionalStateRestored || !request.regional_prompting
+        ? workingRegional
+        : normaliseRegionalConfig(request.regional_prompting),
     };
   }
 
@@ -2593,12 +2788,6 @@ export class OptionsComponent implements OnInit {
       if (Array.isArray(pending.request.loras)) {
         this.generationRequest.loras = this.snapshotLoras(pending.request.loras);
         this.updateCreditCost();
-      }
-      if (pending.request.regional_prompting) {
-        this.generationRequest.regional_prompting = this.sanitizeRegionalPrompting(
-          pending.request.regional_prompting,
-          pending.request.model
-        );
       }
     }
     // Clear pending and release any lock just in case

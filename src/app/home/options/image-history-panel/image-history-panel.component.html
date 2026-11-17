@@ -348,6 +348,22 @@
           label: 'Negative prompt', text: image.negativePrompt, copyKey: image.UUID + ':negative'
         }"></ng-container>
       }
+      @if (hasRegionalLayout(image)) {
+        <div class="info-layout">
+          <app-regional-minimap class="info-layout-map" [boxes]="image.regional_prompting!.regions"
+            [aspect]="image.width && image.height ? image.width / image.height : 1"
+            [style.width.px]="image.width && image.height && image.width < image.height ? 64 * image.width / image.height : 64"></app-regional-minimap>
+          <div class="info-layout-text">
+            <span class="info-label">Region layout</span>
+            <span class="info-value">{{ image.regional_prompting!.regions.length }} {{ image.regional_prompting!.regions.length === 1 ? 'region' : 'regions' }}</span>
+          </div>
+          @if (!pickerMode) {
+            <button type="button" class="btn btn-sm btn-primary info-layout-reuse" (click)="reuseRegionalLayout(image)">
+              <i class="bi bi-bounding-box" aria-hidden="true"></i> Reuse layout
+            </button>
+          }
+        </div>
+      }
       @if (image.regional_prompting?.enabled) {
         @for (region of image.regional_prompting?.regions; track $index) {
           <div class="info-region">

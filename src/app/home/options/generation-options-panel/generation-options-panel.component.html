@@ -25,6 +25,9 @@
       <ng-template #item let-model>
         <div class="model-select-option">
           <span class="model-select-name">{{ model.display_name || model.model_id }}</span>
+          @if (model.regional?.supported ?? model.supports_regional_prompting) {
+            <i class="bi bi-bounding-box model-regional-icon" title="Supports regional prompting" aria-label="Supports regional prompting"></i>
+          }
           <span class="model-type-tag">{{ model.base_model }}</span>
         </div>
       </ng-template>
@@ -81,200 +84,42 @@
     }
 
     @if (!textOnlyModel) {
-    <section class="regional-panel mb-3">
-      <div class="regional-header">
-        <div class="regional-title-wrap">
-          <h5 class="regional-title">Regional Prompting</h5>
-          <p class="regional-subtitle mb-0">Give different areas of the image their own prompt details.</p>
-        </div>
-        <div class="form-check form-switch">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            id="regionalPromptingEnabled"
-            [disabled]="!regionalPromptingSupported"
-            [(ngModel)]="regionalEnabled">
-          <label class="form-check-label" for="regionalPromptingEnabled">Enable</label>
-        </div>
-      </div>
-      @if (!regionalPromptingSupported) {
-        <small class="text-muted">Regional prompting is available only for supported models.</small>
-      }
+      <!-- Regional prompting: inline editor plus the full-screen editor (regional-editor/). -->
+      <app-regional-editor class="regional-inline mb-3" mode="inline"
+        [config]="regionalConfig"
+        [model]="selectedModel"
+        [models]="modelSettings"
+        [mainPrompt]="generationRequest.prompt"
+        [jobType]="regionalJobType"
+        [referenceImage]="referenceImage"
+        [aspectRatio]="aspectRatio"
+        [isLoggedIn]="isLoggedIn"
+        [jobLoras]="generationRequest.loras"
+        (save)="saveSettings.emit()"
+        (switchModel)="onModelSelectionChange($event)"></app-regional-editor>
 
-      <div class="regional-actions">
-        <button class="btn btn-sm regional-action-btn primary" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion()">+ Add</button>
-        <button class="btn btn-sm regional-action-btn" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion('left-right')">Left / Right</button>
-        <button class="btn btn-sm regional-action-btn" type="button" [disabled]="!regionalPromptingSupported" (click)="addRegion('top-bottom')">Top / Bottom</button>
-        <button class="btn btn-sm regional-action-btn danger" type="button" [disabled]="!regionalPromptingSupported" (click)="clearRegions()">Clear</button>
-      </div>
-
-      <div class="regional-presets">
-        <div class="regional-preset-row">
-          <input
-            class="form-control form-control-sm"
-            placeholder="Preset name"
-            [(ngModel)]="newPresetName"
-            [disabled]="!canManagePresets || !regionalPromptingSupported">
-          <button
-            class="btn btn-sm regional-action-btn primary"
-            type="button"
-            [disabled]="!canManagePresets || !regionalPromptingSupported"
-            (click)="saveCurrentAsPreset()">Save Preset</button>
-        </div>
-        @if (regionalPresets.length > 0) {
-          <div class="regional-preset-chip-row">
-            @for (preset of regionalPresets; track preset.id) {
-              <button class="regional-chip" type="button" (click)="applyPreset(preset.id)">{{ preset.name }}</button>
-              <button
-                class="btn btn-sm regional-action-btn danger preset-delete-btn"
-                type="button"
-                [disabled]="!canManagePresets || !regionalPromptingSupported"
-                (click)="removePreset(preset.id, preset.name)">×</button>
-            }
-          </div>
+      <p-dialog styleClass="character-dialog regional-editor-dialog" header="Regional prompting"
+        [visible]="regionalEditor.dialogOpen()" (visibleChange)="!$event && closeRegionalDialog()"
+        [modal]="true" [draggable]="false" [resizable]="false" [blockScroll]="true" appendTo="body"
+        [style]="{ width: 'min(1320px, 96vw)' }">
+        @if (regionalEditor.dialogOpen()) {
+          <app-regional-editor mode="dialog"
+            [config]="regionalConfig"
+            [model]="selectedModel"
+            [models]="modelSettings"
+            [mainPrompt]="generationRequest.prompt"
+            [jobType]="regionalJobType"
+            [referenceImage]="referenceImage"
+            [aspectRatio]="aspectRatio"
+            [isLoggedIn]="isLoggedIn"
+            [jobLoras]="generationRequest.loras"
+            (save)="saveSettings.emit()"
+            (switchModel)="onModelSelectionChange($event)"></app-regional-editor>
         }
-        <small class="regional-storage-hint">
-          {{ isLoggedIn ? 'Presets are saved to your account.' : 'Sign in to save and manage presets.' }}
-        </small>
-      </div>
-
-      <div class="regional-editor-toggle-row">
-        <button
-          class="btn btn-sm regional-action-btn"
-          type="button"
-          [disabled]="(!regionalEnabled && !hasRegions) || !regionalPromptingSupported"
-          (click)="toggleWorkspace()">
-          {{ workspaceExpanded ? 'Hide Workspace' : 'Edit Regions' }}
-        </button>
-        <span class="regional-summary-text">
-          {{ hasRegions ? (regionalRegions.length + ' region(s) configured') : 'No regions configured' }}
-        </span>
-      </div>
-
-      @if (workspaceExpanded) {
-        <div class="regional-workspace-shell" [class.enabled]="regionalEnabled">
-          @if (!regionalEnabled) {
-            <div class="regional-disabled-overlay">
-              <p class="mb-0">Enable regional prompting to edit and drag regions.</p>
-            </div>
-          }
-          <div class="regional-workspace">
-            <div class="regional-preview-column">
-              <div class="regional-preview">
-                <div class="regional-preview-frame" [style.aspect-ratio]="previewAspectRatio">
-                @for (region of regionalRegions; track region.id; let i = $index) {
-                  <button
-                    type="button"
-                    class="regional-preview-box"
-                    [class.active]="i === activeRegionIndex"
-                    [style.left.%]="region.x * 100"
-                    [style.top.%]="region.y * 100"
-                    [style.width.%]="region.width * 100"
-                    [style.height.%]="region.height * 100"
-                    (pointerdown)="onPreviewPointerDown($event, i)"
-                    (pointermove)="onPreviewPointerMove($event, i)"
-                    (pointerup)="onPreviewPointerUp($event, i)"
-                    (pointercancel)="onPreviewPointerUp($event, i)"
-                    (click)="selectRegion(i)">
-                    <span>R{{ i + 1 }}</span>
-                  </button>
-                }
-                </div>
-              </div>
-
-              @if (hasRegions) {
-                <div class="regional-chip-list">
-                  @for (region of regionalRegions; track region.id; let i = $index) {
-                    <button
-                      type="button"
-                      class="regional-chip"
-                      [class.active]="i === activeRegionIndex"
-                      (click)="selectRegion(i)">
-                      Region {{ i + 1 }}
-                    </button>
-                  }
-                </div>
-              }
-            </div>
-
-            <div class="regional-editor-column">
-              @if (selectedRegion; as region) {
-                <article class="regional-region-card">
-                  <div class="regional-region-head">
-                    <h6 class="mb-0">Editing Region {{ activeRegionIndex + 1 }}</h6>
-                    <button class="btn btn-sm regional-action-btn danger" type="button" (click)="removeRegion(activeRegionIndex)">Remove</button>
-                  </div>
-
-                  <label class="form-label mb-1">Region Prompt
-                    <app-hint text="Describe only what should appear inside this region." variant="regional"></app-hint>
-                  </label>
-                  <textarea
-                    class="form-control mb-2"
-                    rows="2"
-                    [(ngModel)]="region.prompt"
-                    (ngModelChange)="saveSettings.emit()"
-                    placeholder="Describe this area"></textarea>
-
-                  @if (selectedModel?.supports_negative_prompt !== false) {
-                  <label class="form-label mb-1">Region Negative Prompt (optional)
-                    <app-hint text="Things to avoid in this region (wrong character, colors, clothing, etc)." variant="regional"></app-hint>
-                  </label>
-                  <input
-                    class="form-control mb-2"
-                    [(ngModel)]="region.negative_prompt"
-                    (ngModelChange)="saveSettings.emit()"
-                    placeholder="What to avoid in this area">
-                  }
-
-                  <div class="form-check mb-2">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      [id]="'inheritBasePrompt-' + activeRegionIndex"
-                      [(ngModel)]="region.inherit_base_prompt"
-                      (ngModelChange)="saveSettings.emit()">
-                    <label class="form-check-label" [for]="'inheritBasePrompt-' + activeRegionIndex">
-                      Include base prompt context in this region's prompt
-                      <app-hint text="When ON, this region also inherits the global prompt. Turn OFF for stronger separation." variant="regional"></app-hint>
-                    </label>
-                  </div>
-
-                  <p class="regional-precision-hint">Drag a slider or type an exact value.</p>
-                  <div class="regional-grid">
-                    @for (control of regionControls; track control.key) {
-                      <div class="regional-slider-item" [class.regional-control-wide]="control.scale === 1">
-                        <div class="regional-value-row">
-                          <label class="form-label" [for]="'region-value-' + control.key">{{ control.label }}
-                            <app-hint [text]="control.hint" variant="regional"></app-hint>
-                          </label>
-                          <div class="regional-number-wrap">
-                            <input type="number" class="form-control regional-number" [id]="'region-value-' + control.key"
-                              [attr.aria-label]="control.label + (control.unit === '%' ? ' (percent)' : control.unit ? ' (' + control.unit + ')' : '')"
-                              inputmode="decimal" [min]="control.min" [max]="control.max" [step]="control.step"
-                              [value]="regionControlValue(region, control)" [disabled]="!regionalEnabled"
-                              (change)="commitRegionValue(region, control, $event)">
-                            @if (control.unit) { <span aria-hidden="true">{{ control.unit }}</span> }
-                          </div>
-                        </div>
-                        <input type="range" class="form-range" [attr.aria-label]="control.label + ' slider'"
-                          [attr.aria-valuetext]="regionControlValue(region, control) + control.unit"
-                          [min]="control.min" [max]="control.max" [step]="control.step" [disabled]="!regionalEnabled"
-                          [ngModel]="regionControlValue(region, control)" (ngModelChange)="setRegionValue(region, control, $event)">
-                      </div>
-                    }
-                  </div>
-                </article>
-              } @else {
-                <div class="regional-empty-state">
-                  <h6>No regions yet</h6>
-                  <p>Create one with <strong>Add</strong> or use a split preset to start quickly.</p>
-                </div>
-              }
-            </div>
-          </div>
-        </div>
-      }
-    </section>
+        <ng-template #footer>
+          <button type="button" class="btn btn-primary regional-dialog-done" (click)="closeRegionalDialog()">Done</button>
+        </ng-template>
+      </p-dialog>
     }
 
     <div class="mb-3" style="display: flex; justify-content: space-between; flex-wrap: wrap;">
