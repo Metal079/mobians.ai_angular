@@ -26,6 +26,15 @@
               <span class="stat-label">{{ suggestionsStatusLabel }}</span>
             </div>
           </div>
+          @if (needsPreviewCount > 0) {
+            <button type="button" class="stat-card needs-preview" (click)="showLorasNeedingPreview()" pTooltip="LoRAs saved without a preview image. Click to list them." tooltipPosition="bottom">
+              <i class="bi bi-image"></i>
+              <div class="stat-info">
+                <span class="stat-value">{{ needsPreviewCount }}</span>
+                <span class="stat-label">Need Preview</span>
+              </div>
+            </button>
+          }
         </div>
       </div>
     </div>
@@ -41,6 +50,9 @@
             <i class="bi bi-card-list"></i>
             <span>All LoRAs</span>
             <span class="tab-badge">{{ filteredAllLoras.length }}</span>
+            @if (needsPreviewCount > 0) {
+              <span class="tab-badge warning" [attr.aria-label]="needsPreviewCount + ' need a preview image'" pTooltip="Need a preview image" tooltipPosition="top"><i class="bi bi-image"></i> {{ needsPreviewCount }}</span>
+            }
           </div>
         </p-tab>
         <p-tab [value]="1">
@@ -103,6 +115,14 @@
             <p-multiSelect [options]="loraBaseModelOptions" [(ngModel)]="selectedBaseModels" placeholder="Base model(s)" (onChange)="filterAllLoras()" [showToggleAll]="false" [display]="'chip'" styleClass="filter-multiselect"></p-multiSelect>
             <p-selectButton [options]="activeOptions" [(ngModel)]="activeFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
             <p-selectButton [options]="nsfwOptions" [(ngModel)]="nsfwFilter" (onChange)="filterAllLoras()" optionLabel="label" optionValue="value" styleClass="filter-btn-group"></p-selectButton>
+            @if (needsPreviewCount > 0) {
+              <p-button
+                [label]="'Needs preview (' + needsPreviewCount + ')'"
+                icon="bi bi-image"
+                [styleClass]="needsPreviewOnly ? 'needs-preview-filter is-active' : 'needs-preview-filter'"
+                [attr.aria-pressed]="needsPreviewOnly"
+                (onClick)="toggleNeedsPreviewFilter()"></p-button>
+            }
           </div>
           <div class="tab-action-buttons">
             <p-button label="Upload LoRA" icon="bi bi-upload" styleClass="p-button-success" (onClick)="openManualLoraDialog()"></p-button>
@@ -128,7 +148,14 @@
               <td colspan="10">
                 <div class="expansion-card">
                   <div class="expansion-image">
-                    <img class="preview-img-lg clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
+                    @if (getPreviewUrl(row); as img) {
+                      <img class="preview-img-lg clickable" [src]="getThumbUrl(img, 480)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
+                    } @else {
+                      <div class="no-image-placeholder preview-missing-lg">
+                        <i class="bi bi-image"></i>
+                        <span>Needs preview</span>
+                      </div>
+                    }
                   </div>
                   <div class="expansion-details">
                     <div class="detail-grid">
@@ -191,8 +218,11 @@
                         </div>
                       }
                     </div>
-                    <div class="image-upload-section">
-                      <span class="detail-label">Replace Preview</span>
+                    <div class="image-upload-section" [class.needs-preview]="needsPreview(row)">
+                      <span class="detail-label">{{ needsPreview(row) ? 'Add Preview' : 'Replace Preview' }}</span>
+                      @if (needsPreview(row)) {
+                        <small class="needs-preview-note"><i class="bi bi-exclamation-triangle-fill"></i> CivitAI provided no preview image. Users see a placeholder until one is uploaded.</small>
+                      }
                       <div class="image-upload-controls">
                         <input type="file" accept="image/*" [disabled]="isLoraImageUploading(row)" (change)="onLoraImageSelected($event, row)" />
                         @if (isLoraImageUploading(row)) {
@@ -240,7 +270,14 @@
               </td>
               <td>
                 <span class="p-column-title">Preview</span>
-                <img class="preview-img clickable" [src]="getThumbUrl(getPreviewUrl(row) || row.image_url, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(getPreviewUrl(row) || row.image_url, row.name)" />
+                @if (getPreviewUrl(row); as img) {
+                  <img class="preview-img clickable" [src]="getThumbUrl(img, 120)" [alt]="row.name" loading="lazy" (click)="openImagePreview(img, row.name)" />
+                } @else {
+                  <button type="button" class="preview-img preview-missing" [pRowToggler]="row" pTooltip="Needs a preview image. Click to open and upload one." tooltipPosition="top" aria-label="Needs a preview image: open row to upload one">
+                    <i class="bi bi-image"></i>
+                    <span>Needs preview</span>
+                  </button>
+                }
               </td>
               <td>
                 @if (!isEditingName(row)) {
@@ -609,7 +646,8 @@
                     <span class="p-column-title">Failure Details</span>
                     <span
                       class="history-result-detail"
-                      [class.error-snippet]="item.status === 'failed'">
+                      [class.error-snippet]="item.status === 'failed'"
+                      [class.warning-snippet]="isDownloadedWithNote(item)">
                       {{ getDownloadFailureReason(item) }}
                     </span>
                   </td>

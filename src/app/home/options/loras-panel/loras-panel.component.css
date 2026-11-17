@@ -74,6 +74,27 @@
   background: none;
 }
 
+/* LoRAs saved without a preview image (CivitAI sometimes returns none) */
+.lora-image.lora-image-placeholder,
+.selected-lora-image.lora-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  animation: none;
+  background: var(--theme-surface-alt-bg);
+  color: var(--theme-surface-text);
+  border-radius: 4px;
+  opacity: 0.75;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.lora-image.lora-image-placeholder i {
+  font-size: 2rem;
+}
+
 :host ::ng-deep .lora-preview-dialog .p-dialog-content {
   display: flex;
   justify-content: center;

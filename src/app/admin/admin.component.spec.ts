@@ -105,6 +105,66 @@ describe('AdminComponent manual LoRA upload', () => {
     expect(component.getHistoryStatusIcon('downloaded')).toContain('text-success');
   });
 
+  describe('LoRAs without a preview image', () => {
+    beforeEach(() => {
+      component.allLoras = [
+        { id: 1, name: 'Has preview', image_url: '/lora-image/1?v=1' },
+        { id: 2, name: 'My Melody', image_url: null },
+        { id: 3, name: 'Clam', image_url: '' },
+      ];
+      component.updateNeedsPreviewCount();
+      component.filterAllLoras();
+    });
+
+    it('counts them and filters the list down to them', () => {
+      expect(component.needsPreviewCount).toBe(2);
+      expect(component.filteredAllLoras.length).toBe(3);
+
+      component.toggleNeedsPreviewFilter();
+      expect(component.filteredAllLoras.map(r => r.id)).toEqual([2, 3]);
+
+      component.toggleNeedsPreviewFilter();
+      expect(component.filteredAllLoras.length).toBe(3);
+    });
+
+    it('opens the All LoRAs tab filtered to them from the header card', () => {
+      component.adminTab = 2;
+
+      component.showLorasNeedingPreview();
+
+      expect(component.adminTab).toBe(0);
+      expect(component.needsPreviewOnly).toBeTrue();
+      expect(component.filteredAllLoras.map(r => r.id)).toEqual([2, 3]);
+    });
+
+    it('turns the filter off once the last one gets a preview', () => {
+      component.showLorasNeedingPreview();
+      component.allLoras[1].image_url = '/lora-image/2?v=2';
+      component.allLoras[2].image_url = '/lora-image/3?v=3';
+
+      component.updateNeedsPreviewCount();
+
+      expect(component.needsPreviewCount).toBe(0);
+      expect(component.needsPreviewOnly).toBeFalse();
+    });
+  });
+
+  it('shows the missing-preview note on downloaded history entries', () => {
+    const item = {
+      lora_name: 'My Melody',
+      version: 'Anima',
+      status: 'downloaded',
+      error_message: 'Needs a preview image: CivitAI provided none for this version',
+      version_id: 2986306,
+      downloaded_at: '2026-11-16T12:00:00Z',
+    };
+
+    expect(component.getDownloadFailureReason(item)).toBe(item.error_message);
+    expect(component.isDownloadedWithNote(item)).toBeTrue();
+    expect(component.getDownloadFailureReason({ ...item, error_message: null })).toBe('Completed successfully');
+    expect(component.isDownloadedWithNote({ ...item, error_message: null })).toBeFalse();
+  });
+
   it('explains legacy download failures that lack upstream details', () => {
     const reason = component.getDownloadFailureReason({
       lora_name: 'Legacy LoRA',

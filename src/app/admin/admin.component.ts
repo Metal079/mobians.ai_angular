@@ -63,7 +63,7 @@ type CommunityModerationContentType = 'templates' | 'categories';
 @Component({
     selector: 'app-admin',
     templateUrl: './admin.component.html',
-    styleUrls: ['./admin.component.css'],
+    styleUrls: ['./admin.component.css', './admin-needs-preview.css'],
     standalone: true,
     providers: [MessageService, ConfirmationService],
     imports: [
@@ -297,6 +297,7 @@ export class AdminComponent implements OnInit, OnDestroy {
           this.allLoras = Array.isArray(rows) ? rows : [];
           this.expandedRowKeysLoras = {}; // reset
           this.buildLoraBaseModelOptions();
+          this.updateNeedsPreviewCount();
           this.filterAllLoras();
         });
       },
@@ -684,6 +685,7 @@ export class AdminComponent implements OnInit, OnDestroy {
         if (imageUrl) {
           row.image_url = imageUrl;
           this.updateLoraImageInList(loraId, imageUrl);
+          this.updateNeedsPreviewCount();
         }
         this.messageService.add({
           severity: 'success',
@@ -1126,6 +1128,9 @@ export class AdminComponent implements OnInit, OnDestroy {
   loraBaseModelOptions: { label: string; value: string }[] = [];
   activeFilter: 'any' | 'active' | 'inactive' = 'any';
   nsfwFilter: 'any' | 'nsfw' | 'sfw' = 'any';
+  // LoRAs the downloader saved without a preview (CivitAI returned none)
+  needsPreviewOnly = false;
+  needsPreviewCount = 0;
   activeOptions = [
     { label: 'Any', value: 'any' },
     { label: 'Active', value: 'active' },
@@ -1164,8 +1169,29 @@ export class AdminComponent implements OnInit, OnDestroy {
         this.nsfwFilter === 'any' ||
         (this.nsfwFilter === 'nsfw' && !!r?.is_nsfw) ||
         (this.nsfwFilter === 'sfw' && !r?.is_nsfw);
-      return matchesText && matchesBase && matchesActive && matchesNSFW;
+      const matchesPreview = !this.needsPreviewOnly || this.needsPreview(r);
+      return matchesText && matchesBase && matchesActive && matchesNSFW && matchesPreview;
     });
+  }
+
+  needsPreview(row: any): boolean {
+    return !this.getPreviewUrl(row);
+  }
+
+  updateNeedsPreviewCount(): void {
+    this.needsPreviewCount = (this.allLoras || []).filter(r => this.needsPreview(r)).length;
+    if (this.needsPreviewCount === 0) this.needsPreviewOnly = false;
+  }
+
+  toggleNeedsPreviewFilter(): void {
+    this.needsPreviewOnly = !this.needsPreviewOnly;
+    this.filterAllLoras();
+  }
+
+  showLorasNeedingPreview(): void {
+    this.adminTab = 0;
+    this.needsPreviewOnly = true;
+    this.filterAllLoras();
   }
 
   // ---------------- Filters (Suggestions) ----------------
@@ -1911,10 +1937,15 @@ export class AdminComponent implements OnInit, OnDestroy {
     }
   }
 
+  isDownloadedWithNote(item: DownloadHistoryItem): boolean {
+    return item.status?.toLowerCase() === 'downloaded' && !!item.error_message?.trim();
+  }
+
   getDownloadFailureReason(item: DownloadHistoryItem): string {
     const status = item.status?.toLowerCase();
     if (status === 'downloading') return 'Download in progress';
-    if (status !== 'failed') return 'Completed successfully';
+    // A downloaded row keeps a note when it still needs attention (no preview image).
+    if (status !== 'failed') return item.error_message?.trim() || 'Completed successfully';
 
     const message = item.error_message?.trim();
     if (!message) return 'No failure details were recorded.';

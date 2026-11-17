@@ -140,6 +140,14 @@ describe('LorasPanelComponent', () => {
     expect(component.selectedLoras).toEqual([]);
   });
 
+  it('does not open the preview dialog for a LoRA without a preview image', () => {
+    component.displayModal = false;
+
+    component.openImageModalLoraPreview(null);
+
+    expect(component.displayModal).toBeFalse();
+  });
+
   it('refilters LoRAs when model type mapping arrives after LoRAs load', () => {
     component.modelsTypes = {};
     component.loras = [

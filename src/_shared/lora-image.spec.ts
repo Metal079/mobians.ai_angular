@@ -1,5 +1,5 @@
 import { environment } from 'src/environments/environment';
-import { loraThumbnailUrl } from './lora-image';
+import { loraThumbnailUrl, resolveLoraImageUrl } from './lora-image';
 
 describe('LoRA thumbnails', () => {
   it('resolves local images against the API and replaces an existing size', () => {
@@ -14,5 +14,9 @@ describe('LoRA thumbnails', () => {
   it('preserves other image URLs and handles absent previews', () => {
     expect(loraThumbnailUrl('/assets/Sanic.webp', 160)).toBe('/assets/Sanic.webp');
     expect(loraThumbnailUrl(null, 160)).toBe('');
+  });
+  it('resolves an absent preview to an empty string instead of throwing', () => {
+    expect(resolveLoraImageUrl(null)).toBe('');
+    expect(resolveLoraImageUrl(undefined)).toBe('');
   });
 });

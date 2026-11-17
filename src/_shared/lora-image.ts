@@ -1,6 +1,7 @@
 import { environment } from 'src/environments/environment';
 
-export function resolveLoraImageUrl(imageUrl: string): string {
+export function resolveLoraImageUrl(imageUrl: string | null | undefined): string {
+  if (!imageUrl) return '';
   return imageUrl.startsWith('/lora-image/') ? `${environment.apiBaseUrl}${imageUrl}` : imageUrl;
 }
 

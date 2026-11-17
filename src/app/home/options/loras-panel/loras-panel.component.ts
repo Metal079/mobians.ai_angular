@@ -571,7 +571,8 @@ export class LorasPanelComponent implements OnInit, OnChanges, DoCheck, AfterVie
     this.emitLorasChanged();
   }
 
-  openImageModalLoraPreview(imageUrl: string) {
+  openImageModalLoraPreview(imageUrl: string | null | undefined) {
+    if (!imageUrl) return;
     this.selectedImageUrl = this.resolveImageUrl(imageUrl);
     this.displayModal = true;
   }
