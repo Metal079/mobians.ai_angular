@@ -188,7 +188,16 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
   mapWidth(height: number): number { return Math.round(Math.min(height * 1.6, height * this.ratio)); }
   snippet(text: string): string { return promptSnippet(text, 60); }
   percent(value: number | undefined, fallback = 1): number { return Math.round((value ?? fallback) * 100); }
-  geometryValue(region: RegionalPromptRegion, key: GeometryKey): number { return Math.round(region[key] * 1000) / 10; }
+  /**
+   * Percent with one decimal. Width and height are the distance between the rounded edges, so boxes that touch add
+   * up to 100 (three equal columns read 33.3, 33.4, 33.3 instead of 33.3 three times).
+   */
+  geometryValue(region: RegionalPromptRegion, key: GeometryKey): number {
+    const tenths = (value: number) => Math.round(value * 1000);
+    if (key === 'width') return (tenths(region.x + region.width) - tenths(region.x)) / 10;
+    if (key === 'height') return (tenths(region.y + region.height) - tenths(region.y)) / 10;
+    return tenths(region[key]) / 10;
+  }
   isSmall(region: RegionalPromptRegion): boolean { return Math.min(region.width, region.height) < 0.1; }
 
   sharedTag(region: RegionalPromptRegion): string | null {
@@ -358,13 +367,19 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     this.saveSoon();
   }
 
-  /** Exact values commit on change (Enter or leaving the field); invalid entries restore the current value. */
+  /**
+   * Exact values (to 0.1%) commit on change (Enter or leaving the field); invalid entries restore the current value.
+   * A typed width or height puts the far edge on the shown left/top value plus the typed size, so the field reads
+   * back exactly what was typed.
+   */
   onGeometry(region: RegionalPromptRegion, key: GeometryKey, event: Event): void {
     const input = event.target as HTMLInputElement;
-    const value = input.valueAsNumber;
-    if (Number.isFinite(value)) {
+    const tenths = Math.round(input.valueAsNumber * 10);
+    if (Number.isFinite(tenths)) {
       this.store.checkpoint(this.config);
-      region[key] = value / 100;
+      if (key === 'width') region.width = (Math.round(region.x * 1000) + tenths) / 1000 - region.x;
+      else if (key === 'height') region.height = (Math.round(region.y * 1000) + tenths) / 1000 - region.y;
+      else region[key] = tenths / 1000;
       clampBox(region);
       this.saveNow();
     }

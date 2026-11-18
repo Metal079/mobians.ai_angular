@@ -7,6 +7,7 @@ import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { RegionalEditorComponent } from './regional-editor.component';
 import { RegionalEditorService } from './regional-editor.service';
 import { normaliseRegionalConfig } from './regional-state';
+import { REGIONAL_TEMPLATES } from './regional-templates';
 
 const sdxl = { model_id: 'novaMobianXL_v20', display_name: 'novaMobianXL_v20', base_model: 'Illustrious', supports_regional_prompting: true } as any;
 const krea = { model_id: 'Kroma-Krea2', display_name: 'Kroma Krea 2', base_model: 'Krea 2', supports_regional_prompting: true, supports_negative_prompt: false } as any;
@@ -393,5 +394,76 @@ describe('RegionalEditorComponent', () => {
     input.value = '';
     component.onGeometry(region, 'x', { target: input } as any);
     expect(input.value).toBe('0');
+  });
+
+  describe('decimal sizes (user report 2026-11-17: 33.3 was flagged invalid; three columns read 33.3 x 3)', () => {
+    const typeInto = (region: any, key: 'x' | 'y' | 'width' | 'height', text: string): HTMLInputElement => {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = 'any';
+      input.min = '0';
+      input.max = '100';
+      input.value = text;
+      component.onGeometry(region, key, { target: input } as any);
+      return input;
+    };
+
+    it('the size fields accept decimals without a browser validation error', async () => {
+      component.addRegion();
+      await render();
+      const fields = Array.from(el().querySelectorAll<HTMLInputElement>('.rp-geo-input input'));
+      expect(fields.length).toBe(4);
+      for (const field of fields) {
+        field.value = '33.3';
+        expect(field.validity.valid).withContext(field.getAttribute('aria-label') ?? '').toBeTrue();
+      }
+    });
+
+    it('three columns read 33.3, 33.4, 33.3 wide, so the numbers add up to 100', async () => {
+      component.applyTemplate(REGIONAL_TEMPLATES.find(item => item.id === 'three-columns')!);
+      await render();
+      const regions = component.config.regions;
+      expect(regions.map(region => component.geometryValue(region, 'x'))).toEqual([0, 33.3, 66.7]);
+      expect(regions.map(region => component.geometryValue(region, 'width'))).toEqual([33.3, 33.4, 33.3]);
+      expect(regions.map(region => component.geometryValue(region, 'height'))).toEqual([100, 100, 100]);
+    });
+
+    it('a typed decimal size is kept to 0.1% and reads back exactly as typed', () => {
+      component.addRegion();
+      const region = component.config.regions[0];
+      expect(typeInto(region, 'x', '0').value).toBe('0');
+      expect(typeInto(region, 'width', '33.3').value).toBe('33.3');
+      expect(region.width).toBeCloseTo(0.333, 10);
+      expect(typeInto(region, 'x', '33.3').value).toBe('33.3');
+      expect(typeInto(region, 'width', '33.45').value).toBe('33.5');   // more than one decimal rounds to 0.1%
+      expect(typeInto(region, 'height', '12.5').value).toBe('12.5');
+    });
+
+    it('typing 33.3 / 33.4 / 33.3 by hand tiles the image with no gap', () => {
+      component.addRegion();
+      component.addRegion();
+      component.addRegion();
+      const [left, middle, right] = component.config.regions;
+      const place = (region: any, x: string, width: string) => {
+        typeInto(region, 'y', '0');
+        typeInto(region, 'height', '100');
+        typeInto(region, 'width', width);
+        typeInto(region, 'x', x);
+        typeInto(region, 'width', width);   // again, now that the box starts on the typed position
+      };
+      place(left, '0', '33.3');
+      place(middle, '33.3', '33.4');
+      place(right, '66.7', '33.3');
+      expect(left.x + left.width).toBeCloseTo(middle.x, 10);
+      expect(middle.x + middle.width).toBeCloseTo(right.x, 10);
+      expect(right.x + right.width).toBeCloseTo(1, 10);
+    });
+
+    it('a typed width on a box that starts between tenths puts the far edge on the shown numbers', () => {
+      component.applyTemplate(REGIONAL_TEMPLATES.find(item => item.id === 'three-columns')!);
+      const middle = component.config.regions[1];             // starts at exactly 1/3 (shown 33.3)
+      expect(typeInto(middle, 'width', '33.4').value).toBe('33.4');
+      expect(middle.x + middle.width).toBeCloseTo(0.667, 10);
+    });
   });
 });

@@ -61,6 +61,18 @@ export function clamp(value: number, min: number, max: number): number {
 
 const round4 = (value: number): number => Math.round(value * 10000) / 10000;
 
+/**
+ * Start and size of a box along one axis, inside the image and rounded to 0.01%. The edges are rounded rather than
+ * the size, so boxes that touch in the editor still touch when sent (three equal columns: no 0.01% gap).
+ */
+function roundedSpan(start: number, size: number): [number, number] {
+  const length = clamp(finite(size, 0.5), REGIONAL_LIMITS.minSize, 1);
+  const from = clamp(finite(start, 0), 0, 1 - length);
+  const near = round4(from);
+  const sized = Math.max(REGIONAL_LIMITS.minSize, round4(round4(from + length) - near));
+  return [Math.min(near, round4(1 - sized)), sized];
+}
+
 export function emptyRegionalConfig(): RegionalPromptingConfig {
   // Layout hints are opt-in: GPU tests (2026-11-17) showed no gain with region masks on and misplaced small objects.
   return { enabled: false, version: 2, separation: 'balanced', layout_hints: false, regions: [] };
@@ -370,12 +382,8 @@ export function buildRegionalPayload(
     .map(item => item.number);
 
   const regions = kept.map((region, keptIndex): RegionalPromptRegion => {
-    const width = round4(clamp(region.width, REGIONAL_LIMITS.minSize, 1));
-    const height = round4(clamp(region.height, REGIONAL_LIMITS.minSize, 1));
-    let x = round4(clamp(region.x, 0, 1));
-    let y = round4(clamp(region.y, 0, 1));
-    if (x + width > 1) x = Math.max(0, Math.floor((1 - width) * 10000) / 10000);
-    if (y + height > 1) y = Math.max(0, Math.floor((1 - height) * 10000) / 10000);
+    const [x, width] = roundedSpan(region.x, region.width);
+    const [y, height] = roundedSpan(region.y, region.height);
     const strength = round4(clamp(finite(region.strength, 1), 0, 1));
     const loras = lorasFor(region, numbers[keptIndex]);
     return {

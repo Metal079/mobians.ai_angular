@@ -232,7 +232,7 @@
                         <label class="rp-geo">
                           <span>{{ field.label }}</span>
                           <span class="rp-geo-input">
-                            <input type="number" class="form-control form-control-sm" inputmode="decimal" min="0" max="100" step="1"
+                            <input type="number" class="form-control form-control-sm" inputmode="decimal" min="0" max="100" step="any"
                               [value]="geometryValue(region, field.key)" (change)="onGeometry(region, field.key, $event)"
                               [attr.aria-label]="field.label + ' in percent of the image'">
                             <span aria-hidden="true">%</span>

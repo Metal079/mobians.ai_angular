@@ -181,6 +181,39 @@ describe('regional-state: job payload (SPEC 1)', () => {
     expect(payload.layout_hints).toBeFalse();
     expect(payload.regions[0].strength).toBeCloseTo(0.4, 6);
   });
+
+  it('rounds box edges, not sizes, so touching boxes still touch: three columns leave no 0.01% gap', () => {
+    const third = 1 / 3;
+    const columns = normaliseRegionalConfig({
+      enabled: true, version: 2,
+      regions: [0, 1, 2].map(index => ({ id: `c${index}`, prompt: `column ${index}`, x: index * third, y: 0, width: third, height: 1 })),
+    });
+    const [left, middle, right] = buildRegionalPayload(columns, resolveRegionalCapability(sdxl), 'txt2img').payload.regions;
+    expect([left.x, middle.x, right.x]).toEqual([0, 0.3333, 0.6667]);
+    expect([left.width, middle.width, right.width]).toEqual([0.3333, 0.3334, 0.3333]);
+    expect(left.x + left.width).toBeCloseTo(middle.x, 12);
+    expect(middle.x + middle.width).toBeCloseTo(right.x, 12);
+    expect(right.x + right.width).toBeCloseTo(1, 12);
+  });
+
+  it('keeps every sent box inside the image and at least the minimum size after rounding', () => {
+    const odd = normaliseRegionalConfig({
+      enabled: true, version: 2,
+      regions: [
+        { id: 'a', prompt: 'tiny', x: 0.00005, y: 0.99, width: 0.03, height: 0.03 },
+        { id: 'b', prompt: 'edge', x: 0.97004, y: 0.4, width: 0.02996, height: 0.6 },
+        { id: 'c', prompt: 'full', x: 0, y: 0, width: 1, height: 1 },
+      ],
+    });
+    for (const box of buildRegionalPayload(odd, resolveRegionalCapability(sdxl), 'txt2img').payload.regions) {
+      expect(box.width).toBeGreaterThanOrEqual(0.03);
+      expect(box.height).toBeGreaterThanOrEqual(0.03);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(1 + 1e-12);
+      expect(box.y + box.height).toBeLessThanOrEqual(1 + 1e-12);
+    }
+  });
 });
 
 describe('regional-state: status chip and coaching', () => {
