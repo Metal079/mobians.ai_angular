@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AnnouncementEditorComponent } from './announcement-editor.component';
 import { AdminAnnouncement, AnnouncementDraft, WhatsNewService } from 'src/app/whats-new/whats-new.service';
 
 /**
@@ -16,7 +17,7 @@ export const BODY_LIMIT = 4000;
 @Component({
   selector: 'app-announcements-admin',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, AnnouncementEditorComponent],
   templateUrl: './announcements-admin.component.html',
   styleUrls: ['./announcements-admin.component.css']
 })
@@ -35,6 +36,7 @@ export class AnnouncementsAdminComponent implements OnInit {
 
   /** The post being written; `editingId` is null for a new one. */
   draft: AnnouncementDraft = { ...EMPTY };
+  @ViewChild(AnnouncementEditorComponent) private editor!: AnnouncementEditorComponent;
   readonly editingId = signal<number | null>(null);
   /** The post whose publish options are open. */
   readonly publishing = signal<AdminAnnouncement | null>(null);
@@ -62,19 +64,25 @@ export class AnnouncementsAdminComponent implements OnInit {
   }
 
   get draftIsValid(): boolean {
-    return !!this.draft.title.trim() && !!this.draft.body.trim()
+    return !!this.draft.title.trim() && !!this.draft.body.trim() && (this.draft.body_html?.length ?? 0) <= 64000
       && this.draft.title.length <= TITLE_LIMIT && this.draft.body.length <= BODY_LIMIT;
   }
 
   edit(post: AdminAnnouncement): void {
     this.editingId.set(post.id);
-    this.draft = { title: post.title, body: post.body, link_url: post.link_url, link_label: post.link_label };
+    this.draft = { title: post.title, body: post.body, body_html: post.body_html, link_url: post.link_url, link_label: post.link_label };
+    this.editor.load(post.body, post.body_html);
     this.notice.set(null);
   }
 
   startNew(): void {
     this.editingId.set(null);
     this.draft = { ...EMPTY };
+    this.editor.load('');
+  }
+
+  setBody(value: { body: string; body_html?: string }): void {
+    Object.assign(this.draft, value);
   }
 
   /** Save the draft form. A post that is already published is corrected in place. */
@@ -84,12 +92,14 @@ export class AnnouncementsAdminComponent implements OnInit {
       const saved = await this.whatsNew.adminSave({
         title: this.draft.title.trim(),
         body: this.draft.body.trim(),
+        ...(this.draft.body_html ? { body_html: this.draft.body_html } : {}),
         link_url: this.draft.link_url?.trim() || null,
         link_label: this.draft.link_label?.trim() || null
-      }, this.editingId() ?? undefined);
+      }, this.editingId() ?? undefined, this.editor.attachments());
       this.say('ok', saved.status === 'published' ? 'Saved. The post on the site is updated.' : 'Saved as a draft. It is not on the site yet.');
       this.startNew();
       await this.reload();
+      if (saved.status === 'published') await this.whatsNew.refresh(true);
       return saved;
     }, "Couldn't save the post.");
   }

@@ -4,16 +4,15 @@ import { Router } from '@angular/router';
 import { DialogModule } from 'primeng/dialog';
 import { NotificationService } from '../notification.service';
 import { Announcement, WhatsNewService } from './whats-new.service';
+import { AnnouncementBodyComponent } from './announcement-body.component';
 
 /**
- * The list of "What's new" posts, opened from the bell. Post text is shown as
- * plain text with its line breaks; a post may carry one link, which stays on
- * the site when it is one of our own pages.
+ * The list of "What's new" posts, opened from the bell.
  */
 @Component({
   selector: 'app-whats-new-dialog',
   standalone: true,
-  imports: [DialogModule, DatePipe],
+  imports: [DialogModule, DatePipe, AnnouncementBodyComponent],
   template: `
     <p-dialog [visible]="whatsNew.isOpen()" (visibleChange)="onVisibleChange($event)" [modal]="true" [closable]="true"
               [dismissableMask]="true" [draggable]="false" [resizable]="false" header="What's new"
@@ -23,7 +22,11 @@ import { Announcement, WhatsNewService } from './whats-new.service';
           <article class="post">
             <h3>{{ post.title }}</h3>
             @if (post.published_at) { <time [attr.datetime]="post.published_at">{{ post.published_at | date: 'mediumDate' }}</time> }
-            <p class="body">{{ post.body }}</p>
+            @if (post.body_html) {
+              <app-announcement-body class="body" [source]="post.body_html" />
+            } @else {
+              <p class="body">{{ post.body }}</p>
+            }
             @if (post.link_url) {
               @if (isOwnPage(post)) {
                 <button type="button" class="link" (click)="openOwnPage(post)">{{ post.link_label || 'Open' }}</button>

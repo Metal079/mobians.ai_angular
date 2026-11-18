@@ -65,7 +65,7 @@ describe('AnnouncementsAdminComponent', () => {
     expect(component.draftIsValid).toBeTrue();
     await component.save();
     await settle();
-    expect(api.adminSave).toHaveBeenCalledOnceWith({ title: 'Krea 2 is here', body: 'A new model.', link_url: '/video', link_label: null }, undefined);
+    expect(api.adminSave).toHaveBeenCalledOnceWith({ title: 'Krea 2 is here', body: 'A new model.', link_url: '/video', link_label: null }, undefined, new Map());
     expect(text()).toContain('Saved as a draft. It is not on the site yet.');
     expect(component.draft.title).toBe('');
     expect(api.adminList).toHaveBeenCalledTimes(2);
@@ -79,6 +79,27 @@ describe('AnnouncementsAdminComponent', () => {
       await component.save();
     }
     expect(api.adminSave).not.toHaveBeenCalled();
+  });
+
+  it('edits existing formatting visually and attaches a pasted image when saving', async () => {
+    await start();
+    component.edit(post(3, { body: 'A new model', body_html: 'A <strong>new</strong> model' }));
+    const field: HTMLElement = fixture.nativeElement.querySelector('[contenteditable=true]');
+    expect(field.querySelector('strong')?.textContent).toBe('new');
+    const transfer = new DataTransfer();
+    const file = new File(['preview'], 'Gold ring.png', { type: 'image/png' });
+    transfer.items.add(file);
+    field.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+    expect(field.querySelector<HTMLImageElement>('img[src]')?.src).toMatch(/^blob:/);
+    api.adminSave.and.resolveTo(post(3));
+    await component.save();
+    const [draft, id, files] = api.adminSave.calls.mostRecent().args;
+    expect(id).toBe(3);
+    expect(Array.from(files!.values())).toEqual([file]);
+    expect(draft.body_html).toContain('/announcement-images/' + Array.from(files!.keys())[0]);
+    expect(draft.body_html).toContain('<strong>new</strong>');
+    expect(draft.body).toContain('Gold ring');
+    expect(field.querySelector('img')).toBeNull();
   });
 
   it('edits an existing post in place', async () => {

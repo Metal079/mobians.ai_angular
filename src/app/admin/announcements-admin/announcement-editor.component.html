@@ -1,0 +1,13 @@
+<div class="composer">
+  <div class="composer-tools" role="group" aria-label="Post formatting">
+    <button type="button" aria-label="Bold" title="Bold (Ctrl+B or ⌘B)" [attr.aria-pressed]="bold()"
+      (mousedown)="$event.preventDefault()" (click)="format('bold')"><strong>B</strong></button>
+    <button type="button" aria-label="Italic" title="Italic (Ctrl+I or ⌘I)" [attr.aria-pressed]="italic()"
+      (mousedown)="$event.preventDefault()" (click)="format('italic')"><em>I</em></button>
+    <button type="button" class="attach" (mousedown)="$event.preventDefault()" (click)="picker.click()"><i class="bi bi-image" aria-hidden="true"></i> Add image</button>
+    <input hidden #picker type="file" multiple accept="image/png,image/jpeg,image/webp" (change)="choose(picker)">
+  </div>
+  <div #mount></div>
+</div>
+<small id="announcement-image-help">Drop or paste an image here, or choose Add image.</small>
+@if (error()) { <p class="attachment-error" role="alert">{{ error() }}</p> }

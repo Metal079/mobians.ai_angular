@@ -12,8 +12,9 @@ h3 { margin: 0; font-size: 1.05rem; }
 label { display: grid; gap: .25rem; margin: 0; font-size: .9rem; }
 label > span { font-weight: 600; }
 small { font-weight: 400; opacity: .7; }
-input[type=text], textarea { width: 100%; box-sizing: border-box; padding: .5rem .6rem; border: 1px solid rgb(128 128 128 / 50%); border-radius: 6px; font: inherit; }
-textarea { resize: vertical; }
+input[type=text] { width: 100%; box-sizing: border-box; padding: .5rem .6rem; border: 1px solid rgb(128 128 128 / 50%); border-radius: 6px; font: inherit; }
+.body-editor { display: grid; gap: .4rem; min-width: 0; }
+.body-editor > span { font-size: .9rem; font-weight: 600; }
 .link-fields { display: grid; grid-template-columns: 2fr 1fr; gap: .7rem; }
 
 .check { display: flex; align-items: flex-start; gap: .55rem; cursor: pointer; }
@@ -28,7 +29,7 @@ button.primary { border-color: #0f9d6b; background: #10b981; color: #fff; font-w
 /* A light fill keeps the red readable on every theme's surface colour, including the blue ones. */
 button.danger { border-color: #b91c1c; background: rgb(255 255 255 / 88%); color: #b91c1c; font-weight: 600; }
 button:disabled { opacity: .55; cursor: default; }
-button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #0f9d6b; outline-offset: 2px; }
+button:focus-visible, input:focus-visible { outline: 2px solid #0f9d6b; outline-offset: 2px; }
 
 .posts { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
 .posts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .8rem; align-items: start; padding: .8rem; border: 1px solid rgb(128 128 128 / 30%); border-radius: 10px; }

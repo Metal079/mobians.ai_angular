@@ -164,12 +164,27 @@ describe("What's new", () => {
 
     afterEach(() => { service.close(); fixture?.destroy(); });
 
-    it('shows text exactly as typed, never as HTML', async () => {
+    it('preserves literal tags in titles and plain-text posts', async () => {
       await open([post(1, { title: 'Krea 2 <b>is</b> here', body: 'Line one\nLine two <img src=x onerror=alert(1)>' })]);
       expect(text()).toContain('Krea 2 <b>is</b> here');
       expect(text()).toContain('<img src=x onerror=alert(1)>');
       expect(document.querySelector('.whats-new img')).toBeNull();
       expect(document.querySelector('.whats-new b')).toBeNull();
+    });
+
+    it('renders only supported formatting and image sources', async () => {
+      await open([post(1, { body_html: 'One <b><i>two</i></b><br>three &amp; four' +
+        '<img src="/assets/ring.webp" alt="Ring" style="display:none"><img src="//other.test/pic">' +
+        '<img src="data:text/plain,test"><iframe>hidden</iframe>' })]);
+      const body = document.querySelector('.whats-new .body')!;
+      expect(body.textContent).toBe('One two\nthree & four');
+      expect(body.querySelector('strong em')?.textContent).toBe('two');
+      const images = body.querySelectorAll('img');
+      expect(images.length).toBe(1);
+      expect(images[0].getAttribute('src')).toBe('/assets/ring.webp');
+      expect(images[0].alt).toBe('Ring');
+      expect(images[0].hasAttribute('style')).toBeFalse();
+      expect(body.querySelector('iframe')).toBeNull();
     });
 
     it('opens one of our own pages inside the site and closes the list', async () => {

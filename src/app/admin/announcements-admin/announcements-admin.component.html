@@ -1,7 +1,6 @@
 <div class="announcements-admin">
   <p class="intro">
-    Posts appear on the site behind the bell next to Image / Video / Characters. Text is shown exactly as typed
-    (line breaks kept, no formatting). Nothing is on the site until you publish it.
+    Published posts appear behind the bell next to Image / Video / Characters.
   </p>
 
   @if (notice(); as shown) {
@@ -9,16 +8,16 @@
   }
 
   <!-- Write or edit -->
-  <form class="editor" (ngSubmit)="save()">
+  <form class="editor" [inert]="busy()" (ngSubmit)="save()">
     <h3>{{ editingId() === null ? 'New post' : 'Edit post' }}</h3>
     <label>
       <span>Title <small>{{ draft.title.length }} / {{ titleLimit }}</small></span>
       <input type="text" name="title" [(ngModel)]="draft.title" [maxlength]="titleLimit" placeholder="Krea 2 is here" autocomplete="off">
     </label>
-    <label>
+    <div class="body-editor">
       <span>Text <small>{{ draft.body.length }} / {{ bodyLimit }}</small></span>
-      <textarea name="body" rows="5" [(ngModel)]="draft.body" [maxlength]="bodyLimit" placeholder="What changed, in a sentence or two."></textarea>
-    </label>
+      <app-announcement-editor (changed)="setBody($event)" />
+    </div>
     <div class="link-fields">
       <label>
         <span>Link <small>optional: https://… or a page of this site such as /video</small></span>

@@ -13,8 +13,9 @@ import { SKIP_AUTH } from '../auth/auth.interceptor';
 export interface Announcement {
   id: number;
   title: string;
-  /** Plain text; line breaks are kept, nothing is treated as HTML. */
+  /** Plain text for notifications and clients without formatting support. */
   body: string;
+  body_html?: string | null;
   link_url: string | null;
   link_label: string | null;
   published_at: string | null;
@@ -40,6 +41,7 @@ export interface AdminAnnouncementList {
 export interface AnnouncementDraft {
   title: string;
   body: string;
+  body_html?: string | null;
   link_url: string | null;
   link_label: string | null;
 }
@@ -142,10 +144,17 @@ export class WhatsNewService {
     return firstValueFrom(this.http.get<AdminAnnouncementList>(`${this.base}/admin/announcements`));
   }
 
-  async adminSave(draft: AnnouncementDraft, id?: number): Promise<AdminAnnouncement> {
+  async adminSave(draft: AnnouncementDraft, id?: number, images?: ReadonlyMap<string, File>): Promise<AdminAnnouncement> {
+    let payload: AnnouncementDraft | FormData = draft;
+    if (images?.size) {
+      const form = new FormData();
+      form.append('post', JSON.stringify(draft));
+      images.forEach((file, key) => form.append(key, file));
+      payload = form;
+    }
     const request = id == null
-      ? this.http.post<{ announcement: AdminAnnouncement }>(`${this.base}/admin/announcements`, draft)
-      : this.http.patch<{ announcement: AdminAnnouncement }>(`${this.base}/admin/announcements/${id}`, draft);
+      ? this.http.post<{ announcement: AdminAnnouncement }>(`${this.base}/admin/announcements`, payload)
+      : this.http.patch<{ announcement: AdminAnnouncement }>(`${this.base}/admin/announcements/${id}`, payload);
     return (await firstValueFrom(request)).announcement;
   }
 
