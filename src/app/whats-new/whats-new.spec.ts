@@ -3,7 +3,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
+import { Dialog } from 'primeng/dialog';
+import { firstValueFrom } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { GenerationModeSwitchComponent } from '../generation-mode-switch/generation-mode-switch.component';
 import { NotificationService, PushPreferences } from '../notification.service';
@@ -163,6 +166,34 @@ describe("What's new", () => {
     }
 
     afterEach(() => { service.close(); fixture?.destroy(); });
+
+    it('opens and reopens at the newest post with focus at the start of a long list', async () => {
+      await loaded([post(2, { body: 'Another line\n'.repeat(100) }), post(1, { link_url: '/video' })]);
+      fixture = TestBed.createComponent(WhatsNewDialogComponent);
+      fixture.detectChanges();
+      const dialog: Dialog = fixture.debugElement.query(By.directive(Dialog)).componentInstance;
+      async function openAtTop(): Promise<HTMLElement> {
+        const shown = firstValueFrom(dialog.onShow);
+        service.open();
+        fixture.detectChanges();
+        await shown;
+        const list = document.querySelector<HTMLElement>('.whats-new')!;
+        const scroller = list.parentElement!;
+        expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
+        expect(list.querySelector('h3')?.textContent).toBe('Post 2');
+        expect(document.activeElement).toBe(list);
+        expect(scroller.scrollTop).toBe(0);
+        return scroller;
+      }
+      const scroller = await openAtTop();
+      scroller.scrollTop = scroller.scrollHeight;
+      expect(scroller.scrollTop).toBeGreaterThan(0);
+      const hidden = firstValueFrom(dialog.onHide);
+      service.close();
+      fixture.detectChanges();
+      await hidden;
+      await openAtTop();
+    });
 
     it('preserves literal tags in titles and plain-text posts', async () => {
       await open([post(1, { title: 'Krea 2 <b>is</b> here', body: 'Line one\nLine two <img src=x onerror=alert(1)>' })]);

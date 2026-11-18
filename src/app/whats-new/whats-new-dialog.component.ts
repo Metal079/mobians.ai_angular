@@ -15,9 +15,10 @@ import { AnnouncementBodyComponent } from './announcement-body.component';
   imports: [DialogModule, DatePipe, AnnouncementBodyComponent],
   template: `
     <p-dialog [visible]="whatsNew.isOpen()" (visibleChange)="onVisibleChange($event)" [modal]="true" [closable]="true"
+              [focusOnShow]="false" (onShow)="focusNewsStart(newsList)"
               [dismissableMask]="true" [draggable]="false" [resizable]="false" header="What's new"
               [style]="{ width: '90vw', maxWidth: '480px' }" [contentStyle]="{ 'max-height': '70vh' }">
-      <div class="whats-new">
+      <div #newsList class="whats-new" role="region" aria-label="Announcements" tabindex="-1">
         @for (post of whatsNew.posts(); track post.id) {
           <article class="post">
             <h3>{{ post.title }}</h3>
@@ -68,6 +69,11 @@ export class WhatsNewDialogComponent {
   readonly notifications = inject(NotificationService);
   private readonly router = inject(Router);
   readonly busy = signal(false);
+
+  focusNewsStart(list: HTMLElement): void {
+    list.parentElement?.scrollTo({ top: 0, behavior: 'instant' });
+    list.focus({ preventScroll: true });
+  }
 
   isOwnPage(post: Announcement): boolean {
     return !!post.link_url && post.link_url.startsWith('/') && !post.link_url.startsWith('//');
