@@ -1,4 +1,4 @@
-/* Regional editor: frame, header, banners, toolbar, layouts and the two-column dialog layout.
+/* Regional editor (full-screen dialog): on/off bar, banners, toolbar, layouts and the two-column workspace.
    Colours come from the site theme tokens (styles.css); region colours come from regional-state.ts. */
 :host {
   display: block;
@@ -11,22 +11,17 @@
   color: var(--rp-text);
 }
 
-.rp { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; container: rp / inline-size; }
-
-.rp-mode-inline {
-  padding: 0.9rem;
-  border: 1px solid var(--theme-border-strong);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--theme-surface-alt-bg) 45%, var(--theme-surface-bg));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+.rp {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  container: rp / inline-size;
+  /* The canvas fills the height its column has left (the canvas host below is the size container). */
+  --rc-dialog-max-h: 100cqh;
 }
-
-.rp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
-.rp-head-text { min-width: 0; }
-.rp-title { margin: 0; font-size: 1.08rem; font-weight: 700; letter-spacing: 0.01em; }
-.rp-sub { margin: 0.15rem 0 0; font-size: 0.83rem; color: var(--rp-muted); }
-.rp-mode-dialog .rp-sub { margin: 0; }
-.rp-head-actions { display: flex; align-items: center; gap: 0.6rem; flex: none; }
 
 .rp-counter {
   min-width: 2.6rem;
@@ -46,6 +41,33 @@
 .rp-switch .form-check-input { width: 2.4em; height: 1.3em; margin-top: 0; cursor: pointer; }
 .rp-switch .form-check-input:checked { background-color: var(--theme-primary); border-color: var(--theme-primary-border); }
 .rp-switch .form-check-label { min-width: 1.6rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+
+/* Full-screen editor: the on/off bar comes first. Saved regions that are off get the warning palette (fixed colours
+   read the same on every theme); on, it takes the theme's primary tint. */
+.rp-power {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "switch help count";
+  align-items: center;
+  column-gap: 0.85rem;
+  padding: 0.2rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 55%, var(--rp-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-primary) 14%, transparent);
+}
+
+.rp-power-switch { grid-area: switch; }
+.rp-power-switch .form-check-label { font-size: 0.95rem; white-space: nowrap; }
+.rp-power-help { grid-area: help; min-width: 0; margin: 0; font-size: 0.8rem; line-height: 1.35; color: var(--rp-muted); }
+.rp-power .rp-counter { grid-area: count; }
+.rp-power-off { border-color: var(--rp-line); background: var(--rp-soft); }
+.rp-power-alert { border-color: #f0b429; border-left-width: 4px; background: #fff6db; color: #3f2c00; }
+.rp-power-alert .rp-power-help { color: #3f2c00; }
+.rp-power-alert .rp-counter { border-color: #b7791f; background: #ffffff; color: #3f2c00; }
+
+@container rp (max-width: 480px) {
+  .rp-power { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "switch count" "help help"; padding-bottom: 0.5rem; }
+}
 
 .rp-banner {
   display: flex;
@@ -89,20 +111,15 @@
 .rp-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 0.4rem; }
 .rp-tool-group { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .rp-tool-aux { flex: 1 1 auto; justify-content: flex-end; }
-.rp-push { margin-left: 0.4rem; }
-.rp-mode-dialog .rp-push { padding-left: 0.6rem; border-left: 1px solid var(--rp-line); }
 
 @container rp (max-width: 480px) {
   .rp-tool-group { flex: 1 1 100%; }
   .rp-tool-main > .rp-btn { flex: 1 1 0; }
   .rp-tool-aux { justify-content: flex-start; }
-  .rp-push { margin-left: auto; }
 }
 
-/* Very narrow columns (the Options column on 700-900 px tablets): stack the header and let tools wrap. */
+/* Very narrow phones: let the tools wrap. */
 @container rp (max-width: 300px) {
-  .rp-head { flex-direction: column; align-items: stretch; gap: 0.35rem; }
-  .rp-head-actions { justify-content: space-between; }
   .rp-tool-main { flex-wrap: wrap; }
   .rp-tool-main > .rp-btn { flex: 1 1 auto; }
   .rp-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -149,8 +166,7 @@
 .rp-btn:focus-visible,
 .rp-icon-btn:focus-visible,
 .rp-chip-btn:focus-visible,
-.rp-template:focus-visible,
-.rp-link-btn:focus-visible {
+.rp-template:focus-visible {
   outline: 3px solid var(--rp-text);
   outline-offset: 2px;
 }
@@ -191,10 +207,38 @@
 
 .rp-template:hover { border-color: var(--theme-primary); background: color-mix(in srgb, var(--theme-primary) 16%, transparent); }
 
-/* Workspace */
-.rp-workspace { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
-.rp-canvas-col { min-width: 0; }
-.rp-side-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+/* Workspace: canvas on the left, regions and settings on the right; stacked with a sticky canvas on phones. */
+.rp-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 420px);
+  gap: 1.25rem;
+}
+
+/* The canvas takes the height its column has left after the legend, whatever the switch bar, banners or layouts
+   above take (a fixed estimate left a scrollbar once they showed; owner report 2026-11-18). */
+.rp-canvas-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; padding: 4px; }
+.rp-canvas-col > app-regional-canvas {
+  flex: 1 1 0;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.rp-canvas-col > .rp-legend { flex: none; }
+.rp-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 0.4rem 0.5rem 2px;
+  overscroll-behavior: contain;
+}
 
 .rp-legend {
   display: flex;
@@ -216,43 +260,12 @@
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
-.rp-off-note { margin: 0; font-size: 0.86rem; color: var(--rp-muted); }
-
-.rp-link-btn {
-  min-height: 44px;
-  margin-left: 0.25rem;
-  padding: 0 0.15rem;
-  border: 0;
-  background: transparent;
-  color: var(--rp-text);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* Full-screen dialog: canvas on the left, regions and settings on the right; stacked with a sticky canvas on phones. */
-.rp-mode-dialog {
-  height: 100%;
-  min-height: 0;
-  --rc-dialog-max-h: calc(min(94dvh, 1000px) - 250px);
-}
-
-.rp-mode-dialog .rp-workspace {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(330px, 420px);
-  gap: 1.25rem;
-}
-
-.rp-mode-dialog .rp-canvas-col { min-height: 0; overflow: auto; padding: 4px; }
-.rp-mode-dialog .rp-side-col { min-height: 0; overflow-y: auto; padding: 2px 0.4rem 0.5rem 2px; overscroll-behavior: contain; }
-
 @media (max-width: 860px) {
-  .rp-mode-dialog { height: auto; --rc-dialog-max-h: 40dvh; }
-  .rp-mode-dialog .rp-legend-alt { display: none; }
-  .rp-mode-dialog .rp-workspace { display: flex; flex-direction: column; gap: 0.75rem; }
-  .rp-mode-dialog .rp-canvas-col {
+  .rp { height: auto; --rc-dialog-max-h: 40dvh; }
+  .rp-canvas-col > app-regional-canvas { flex: none; container-type: normal; }
+  .rp-legend .rp-legend-alt { display: none; }
+  .rp-workspace { display: flex; flex-direction: column; gap: 0.75rem; }
+  .rp-canvas-col {
     position: sticky;
     top: 0;
     z-index: 5;
@@ -262,17 +275,16 @@
     background: var(--theme-surface-bg);
     box-shadow: 0 8px 12px -10px rgba(0, 0, 0, 0.45);
   }
-  .rp-mode-dialog .rp-side-col { overflow: visible; padding: 0; }
+  .rp-side-col { overflow: visible; padding: 0; }
   /* While a text field is being edited (the phone keyboard takes half the screen) the canvas scrolls away with the
      page instead of covering the field. */
-  .rp-mode-dialog:has(.rp-side-col :is(textarea, input:not([type="range"], [type="checkbox"])):focus) .rp-canvas-col {
+  .rp:has(.rp-side-col :is(textarea, input:not([type="range"], [type="checkbox"])):focus) .rp-canvas-col {
     position: relative;
     box-shadow: none;
   }
 }
 
 @media (max-width: 480px) {
-  .rp-mode-inline { padding: 0.75rem 0.65rem; }
   .rp-btn { padding-inline: 0.6rem; }
   .rp-template-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 }

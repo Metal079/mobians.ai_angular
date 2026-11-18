@@ -67,18 +67,38 @@ describe('GenerationOptionsPanelComponent', () => {
     expect(saved).toEqual([0, null]);
   });
 
-  it('hosts the regional editor and upgrades a version 1 regional config once', () => {
-    expect(fixture.nativeElement.querySelector('app-regional-editor.regional-inline')).not.toBeNull();
-    const config = component.generationRequest.regional_prompting;
+  // Regional prompting lives only in the full-screen dialog (appended to body), opened by the Regions button beside
+  // the prompt; the Options panel has no inline copy (owner request 2026-11-18).
+  const openRegions = async () => {
+    component.regionalEditor.openDialog();
+    fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+  };
+  const closeRegions = async () => {
+    component.closeRegionalDialog();
+    fixture.detectChanges(); await fixture.whenStable();
+  };
+
+  it('has no regional editor in the panel; the dialog hosts it', async () => {
+    expect(fixture.nativeElement.querySelector('app-regional-editor')).toBeNull();
+    await openRegions();
+    expect(document.querySelector('.regional-editor-dialog app-regional-editor')).not.toBeNull();
+    await closeRegions();
+    expect(document.querySelector('.regional-editor-dialog app-regional-editor')).toBeNull();
+  });
+
+  it('upgrades a version 1 regional config once', () => {
+    const config = component.regionalConfig;
     expect(config.version).toBe(2);
     expect(config.regions[0]).toEqual(jasmine.objectContaining({ id: 'one', prompt: 'Amy Rose', strength: 1, inherit_base_prompt: true }));
+    expect(component.generationRequest.regional_prompting).toBe(config);
     expect(component.regionalConfig).toBe(config);
   });
 
-  it('keeps regions (paused) when the model does not support them', () => {
+  it('keeps regions (paused) when the model does not support them', async () => {
     fixture.componentRef.setInput('modelSettings', [{ model_id: 'test', display_name: 'Test', supports_regional_prompting: false }]);
-    fixture.detectChanges();
+    await openRegions();
     expect(component.generationRequest.regional_prompting.enabled).toBeTrue();
-    expect(fixture.nativeElement.querySelector('.rp-banner-paused')).not.toBeNull();
+    expect(document.querySelector('.regional-editor-dialog .rp-banner-paused')).not.toBeNull();
+    await closeRegions();
   });
 });

@@ -1,5 +1,4 @@
 import { Component, DoCheck, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MessageService } from 'primeng/api';
 import { AspectRatio } from 'src/_shared/aspect-ratio.interface';
@@ -9,6 +8,7 @@ import { HintComponent } from 'src/app/hint/hint.component';
 import { SharedService } from 'src/app/shared.service';
 import { GenerationModelSettings } from 'src/app/stable-diffusion.service';
 import { RegionalCanvasCommand, RegionalCanvasComponent } from './regional-canvas.component';
+import { RegionalCharacterPickerComponent } from './regional-character-picker.component';
 import { RegionalEditorService } from './regional-editor.service';
 import { duplicateOffset, freeSpot } from './regional-geometry';
 import { layoutHintText } from './regional-layout-hints';
@@ -29,13 +29,13 @@ type GeometryKey = 'x' | 'y' | 'width' | 'height';
 let instanceCounter = 0;
 
 /**
- * Regional prompting editor (SPEC 5). The same component is used inline in the Options panel and in the
- * full-screen dialog; both edit `generationRequest.regional_prompting` and share selection and undo history.
+ * Regional prompting editor (SPEC 5), shown in the full-screen dialog that the Regions button beside the prompt opens.
+ * It edits `generationRequest.regional_prompting`; selection and undo history live in RegionalEditorService.
  */
 @Component({
   selector: 'app-regional-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, RegionalCanvasComponent, RegionalMinimapComponent, RegionalLoraPickerComponent, HintComponent],
+  imports: [RegionalCanvasComponent, RegionalMinimapComponent, RegionalLoraPickerComponent, RegionalCharacterPickerComponent, HintComponent],
   templateUrl: './regional-editor.component.html',
   styleUrls: ['./regional-editor.component.css', './regional-editor-list.css'],
 })
@@ -55,7 +55,6 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
   @Input() referenceImage?: MobiansImage;
   @Input() aspectRatio?: AspectRatio;
   @Input() isLoggedIn = false;
-  @Input() mode: 'inline' | 'dialog' = 'inline';
   /** The LoRA panel's selection: counts toward the per-image LoRA limit and is not offered per box. */
   @Input() jobLoras: ReadonlyArray<{ id?: unknown; version_id?: unknown }> | null = [];
 
@@ -140,6 +139,16 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
   }
 
   get loraTotalLimit(): number { return this.capability.max_total_loras ?? REGION_LORA_LIMITS.defaultTotal; }
+
+  /** LoRAs a box can take when its own are replaced (a saved character): the per-box limit and the image's limit
+   *  minus what the other boxes use. */
+  loraRoomFor(region: RegionalPromptRegion): number {
+    const options = this.loraOptions;
+    const counted = (item: RegionalPromptRegion) => (item.loras ?? []).filter(lora => lora.strength > 0 && regionLoraUsable(lora, options)).length;
+    const others = this.regions.reduce((total, item) => total + (item === region ? 0 : counted(item)), 0);
+    const budget = regionLoraBudget(this.capability, (this.jobLoras ?? []).length);
+    return Math.max(0, Math.min(this.capability.max_region_loras || REGION_LORA_LIMITS.perRegion, budget - others));
+  }
   get maxRegions(): number { return this.capability.max_regions; }
   get atLimit(): boolean { return this.regions.length >= this.maxRegions; }
   get selectedId(): string | null { return this.store.selectedId(); }
@@ -174,6 +183,20 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     return this.separations.find(item => item.id === (this.config.separation ?? 'balanced'))?.help ?? '';
   }
   get layoutPreview(): string { return promptSnippet(layoutHintText(this.regions), 240); }
+
+  /** The line beside the switch at the top of the full-screen editor. */
+  get powerHelp(): string {
+    if (!this.config.enabled) {
+      return this.regions.length
+        ? 'The next image ignores these regions. Switch on, or edit a region, to use them.'
+        : 'Pick a layout or draw a box to start. Regions switch on by themselves.';
+    }
+    if (this.status.kind === 'paused' || this.status.kind === 'hidden') return 'Paused with this model: see the note below.';
+    if (!this.regions.length) return 'Pick a layout or draw a box to start.';
+    const count = this.status.count;
+    if (!count) return 'No region is used yet: give a box a prompt.';
+    return `The next image uses ${count} ${count === 1 ? 'region' : 'regions'}.`;
+  }
 
   /** Models that use regions for the current job type, for the one-click switch in the paused banner. */
   get supportedModels(): GenerationModelSettings[] {
@@ -232,9 +255,17 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     this.saveNow();
   }
 
-  openFullscreen(): void {
-    if (!this.config.enabled) this.setEnabled(true);
-    this.store.openDialog();
+  /**
+   * Editing a region switches regions on (user report 2026-11-18: regions saved while off looked usable in the
+   * editor, and two images came out without them). Call after the undo checkpoint, so undo switches them off again.
+   */
+  onRegionEdited(): void {
+    if (this.config.enabled) return;
+    this.config.enabled = true;
+    this.messages.add({
+      severity: 'info', summary: 'Regions switched on',
+      detail: 'You edited a region, so the next image uses your regions. The switch at the top turns them off.', life: 4500,
+    });
   }
 
   applyTemplate(template: RegionalTemplate): void {
@@ -297,6 +328,7 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     const next = [...this.regions];
     next.splice(index + 1, 0, copy);
     this.config.regions = next;
+    this.onRegionEdited();
     this.select(copy.id);
     this.saveNow();
   }
@@ -338,8 +370,10 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     else if (id && command === 'duplicate') this.duplicateRegion(id);
   }
 
+  /** A box starts moving or resizing (after a real drag, or a keyboard nudge). */
   onCanvasEditStart(key: string | undefined): void {
     this.store.checkpoint(this.config, key);
+    this.onRegionEdited();
   }
 
   onTextInput(region: RegionalPromptRegion, field: 'prompt' | 'negative_prompt' | 'name', event: Event): void {
@@ -347,6 +381,7 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     const max = field === 'name' ? REGIONAL_LIMITS.nameMax : REGIONAL_LIMITS.promptMax;
     this.store.checkpoint(this.config, `${field}:${region.id}`);
     region[field] = input.value.slice(0, max);
+    this.onRegionEdited();
     this.saveSoon();
   }
 
@@ -356,6 +391,7 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     this.store.checkpoint(this.config, `strength:${region.id}`);
     region.strength = value;
     region.denoise_strength = value;
+    this.onRegionEdited();
     this.saveSoon();
   }
 
@@ -364,6 +400,7 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
     if (!Number.isFinite(value)) return;
     this.store.checkpoint(this.config, `feather:${region.id}`);
     region.feather = value;
+    this.onRegionEdited();
     this.saveSoon();
   }
 
@@ -381,6 +418,7 @@ export class RegionalEditorComponent implements OnChanges, DoCheck, OnDestroy {
       else if (key === 'height') region.height = (Math.round(region.y * 1000) + tenths) / 1000 - region.y;
       else region[key] = tenths / 1000;
       clampBox(region);
+      this.onRegionEdited();
       this.saveNow();
     }
     input.value = String(this.geometryValue(region, key));

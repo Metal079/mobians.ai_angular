@@ -84,26 +84,13 @@
     }
 
     @if (!textOnlyModel) {
-      <!-- Regional prompting: inline editor plus the full-screen editor (regional-editor/). -->
-      <app-regional-editor class="regional-inline mb-3" mode="inline"
-        [config]="regionalConfig"
-        [model]="selectedModel"
-        [models]="modelSettings"
-        [mainPrompt]="generationRequest.prompt"
-        [jobType]="regionalJobType"
-        [referenceImage]="referenceImage"
-        [aspectRatio]="aspectRatio"
-        [isLoggedIn]="isLoggedIn"
-        [jobLoras]="generationRequest.loras"
-        (save)="saveSettings.emit()"
-        (switchModel)="onModelSelectionChange($event)"></app-regional-editor>
-
+      <!-- Regional prompting: the full-screen editor (regional-editor/), opened by the Regions button beside the prompt. -->
       <p-dialog styleClass="character-dialog regional-editor-dialog" header="Regional prompting"
         [visible]="regionalEditor.dialogOpen()" (visibleChange)="!$event && closeRegionalDialog()"
         [modal]="true" [draggable]="false" [resizable]="false" [blockScroll]="true" appendTo="body"
         [style]="{ width: 'min(1320px, 96vw)' }">
         @if (regionalEditor.dialogOpen()) {
-          <app-regional-editor mode="dialog"
+          <app-regional-editor
             [config]="regionalConfig"
             [model]="selectedModel"
             [models]="modelSettings"

@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MessageService } from 'primeng/api';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { AccountCtaService } from 'src/app/auth/account-cta.service';
+import { CharactersService } from 'src/app/characters/characters.service';
 import { SharedService } from 'src/app/shared.service';
 import { StableDiffusionService } from 'src/app/stable-diffusion.service';
 import { RegionalEditorComponent } from './regional-editor.component';
@@ -31,6 +33,19 @@ describe('RegionalEditorComponent', () => {
   let component: RegionalEditorComponent;
   let store: RegionalEditorService;
   let api: { getRegionalPromptPresets: jasmine.Spy; syncRegionalPromptPresets: jasmine.Spy; getLoras: jasmine.Spy };
+  // "Use a character" in a region: one saved character with two LoRAs (catalog ids 11 and 12).
+  const characters = {
+    owner: 'token',
+    saved: new Subject<string>(),
+    list: jasmine.createSpy('list').and.resolveTo({ characters: [] }),
+    search: jasmine.createSpy('search').and.resolveTo({ items: [], next_cursor: null }),
+    get: async () => ({ id: 'amy', name: 'Amy Rose', default_image_id: 'amy-1', images: [{ id: 'amy-1', recipe: {
+      label: 'Original look', model: 'novaMobianXL_v20', appearance: 'amy rose, pink fur', scene: '', negative_prompt: '', guidance_scale: 4,
+      width: 512, height: 768, loras: [{ id: 11, version_id: 1101, name: 'Amy Rose', strength: 0.9 }, { id: 12, version_id: 1201, name: 'Shadow', strength: 0.5 }],
+    } }] }),
+    defaultLook: (detail: any) => detail.images[0],
+    recordLoaded: () => {},
+  };
 
   beforeEach(async () => {
     localStorage.removeItem('mobians:regional-presets');
@@ -46,6 +61,8 @@ describe('RegionalEditorComponent', () => {
         { provide: StableDiffusionService, useValue: api },
         { provide: SharedService, useValue: { getImages: () => new BehaviorSubject([]).asObservable() } },
         { provide: MessageService, useValue: { add: jasmine.createSpy('add') } },
+        { provide: CharactersService, useValue: characters },
+        { provide: AccountCtaService, useValue: { requestLogin: jasmine.createSpy('requestLogin') } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(RegionalEditorComponent);
@@ -464,6 +481,102 @@ describe('RegionalEditorComponent', () => {
       const middle = component.config.regions[1];             // starts at exactly 1/3 (shown 33.3)
       expect(typeInto(middle, 'width', '33.4').value).toBe('33.4');
       expect(middle.x + middle.width).toBeCloseTo(0.667, 10);
+    });
+  });
+
+  describe('switch and characters (user report 2026-11-18)', () => {
+    const savedButOff = () => normaliseRegionalConfig({
+      enabled: false, version: 2, regions: [
+        { id: 'r-a', prompt: 'amy rose', x: 0, y: 0, width: 0.5, height: 1 },
+        { id: 'r-b', prompt: 'shadow', x: 0.5, y: 0, width: 0.5, height: 1 },
+      ],
+    });
+    const messages = () => TestBed.inject(MessageService) as unknown as { add: jasmine.Spy };
+
+    it('the editor starts with the switch, warns when saved regions are off, and has no switch in the toolbar', async () => {
+      fixture.componentRef.setInput('config', savedButOff());
+      await render();
+      const first = el().querySelector('.rp')!.querySelector(':scope > :not(.visually-hidden)') as HTMLElement;
+      expect(first.classList).toContain('rp-power');
+      expect(first.classList).toContain('rp-power-alert');
+      expect(first.textContent).toContain('Regions off');
+      expect(first.textContent).toContain('The next image ignores these regions');
+      expect(el().querySelector('.rp-toolbar .rp-switch')).toBeNull();
+      (first.querySelector('input[role="switch"]') as HTMLInputElement).click();
+      await render();
+      expect(component.config.enabled).toBeTrue();
+      const bar = el().querySelector('.rp-power') as HTMLElement;
+      expect(bar.classList).not.toContain('rp-power-off');
+      expect(bar.textContent).toContain('Regions on');
+      expect(bar.textContent).toContain('The next image uses 2 regions.');
+      expect(bar.textContent).toContain('2/8');
+      component.config.regions.forEach(region => (region.prompt = ''));
+      await render();
+      expect(bar.textContent).toContain('No region is used yet');
+    });
+
+    it('editing a region while regions are off switches them on, once, and undo switches them off again', async () => {
+      fixture.componentRef.setInput('config', savedButOff());
+      await render();
+      const region = component.config.regions[0];
+      const input = document.createElement('textarea');
+      input.value = 'amy rose, waving';
+      component.onTextInput(region, 'prompt', { target: input } as any);
+      expect(component.config.enabled).toBeTrue();
+      expect(messages().add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Regions switched on' }));
+      input.value = 'amy rose, waving hello';
+      component.onTextInput(region, 'prompt', { target: input } as any);
+      expect(messages().add.calls.all().filter(call => call.args[0].summary === 'Regions switched on').length).toBe(1);
+      component.undo();
+      expect(component.config.enabled).toBeFalse();
+      expect(component.config.regions[0].prompt).toBe('amy rose');
+    });
+
+    it('moving a box or changing its strength also switches regions on; selecting one does not', async () => {
+      fixture.componentRef.setInput('config', savedButOff());
+      await render();
+      component.select('r-a');
+      expect(component.config.enabled).toBeFalse();
+      component.onCanvasEditStart(undefined);
+      expect(component.config.enabled).toBeTrue();
+      component.setEnabled(false);
+      const range = document.createElement('input');
+      range.value = '60';
+      component.onStrength(component.config.regions[1], { target: range } as any);
+      expect(component.config.enabled).toBeTrue();
+    });
+
+    it('the chip keeps the plain "Regions" label for saved regions that are off (owner choice: the editor shows it)', () => {
+      expect(component.status.label).toBe('Regions');
+      fixture.componentRef.setInput('config', savedButOff());
+      fixture.detectChanges();
+      expect(component.status).toEqual(jasmine.objectContaining({ kind: 'off', label: 'Regions', detail: '2 regions are saved but switched off.' }));
+    });
+
+    it('each open region has "Use a character"; a saved look fills the box and switches regions on', async () => {
+      fixture.componentRef.setInput('model', sdxlLoras);
+      fixture.componentRef.setInput('config', savedButOff());
+      store.selectedId.set('r-b');
+      await render();
+      const pickers = el().querySelectorAll('app-regional-character-picker');
+      expect(pickers.length).toBe(1);
+      expect(pickers[0].textContent).toContain('Use a character');
+      expect(component.loraRoomFor(component.config.regions[1])).toBe(2);
+      const saves = spyOn(component.save, 'emit');
+      (pickers[0].querySelector('.rc-launch') as HTMLButtonElement).click();
+      await render();
+      const picker = fixture.debugElement.query(debug => debug.name === 'app-regional-character-picker').componentInstance;
+      await picker.choose({ characterId: 'amy', name: 'Amy Rose' });
+      await render();
+      const box = component.config.regions[1];
+      expect(box.prompt).toBe('amy rose, pink fur');
+      expect(box.loras!.map(lora => lora.id)).toEqual([11, 12]);
+      expect(component.config.enabled).toBeTrue();
+      expect(saves).toHaveBeenCalled();
+      expect(messages().add).toHaveBeenCalledWith(jasmine.objectContaining({ summary: 'Amy Rose is in Region 2' }));
+      // The other box can now take only 1 more: 3 per image.
+      expect(component.loraRoomFor(component.config.regions[0])).toBe(1);
+      expect(component.loraRoomFor(component.config.regions[1])).toBe(2);
     });
   });
 });

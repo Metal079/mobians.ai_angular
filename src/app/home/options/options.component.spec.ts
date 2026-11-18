@@ -16,6 +16,7 @@ import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 
 import { OptionsComponent } from './options.component';
+import { RegionalLoraCatalogService } from './regional-editor/regional-lora-catalog.service';
 import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 
 const seedPreferenceKey = 'mobians:seed-preference:v2';
@@ -1596,6 +1597,27 @@ describe('OptionsComponent', () => {
       expect(component.creditCost).toBe(20 + 5);
       expect(component.generationRequest.regional_prompting.regions[0].loras.length).toBe(1);
       expect(component.regionalChipStatus.warnings.join(' ')).toContain('does not use LoRAs per region');
+    });
+
+    it('loads the LoRA catalog with the page for saved region LoRAs, without the editor open', async () => {
+      // A region LoRA from history or a preset carries no base model; the catalog decides whether it is sent.
+      const load = spyOn(TestBed.inject(RegionalLoraCatalogService), 'ensureLoaded');
+      const regional = {
+        supported: true, max_regions: 8, negative_prompts: true, layout_hints: false,
+        job_types: ['txt2img', 'img2img', 'inpainting', 'upscale', 'txt2img_upscale'], region_loras: true, max_region_loras: 2, max_total_loras: 3,
+      };
+      (component as any).setModelSettings(testModelSettings.map(model => model.model_id === 'novaMobianXL_v20' ? { ...model, regional } : model), 'novaMobianXL_v20');
+      component.changeModel('novaMobianXL_v20');
+      expect(load).not.toHaveBeenCalled();   // no region LoRAs yet
+      localStorage.setItem('regional-prompting', JSON.stringify({
+        ...working(), regions: [{ ...working().regions[0], loras: [{ id: 11, version_id: 1101, name: 'Amy Rose', strength: 0.7 }] }],
+      }));
+      await component.loadSettings();
+      expect(component.generationRequest.regional_prompting.regions[0].loras.length).toBe(1);
+      expect(load).toHaveBeenCalled();
+      load.calls.reset();
+      component.changeModel('Anima-baseV1');   // no LoRAs per region: nothing to look up
+      expect(load).not.toHaveBeenCalled();
     });
 
     it('tells the user when the server dropped region LoRAs', async () => {

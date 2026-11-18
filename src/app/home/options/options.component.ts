@@ -290,6 +290,19 @@ export class OptionsComponent implements OnInit {
     if (!current || current.version !== 2 || !Array.isArray(current.regions)) {
       this.generationRequest.regional_prompting = normaliseRegionalConfig(current);
     }
+    this.loadRegionLoraCatalogIfNeeded();
+  }
+
+  /**
+   * Saved region LoRAs need the LoRA catalog for their base model (history and presets do not carry it): it decides
+   * which are sent and charged. Load it with the page, not only when the editor opens.
+   */
+  private loadRegionLoraCatalogIfNeeded(): void {
+    const regions = this.generationRequest?.regional_prompting?.regions;
+    if (Array.isArray(regions) && regions.some((region: any) => region?.loras?.length)
+        && this.regionalCapabilityFor(this.generationRequest.model).region_loras) {
+      this.regionalLoraCatalog.ensureLoaded();
+    }
   }
 
   /** The job type the next Generate press sends (Enhanced Quality turns txt2img into txt2img_upscale). */
@@ -344,6 +357,7 @@ export class OptionsComponent implements OnInit {
       if (raw) {
         this.generationRequest.regional_prompting = normaliseRegionalConfig(JSON.parse(raw));
         this.regionalStateRestored = true;
+        this.loadRegionLoraCatalogIfNeeded();
         return;
       }
     } catch {
@@ -2778,6 +2792,7 @@ export class OptionsComponent implements OnInit {
         ? workingRegional
         : normaliseRegionalConfig(request.regional_prompting),
     };
+    this.loadRegionLoraCatalogIfNeeded();
   }
 
   private handleExpiredPendingJob(pending: { job_id: string; request?: any; createdAt?: number }) {

@@ -1,0 +1,54 @@
+<button type="button" class="rc-launch" (click)="open()" aria-haspopup="dialog" [attr.aria-expanded]="opened()"
+  [attr.aria-label]="'Use a saved character in Region ' + regionNumber" title="Fill this box with a saved character's prompt and LoRAs">
+  <i class="bi bi-person-heart" aria-hidden="true"></i><span>Use a character</span>
+</button>
+
+<p-dialog styleClass="character-dialog regional-character-dialog" [header]="'Character for Region ' + regionNumber"
+  [visible]="opened()" (visibleChange)="!$event && close()" [modal]="true" [draggable]="false" [resizable]="false"
+  appendTo="body" [closable]="!busyName()" [closeOnEscape]="!busyName()" [style]="{ width: 'min(620px, 94vw)' }">
+  @if (opened()) {
+    <div class="rc">
+      @if (pending(); as pick) {
+        <section class="rc-choose" aria-label="Choose the LoRAs for this box">
+          <p class="rc-intro"><strong>{{ pick.name }}</strong> has {{ pick.plan.usable.length }} LoRAs for {{ baseModel || modelName }}.
+            {{ roomText(pick.plan) }}</p>
+          <ul class="rc-loras">
+            @for (lora of pick.plan.usable; track $index; let i = $index) {
+              @let on = pick.selected[i];
+              @let locked = !on && isFull(pick);
+              <li>
+                <label class="rc-lora" [class.rc-lora-on]="on" [class.rc-lora-locked]="locked">
+                  <input type="checkbox" class="form-check-input rc-check" [checked]="on" [disabled]="locked"
+                    (change)="toggle(i, $any($event.target).checked)">
+                  @if (thumb(lora); as url) {
+                    <img class="rc-thumb" [src]="url" alt="" loading="lazy" decoding="async">
+                  } @else {
+                    <span class="rc-thumb rc-thumb-empty" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                  }
+                  <span class="rc-lora-text">
+                    <span class="rc-lora-name">{{ lora.name || 'LoRA' }}</span>
+                    <span class="rc-lora-meta">{{ lora.version ? lora.version + ' · ' : '' }}strength {{ lora.strength | number: '1.2-2' }}</span>
+                  </span>
+                </label>
+              </li>
+            }
+          </ul>
+          @for (note of pick.notes; track $index) {
+            <p class="rc-note"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ note }}</p>
+          }
+          <div class="rc-actions">
+            <button type="button" class="rc-btn" (click)="back()">Back</button>
+            <button type="button" class="rc-btn rc-btn-primary" (click)="confirm()">{{ confirmLabel() }}</button>
+          </div>
+        </section>
+      } @else {
+        <p class="rc-intro">Pick a saved look. Its prompt{{ regionLoras ? ' and LoRAs' : '' }} will fill Region {{ regionNumber }}{{ region.prompt.trim() ? ', replacing what the box has now' : '' }}.</p>
+        @if (error()) { <p class="rc-error" role="alert">{{ error() }}</p> }
+        @if (busyName()) {
+          <p class="rc-busy" role="status"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Loading {{ busyName() }}…</p>
+        }
+        <app-character-browser [disabled]="!!busyName()" (chosen)="choose($event)"></app-character-browser>
+      }
+    </div>
+  }
+</p-dialog>

@@ -12,7 +12,7 @@ export interface RegionalReuseRequest {
 }
 
 /**
- * Editor state shared by the inline editor, the full-screen dialog and the status chip: selection, undo history,
+ * Editor state shared by the full-screen editor, the status chip and the options page: selection, undo history,
  * dialog visibility and "reuse layout" requests from the image history. The regional settings themselves stay in
  * the generation request (`generationRequest.regional_prompting`).
  */

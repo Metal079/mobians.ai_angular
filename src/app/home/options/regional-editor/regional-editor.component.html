@@ -1,30 +1,21 @@
-<section class="rp" [class.rp-mode-dialog]="mode === 'dialog'" [class.rp-mode-inline]="mode === 'inline'" [attr.aria-labelledby]="uid + '-title'">
-  <ng-template #onOff>
-    <div class="rp-head-actions">
-      @if (config.enabled || regions.length) {
-        <span class="rp-counter" [class.rp-counter-full]="atLimit" [attr.title]="'Regions used, out of ' + maxRegions + ' for this model'">
-          <span class="visually-hidden">Regions used: </span>{{ regions.length }}/{{ maxRegions }}
-        </span>
-      }
-      <div class="form-check form-switch rp-switch">
-        <input class="form-check-input" type="checkbox" role="switch" [id]="uid + '-on'"
-          [checked]="config.enabled" (change)="setEnabled($any($event.target).checked)">
-        <label class="form-check-label" [for]="uid + '-on'">{{ config.enabled ? 'On' : 'Off' }}</label>
-      </div>
+<!-- The full-screen regional editor; the Regions button beside the prompt opens it (options.component.html). -->
+<section class="rp" [attr.aria-labelledby]="uid + '-title'">
+  <span class="visually-hidden" [id]="uid + '-title'">Regional prompting editor</span>
+  <!-- The switch leads the editor, so nobody edits regions without seeing that they are off
+       (user report 2026-11-18: the switch at the end of the toolbar went unnoticed on a phone). -->
+  <div class="rp-power" [class.rp-power-off]="!config.enabled" [class.rp-power-alert]="!config.enabled && regions.length > 0">
+    <div class="form-check form-switch rp-switch rp-power-switch">
+      <input class="form-check-input" type="checkbox" role="switch" [id]="uid + '-on'"
+        [checked]="config.enabled" (change)="setEnabled($any($event.target).checked)" [attr.aria-describedby]="uid + '-power-help'">
+      <label class="form-check-label" [for]="uid + '-on'">{{ config.enabled ? 'Regions on' : 'Regions off' }}</label>
     </div>
-  </ng-template>
-
-  @if (mode === 'inline') {
-    <header class="rp-head">
-      <div class="rp-head-text">
-        <h5 class="rp-title" [id]="uid + '-title'">Regional prompting</h5>
-        <p class="rp-sub">Draw boxes and give each part of the image its own prompt.</p>
-      </div>
-      <ng-container [ngTemplateOutlet]="onOff"></ng-container>
-    </header>
-  } @else {
-    <span class="visually-hidden" [id]="uid + '-title'">Regional prompting editor</span>
-  }
+    <p class="rp-power-help" [id]="uid + '-power-help'">{{ powerHelp }}</p>
+    @if (config.enabled || regions.length) {
+      <span class="rp-counter" [class.rp-counter-full]="atLimit" [attr.title]="'Regions used, out of ' + maxRegions + ' for this model'">
+        <span class="visually-hidden">Regions used: </span>{{ regions.length }}/{{ maxRegions }}
+      </span>
+    }
+  </div>
 
   @if (status.kind === 'paused' || status.kind === 'hidden') {
     <div class="rp-banner rp-banner-paused" role="status">
@@ -50,275 +41,275 @@
     </div>
   }
 
-  @if (config.enabled || mode === 'dialog') {
-    <div class="rp-toolbar" role="toolbar" aria-label="Region tools">
-      <div class="rp-tool-group rp-tool-main">
-      <button type="button" class="rp-btn" [class.rp-btn-on]="templatesOpen" [attr.aria-expanded]="templatesOpen"
-        (click)="templatesOpen = !templatesOpen"><i class="bi bi-grid-1x2" aria-hidden="true"></i><span>Layouts</span></button>
-      <button type="button" class="rp-btn" (click)="addRegion()" [disabled]="atLimit"
-        title="Add a region in a free spot"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Region</span></button>
-      <button type="button" class="rp-btn" [class.rp-btn-on]="drawMode" [attr.aria-pressed]="drawMode"
-        [disabled]="atLimit && !drawMode" (click)="drawMode = !drawMode"
-        title="Draw a new region anywhere, even over other regions"><i class="bi bi-bounding-box-circles" aria-hidden="true"></i><span>Draw</span></button>
-      </div>
-      <div class="rp-tool-group rp-tool-aux">
-      <button type="button" class="rp-icon-btn" (click)="undo()" [disabled]="!store.canUndo" aria-label="Undo" title="Undo (Ctrl+Z)">
-        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
-      <button type="button" class="rp-icon-btn" (click)="redo()" [disabled]="!store.canRedo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
-        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
-      @if (backgroundSource) {
-        <button type="button" class="rp-icon-btn" [class.rp-btn-on]="showBackground" [attr.aria-pressed]="showBackground"
-          (click)="showBackground = !showBackground" [attr.aria-label]="showBackground ? 'Hide the image under the regions' : 'Show the image under the regions'"
-          [title]="showBackground ? 'Hide image' : 'Show image'"><i class="bi bi-image" aria-hidden="true"></i></button>
-      }
-      @if (regions.length) {
-        <button type="button" class="rp-icon-btn" (click)="clearAll()" aria-label="Remove all regions" title="Remove all regions">
-          <i class="bi bi-eraser" aria-hidden="true"></i></button>
-      }
-      @if (mode === 'inline') {
-        <button type="button" class="rp-btn rp-btn-primary rp-push" (click)="openFullscreen()" title="Open the large editor">
-          <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i><span>Expand</span></button>
-      } @else {
-        <div class="rp-push"><ng-container [ngTemplateOutlet]="onOff"></ng-container></div>
-      }
-      </div>
+  <div class="rp-toolbar" role="toolbar" aria-label="Region tools">
+    <div class="rp-tool-group rp-tool-main">
+    <button type="button" class="rp-btn" [class.rp-btn-on]="templatesOpen" [attr.aria-expanded]="templatesOpen"
+      (click)="templatesOpen = !templatesOpen"><i class="bi bi-grid-1x2" aria-hidden="true"></i><span>Layouts</span></button>
+    <button type="button" class="rp-btn" (click)="addRegion()" [disabled]="atLimit"
+      title="Add a region in a free spot"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Region</span></button>
+    <button type="button" class="rp-btn" [class.rp-btn-on]="drawMode" [attr.aria-pressed]="drawMode"
+      [disabled]="atLimit && !drawMode" (click)="drawMode = !drawMode"
+      title="Draw a new region anywhere, even over other regions"><i class="bi bi-bounding-box-circles" aria-hidden="true"></i><span>Draw</span></button>
     </div>
-
-    @if (templatesOpen || !regions.length) {
-      <div class="rp-templates" role="group" aria-label="Layouts">
-        <p class="rp-templates-intro">
-          {{ regions.length ? 'Pick a layout. Your prompts move into the new boxes in order.' : 'Start with a layout, or drag on the canvas to draw your own box.' }}
-        </p>
-        <div class="rp-template-grid">
-          @for (template of templates; track template.id) {
-            <button type="button" class="rp-template" (click)="applyTemplate(template)" [title]="template.description">
-              <app-regional-minimap [boxes]="template.boxes" [aspect]="ratio" [style.width.px]="mapWidth(54)"></app-regional-minimap>
-              <span>{{ template.label }}</span>
-            </button>
-          }
-        </div>
-      </div>
+    <div class="rp-tool-group rp-tool-aux">
+    <button type="button" class="rp-icon-btn" (click)="undo()" [disabled]="!store.canUndo" aria-label="Undo" title="Undo (Ctrl+Z)">
+      <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
+    <button type="button" class="rp-icon-btn" (click)="redo()" [disabled]="!store.canRedo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
+    @if (backgroundSource) {
+      <button type="button" class="rp-icon-btn" [class.rp-btn-on]="showBackground" [attr.aria-pressed]="showBackground"
+        (click)="showBackground = !showBackground" [attr.aria-label]="showBackground ? 'Hide the image under the regions' : 'Show the image under the regions'"
+        [title]="showBackground ? 'Hide image' : 'Show image'"><i class="bi bi-image" aria-hidden="true"></i></button>
     }
+    @if (regions.length) {
+      <button type="button" class="rp-icon-btn" (click)="clearAll()" aria-label="Remove all regions" title="Remove all regions">
+        <i class="bi bi-eraser" aria-hidden="true"></i></button>
+    }
+    </div>
+  </div>
 
-    <div class="rp-workspace">
-      <div class="rp-canvas-col">
-        <app-regional-canvas
-          [regions]="regions"
-          [selectedId]="selectedId"
-          [ratio]="ratio"
-          [backgroundUrl]="backgroundUrl"
-          [drawMode]="drawMode"
-          [full]="atLimit"
-          [size]="mode"
-          (selectRegion)="select($event)"
-          (editStart)="onCanvasEditStart($event)"
-          (editEnd)="saveNow()"
-          (createRegion)="addRegion($event)"
-          (command)="onCanvasCommand($event)"
-          (drawModeChange)="drawMode = $event">
-        </app-regional-canvas>
-        <p class="rp-legend">
-          <span class="rp-legend-item"><span class="rp-legend-hatch" aria-hidden="true"></span>Main prompt only</span>
-          <span class="rp-legend-item">Higher numbers sit on top</span>
-          @if (!coarsePointer) { <span class="rp-legend-item rp-legend-alt">Hold Alt to stop snapping</span> }
-        </p>
-      </div>
-
-      <div class="rp-side-col">
-        <div class="rp-section-head">
-          <h6 class="rp-section-title">Regions @if (regions.length > 1) { <span class="rp-optional rp-order-note">front to back</span> }</h6>
-          @if (regions.length > 6) { <span class="rp-section-note">More than 6 regions often blur together.</span> }
-        </div>
-        @if (!regions.length) {
-          <p class="rp-empty">No regions yet. Pick a layout above or draw a box on the canvas.</p>
+  @if (templatesOpen || !regions.length) {
+    <div class="rp-templates" role="group" aria-label="Layouts">
+      <p class="rp-templates-intro">
+        {{ regions.length ? 'Pick a layout. Your prompts move into the new boxes in order.' : 'Start with a layout, or drag on the canvas to draw your own box.' }}
+      </p>
+      <div class="rp-template-grid">
+        @for (template of templates; track template.id) {
+          <button type="button" class="rp-template" (click)="applyTemplate(template)" [title]="template.description">
+            <app-regional-minimap [boxes]="template.boxes" [aspect]="ratio" [style.width.px]="mapWidth(54)"></app-regional-minimap>
+            <span>{{ template.label }}</span>
+          </button>
         }
-        <ol class="rp-list">
-          @for (entry of listOrder; track entry.region.id) {
-            @let region = entry.region;
-            @let i = entry.index;
-            <li class="rp-item" [class.rp-item-selected]="region.id === selectedId" [style.--rc]="color(i)">
-              <div class="rp-item-head">
-                <button type="button" class="rp-item-select" (click)="toggleSelect(region.id)"
-                  [attr.aria-expanded]="region.id === selectedId"
-                  [attr.aria-label]="'Region ' + (i + 1) + ': ' + (region.prompt || 'no prompt') + (region.id === selectedId ? '. Collapse' : '. Edit')">
-                  <span class="rp-swatch" aria-hidden="true">{{ i + 1 }}</span>
-                  <span class="rp-item-title">
-                    <span class="rp-item-name">Region {{ i + 1 }}</span>
-                    <span class="rp-item-snippet" [class.rp-muted]="!region.prompt.trim()">{{ region.prompt.trim() ? snippet(region.prompt) : 'No prompt yet' }}</span>
-                  </span>
-                  @if (region.loras?.length) {
-                    <span class="rp-tag rp-tag-lora" [class.rp-tag-lora-paused]="!capability.region_loras"
-                      [attr.title]="region.loras!.length + (region.loras!.length === 1 ? ' LoRA' : ' LoRAs') + ' for this box' + (capability.region_loras ? '' : ' (paused with this model)')">
-                      <i class="bi bi-stars" aria-hidden="true"></i>{{ region.loras!.length }}
-                      <span class="visually-hidden">{{ region.loras!.length === 1 ? 'LoRA' : 'LoRAs' }}</span></span>
-                  }
-                  @if (!region.prompt.trim()) { <span class="rp-tag rp-tag-warn">Skipped</span> }
-                  @else if ((region.strength ?? 1) <= 0) { <span class="rp-tag">Off</span> }
-                </button>
-                <div class="rp-item-actions">
-                  <button type="button" class="rp-icon-btn rp-icon-sm" (click)="moveDepth(i, 1)" [disabled]="i === regions.length - 1"
-                    aria-label="Bring forward" title="Bring forward (up the list)"><i class="bi bi-layer-forward" aria-hidden="true"></i></button>
-                  <button type="button" class="rp-icon-btn rp-icon-sm" (click)="moveDepth(i, -1)" [disabled]="i === 0"
-                    aria-label="Send backward" title="Send backward (down the list)"><i class="bi bi-layer-backward" aria-hidden="true"></i></button>
-                  <button type="button" class="rp-icon-btn rp-icon-sm" (click)="duplicateRegion(region.id)" [disabled]="atLimit"
-                    aria-label="Duplicate region" title="Duplicate (Ctrl+D)"><i class="bi bi-copy" aria-hidden="true"></i></button>
-                  <button type="button" class="rp-icon-btn rp-icon-sm rp-danger" (click)="deleteRegion(region.id)"
-                    aria-label="Delete region" title="Delete (Del)"><i class="bi bi-trash3" aria-hidden="true"></i></button>
-                </div>
-              </div>
-
-              @if (region.id === selectedId) {
-                <div class="rp-item-body">
-                  <label class="rp-label" [for]="uid + '-prompt-' + region.id">Prompt</label>
-                  <textarea class="form-control rp-textarea" rows="3" [id]="uid + '-prompt-' + region.id" maxlength="4000"
-                    [value]="region.prompt" (input)="onTextInput(region, 'prompt', $event)" (blur)="store.sealHistory()"
-                    placeholder="What belongs in this box, e.g. sonic the hedgehog, running, blue fur"
-                    spellcheck="false" autocapitalize="off"></textarea>
-                  @if (sharedTag(region); as tag) {
-                    <p class="rp-coach"><i class="bi bi-lightbulb" aria-hidden="true"></i>
-                      <span>"{{ tag }}" is also in the main prompt, so it can show up in other boxes too. Keep each subject only in its own box.</span></p>
-                  }
-                  @if (showComposed(region)) {
-                    <p class="rp-preview"><span class="rp-preview-label">The model reads:</span> {{ composed(region) }}</p>
-                  }
-
-                  @if (capability.negative_prompts) {
-                    <label class="rp-label" [for]="uid + '-neg-' + region.id">Region Negative Prompt <span class="rp-optional">optional, added to the main negative</span></label>
-                    <input class="form-control form-control-sm" [id]="uid + '-neg-' + region.id" maxlength="4000"
-                      [value]="region.negative_prompt ?? ''" (input)="onTextInput(region, 'negative_prompt', $event)" (blur)="store.sealHistory()"
-                      placeholder="e.g. wrong character, extra arms" spellcheck="false" autocapitalize="off">
-                  }
-
-                  <div class="rp-range-row">
-                    <label class="rp-label" [for]="uid + '-strength-' + region.id">Strength
-                      <app-hint variant="regional" text="How strongly this box's prompt owns its area. 100% is the usual choice; lower values let the main prompt show through; 0% switches the region off."></app-hint>
-                    </label>
-                    <output [attr.for]="uid + '-strength-' + region.id">{{ percent(region.strength) }}%</output>
-                  </div>
-                  <input type="range" class="form-range rp-range" [id]="uid + '-strength-' + region.id" min="0" max="100" step="5"
-                    [value]="percent(region.strength)" (input)="onStrength(region, $event)" (change)="store.sealHistory()">
-                  @if (isSmall(region)) {
-                    <p class="rp-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Small box: models can ignore very small regions.</p>
-                  }
-
-                  @if (capability.region_loras) {
-                    <app-regional-lora-picker
-                      [region]="region"
-                      [config]="config"
-                      [baseModel]="model?.base_model ?? ''"
-                      [modelName]="modelName"
-                      [remaining]="loraRemaining"
-                      [totalLimit]="loraTotalLimit"
-                      [jobLoras]="jobLoras ?? []"
-                      [uid]="uid + '-' + region.id"
-                      (changed)="$event === 'now' ? saveNow() : saveSoon()"></app-regional-lora-picker>
-                  } @else if (region.loras?.length) {
-                    <p class="rp-note"><i class="bi bi-pause-circle" aria-hidden="true"></i>
-                      {{ region.loras!.length === 1 ? '1 LoRA for this box is' : region.loras!.length + ' LoRAs for this box are' }} paused: {{ modelName }} does not use LoRAs per region.</p>
-                  }
-
-                  <details class="rp-advanced">
-                    <summary>Advanced</summary>
-                    <div class="rp-range-row">
-                      <label class="rp-label" [for]="uid + '-feather-' + region.id">Edge blend
-                        <app-hint variant="regional" text="How far the region fades out past its edges, in pixels of the final image. Higher values give smoother transitions; 0 gives hard edges."></app-hint>
-                      </label>
-                      <output [attr.for]="uid + '-feather-' + region.id">{{ region.feather }} px</output>
-                    </div>
-                    <input type="range" class="form-range rp-range" [id]="uid + '-feather-' + region.id" min="0" max="160" step="4"
-                      [value]="region.feather" (input)="onFeather(region, $event)" (change)="store.sealHistory()">
-                    <div class="rp-geo-grid">
-                      @for (field of geometryFields; track field.key) {
-                        <label class="rp-geo">
-                          <span>{{ field.label }}</span>
-                          <span class="rp-geo-input">
-                            <input type="number" class="form-control form-control-sm" inputmode="decimal" min="0" max="100" step="any"
-                              [value]="geometryValue(region, field.key)" (change)="onGeometry(region, field.key, $event)"
-                              [attr.aria-label]="field.label + ' in percent of the image'">
-                            <span aria-hidden="true">%</span>
-                          </span>
-                        </label>
-                      }
-                    </div>
-                  </details>
-                </div>
-              }
-            </li>
-          }
-        </ol>
-
-        <section class="rp-settings" aria-label="How regions combine">
-          <h6 class="rp-section-title">How regions combine</h6>
-          <div class="rp-seg" role="radiogroup" aria-label="Separation">
-            @for (option of separations; track option.id) {
-              <button type="button" role="radio" class="rp-seg-btn" [class.rp-seg-on]="(config.separation ?? 'balanced') === option.id"
-                [attr.aria-checked]="(config.separation ?? 'balanced') === option.id" (click)="setSeparation(option.id)">{{ option.label }}</button>
-            }
-          </div>
-          <p class="rp-help">{{ separationHelp }}</p>
-
-          @if (inheritApplies) {
-            <div class="form-check rp-check">
-              <input class="form-check-input" type="checkbox" [id]="uid + '-inherit'" [checked]="inheritAll" [indeterminate]="inheritMixed"
-                (change)="setInheritAll($any($event.target).checked)">
-              <label class="form-check-label" [for]="uid + '-inherit'">Add the main prompt to every region
-                <app-hint variant="regional" text="On: each box reads 'main prompt, box prompt', which keeps the style and scene consistent. Off: boxes read only their own prompt, for stronger separation."></app-hint>
-              </label>
-            </div>
-          } @else {
-            <p class="rp-help">{{ modelName }} shares the main prompt with every region automatically and does not use region negatives.</p>
-          }
-
-          <p class="rp-help">{{ capability.region_loras
-            ? 'LoRAs in the LoRA panel, the seed and the main negative prompt apply to the whole image. Open a region to give it its own LoRAs.'
-            : 'LoRAs, the seed and the main negative prompt apply to the whole image.' }}</p>
-
-          @if (capability.layout_hints) {
-            <div class="form-check rp-check">
-              <input class="form-check-input" type="checkbox" [id]="uid + '-hints'" [checked]="config.layout_hints === true"
-                (change)="setLayoutHints($any($event.target).checked)">
-              <label class="form-check-label" [for]="uid + '-hints'">Describe positions in the main prompt
-                <app-hint variant="regional" text="Adds sentences like 'On the left side of the image: ...' to the main prompt, which helps this model place each subject."></app-hint>
-              </label>
-            </div>
-            @if (config.layout_hints === true && layoutPreview) {
-              <p class="rp-preview"><span class="rp-preview-label">Adds:</span> {{ layoutPreview }}</p>
-            }
-          } @else if (family === 'anima' && layoutPreview) {
-            <p class="rp-preview"><span class="rp-preview-label">{{ modelName || 'This model' }} also reads the positions in words:</span> {{ layoutPreview }}</p>
-          }
-        </section>
-
-        <section class="rp-presets" aria-label="Presets">
-          <h6 class="rp-section-title">Presets</h6>
-          @if (presets().length) {
-            <ul class="rp-preset-list">
-              @for (preset of presets(); track preset.id) {
-                <li class="rp-preset">
-                  <button type="button" class="rp-preset-apply" (click)="applyPreset(preset)" [title]="'Use the preset ' + preset.name">
-                    <app-regional-minimap class="rp-preset-map" [boxes]="preset.regions" [aspect]="ratio" [style.width.px]="mapWidth(30)"></app-regional-minimap>
-                    <span class="rp-preset-name">{{ preset.name }}</span>
-                  </button>
-                  <button type="button" class="rp-icon-btn rp-icon-sm" (click)="deletePreset(preset)" [attr.aria-label]="'Delete the preset ' + preset.name" title="Delete preset">
-                    <i class="bi bi-x-lg" aria-hidden="true"></i></button>
-                </li>
-              }
-            </ul>
-          }
-          <form class="rp-preset-form" (submit)="$event.preventDefault(); savePreset()">
-            <input class="form-control form-control-sm" [id]="uid + '-preset'" [value]="presetName" (input)="onPresetNameInput($event)"
-              maxlength="60" placeholder="Name this layout" aria-label="Preset name" autocomplete="off">
-            <button type="submit" class="rp-btn rp-btn-primary" [disabled]="!presetName.trim() || !regions.length || presetsLoading()">
-              {{ presetsLoading() ? 'Loading…' : 'Save preset' }}</button>
-          </form>
-          <p class="rp-help">{{ isLoggedIn ? 'Presets are saved to your account.' : 'Saved in this browser. Sign in to keep presets on your account.' }}</p>
-        </section>
       </div>
     </div>
-  } @else if (regions.length) {
-    <p class="rp-off-note">
-      {{ regions.length }} {{ regions.length === 1 ? 'region is' : 'regions are' }} saved but not used.
-      <button type="button" class="rp-link-btn" (click)="setEnabled(true)">Switch regions on</button>
-    </p>
   }
+
+  <div class="rp-workspace">
+    <div class="rp-canvas-col">
+      <app-regional-canvas
+        [regions]="regions"
+        [selectedId]="selectedId"
+        [ratio]="ratio"
+        [backgroundUrl]="backgroundUrl"
+        [drawMode]="drawMode"
+        [full]="atLimit"
+        size="dialog"
+        (selectRegion)="select($event)"
+        (editStart)="onCanvasEditStart($event)"
+        (editEnd)="saveNow()"
+        (createRegion)="addRegion($event)"
+        (command)="onCanvasCommand($event)"
+        (drawModeChange)="drawMode = $event">
+      </app-regional-canvas>
+      <p class="rp-legend">
+        <span class="rp-legend-item"><span class="rp-legend-hatch" aria-hidden="true"></span>Main prompt only</span>
+        <span class="rp-legend-item">Higher numbers sit on top</span>
+        @if (!coarsePointer) { <span class="rp-legend-item rp-legend-alt">Hold Alt to stop snapping</span> }
+      </p>
+    </div>
+
+    <div class="rp-side-col">
+      <div class="rp-section-head">
+        <h6 class="rp-section-title">Regions @if (regions.length > 1) { <span class="rp-optional rp-order-note">front to back</span> }</h6>
+        @if (regions.length > 6) { <span class="rp-section-note">More than 6 regions often blur together.</span> }
+      </div>
+      @if (!regions.length) {
+        <p class="rp-empty">No regions yet. Pick a layout above or draw a box on the canvas.</p>
+      }
+      <ol class="rp-list">
+        @for (entry of listOrder; track entry.region.id) {
+          @let region = entry.region;
+          @let i = entry.index;
+          <li class="rp-item" [class.rp-item-selected]="region.id === selectedId" [style.--rc]="color(i)">
+            <div class="rp-item-head">
+              <button type="button" class="rp-item-select" (click)="toggleSelect(region.id)"
+                [attr.aria-expanded]="region.id === selectedId"
+                [attr.aria-label]="'Region ' + (i + 1) + ': ' + (region.prompt || 'no prompt') + (region.id === selectedId ? '. Collapse' : '. Edit')">
+                <span class="rp-swatch" aria-hidden="true">{{ i + 1 }}</span>
+                <span class="rp-item-title">
+                  <span class="rp-item-name">Region {{ i + 1 }}</span>
+                  <span class="rp-item-snippet" [class.rp-muted]="!region.prompt.trim()">{{ region.prompt.trim() ? snippet(region.prompt) : 'No prompt yet' }}</span>
+                </span>
+                @if (region.loras?.length) {
+                  <span class="rp-tag rp-tag-lora" [class.rp-tag-lora-paused]="!capability.region_loras"
+                    [attr.title]="region.loras!.length + (region.loras!.length === 1 ? ' LoRA' : ' LoRAs') + ' for this box' + (capability.region_loras ? '' : ' (paused with this model)')">
+                    <i class="bi bi-stars" aria-hidden="true"></i>{{ region.loras!.length }}
+                    <span class="visually-hidden">{{ region.loras!.length === 1 ? 'LoRA' : 'LoRAs' }}</span></span>
+                }
+                @if (!region.prompt.trim()) { <span class="rp-tag rp-tag-warn">Skipped</span> }
+                @else if ((region.strength ?? 1) <= 0) { <span class="rp-tag">Off</span> }
+              </button>
+              <div class="rp-item-actions">
+                <button type="button" class="rp-icon-btn rp-icon-sm" (click)="moveDepth(i, 1)" [disabled]="i === regions.length - 1"
+                  aria-label="Bring forward" title="Bring forward (up the list)"><i class="bi bi-layer-forward" aria-hidden="true"></i></button>
+                <button type="button" class="rp-icon-btn rp-icon-sm" (click)="moveDepth(i, -1)" [disabled]="i === 0"
+                  aria-label="Send backward" title="Send backward (down the list)"><i class="bi bi-layer-backward" aria-hidden="true"></i></button>
+                <button type="button" class="rp-icon-btn rp-icon-sm" (click)="duplicateRegion(region.id)" [disabled]="atLimit"
+                  aria-label="Duplicate region" title="Duplicate (Ctrl+D)"><i class="bi bi-copy" aria-hidden="true"></i></button>
+                <button type="button" class="rp-icon-btn rp-icon-sm rp-danger" (click)="deleteRegion(region.id)"
+                  aria-label="Delete region" title="Delete (Del)"><i class="bi bi-trash3" aria-hidden="true"></i></button>
+              </div>
+            </div>
+
+            @if (region.id === selectedId) {
+              <div class="rp-item-body">
+                <div class="rp-prompt-head">
+                  <label class="rp-label" [for]="uid + '-prompt-' + region.id">Prompt</label>
+                  <app-regional-character-picker
+                    [region]="region"
+                    [config]="config"
+                    [regionNumber]="i + 1"
+                    [baseModel]="model?.base_model ?? ''"
+                    [modelName]="modelName"
+                    [regionLoras]="!!capability.region_loras"
+                    [loraRoom]="loraRoomFor(region)"
+                    [totalLimit]="loraTotalLimit"
+                    [jobLoras]="jobLoras ?? []"
+                    (changed)="onRegionEdited(); saveNow()"></app-regional-character-picker>
+                </div>
+                <textarea class="form-control rp-textarea" rows="3" [id]="uid + '-prompt-' + region.id" maxlength="4000"
+                  [value]="region.prompt" (input)="onTextInput(region, 'prompt', $event)" (blur)="store.sealHistory()"
+                  placeholder="What belongs in this box, e.g. sonic the hedgehog, running, blue fur"
+                  spellcheck="false" autocapitalize="off"></textarea>
+                @if (sharedTag(region); as tag) {
+                  <p class="rp-coach"><i class="bi bi-lightbulb" aria-hidden="true"></i>
+                    <span>"{{ tag }}" is also in the main prompt, so it can show up in other boxes too. Keep each subject only in its own box.</span></p>
+                }
+                @if (showComposed(region)) {
+                  <p class="rp-preview"><span class="rp-preview-label">The model reads:</span> {{ composed(region) }}</p>
+                }
+
+                @if (capability.negative_prompts) {
+                  <label class="rp-label" [for]="uid + '-neg-' + region.id">Region Negative Prompt <span class="rp-optional">optional, added to the main negative</span></label>
+                  <input class="form-control form-control-sm" [id]="uid + '-neg-' + region.id" maxlength="4000"
+                    [value]="region.negative_prompt ?? ''" (input)="onTextInput(region, 'negative_prompt', $event)" (blur)="store.sealHistory()"
+                    placeholder="e.g. wrong character, extra arms" spellcheck="false" autocapitalize="off">
+                }
+
+                <div class="rp-range-row">
+                  <label class="rp-label" [for]="uid + '-strength-' + region.id">Strength
+                    <app-hint variant="regional" text="How strongly this box's prompt owns its area. 100% is the usual choice; lower values let the main prompt show through; 0% switches the region off."></app-hint>
+                  </label>
+                  <output [attr.for]="uid + '-strength-' + region.id">{{ percent(region.strength) }}%</output>
+                </div>
+                <input type="range" class="form-range rp-range" [id]="uid + '-strength-' + region.id" min="0" max="100" step="5"
+                  [value]="percent(region.strength)" (input)="onStrength(region, $event)" (change)="store.sealHistory()">
+                @if (isSmall(region)) {
+                  <p class="rp-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Small box: models can ignore very small regions.</p>
+                }
+
+                @if (capability.region_loras) {
+                  <app-regional-lora-picker
+                    [region]="region"
+                    [config]="config"
+                    [baseModel]="model?.base_model ?? ''"
+                    [modelName]="modelName"
+                    [remaining]="loraRemaining"
+                    [totalLimit]="loraTotalLimit"
+                    [jobLoras]="jobLoras ?? []"
+                    [uid]="uid + '-' + region.id"
+                    (changed)="onRegionEdited(); $event === 'now' ? saveNow() : saveSoon()"></app-regional-lora-picker>
+                } @else if (region.loras?.length) {
+                  <p class="rp-note"><i class="bi bi-pause-circle" aria-hidden="true"></i>
+                    {{ region.loras!.length === 1 ? '1 LoRA for this box is' : region.loras!.length + ' LoRAs for this box are' }} paused: {{ modelName }} does not use LoRAs per region.</p>
+                }
+
+                <details class="rp-advanced">
+                  <summary>Advanced</summary>
+                  <div class="rp-range-row">
+                    <label class="rp-label" [for]="uid + '-feather-' + region.id">Edge blend
+                      <app-hint variant="regional" text="How far the region fades out past its edges, in pixels of the final image. Higher values give smoother transitions; 0 gives hard edges."></app-hint>
+                    </label>
+                    <output [attr.for]="uid + '-feather-' + region.id">{{ region.feather }} px</output>
+                  </div>
+                  <input type="range" class="form-range rp-range" [id]="uid + '-feather-' + region.id" min="0" max="160" step="4"
+                    [value]="region.feather" (input)="onFeather(region, $event)" (change)="store.sealHistory()">
+                  <div class="rp-geo-grid">
+                    @for (field of geometryFields; track field.key) {
+                      <label class="rp-geo">
+                        <span>{{ field.label }}</span>
+                        <span class="rp-geo-input">
+                          <input type="number" class="form-control form-control-sm" inputmode="decimal" min="0" max="100" step="any"
+                            [value]="geometryValue(region, field.key)" (change)="onGeometry(region, field.key, $event)"
+                            [attr.aria-label]="field.label + ' in percent of the image'">
+                          <span aria-hidden="true">%</span>
+                        </span>
+                      </label>
+                    }
+                  </div>
+                </details>
+              </div>
+            }
+          </li>
+        }
+      </ol>
+
+      <section class="rp-settings" aria-label="How regions combine">
+        <h6 class="rp-section-title">How regions combine</h6>
+        <div class="rp-seg" role="radiogroup" aria-label="Separation">
+          @for (option of separations; track option.id) {
+            <button type="button" role="radio" class="rp-seg-btn" [class.rp-seg-on]="(config.separation ?? 'balanced') === option.id"
+              [attr.aria-checked]="(config.separation ?? 'balanced') === option.id" (click)="setSeparation(option.id)">{{ option.label }}</button>
+          }
+        </div>
+        <p class="rp-help">{{ separationHelp }}</p>
+
+        @if (inheritApplies) {
+          <div class="form-check rp-check">
+            <input class="form-check-input" type="checkbox" [id]="uid + '-inherit'" [checked]="inheritAll" [indeterminate]="inheritMixed"
+              (change)="setInheritAll($any($event.target).checked)">
+            <label class="form-check-label" [for]="uid + '-inherit'">Add the main prompt to every region
+              <app-hint variant="regional" text="On: each box reads 'main prompt, box prompt', which keeps the style and scene consistent. Off: boxes read only their own prompt, for stronger separation."></app-hint>
+            </label>
+          </div>
+        } @else {
+          <p class="rp-help">{{ modelName }} shares the main prompt with every region automatically and does not use region negatives.</p>
+        }
+
+        <p class="rp-help">{{ capability.region_loras
+          ? 'LoRAs in the LoRA panel, the seed and the main negative prompt apply to the whole image. Open a region to give it its own LoRAs.'
+          : 'LoRAs, the seed and the main negative prompt apply to the whole image.' }}</p>
+
+        @if (capability.layout_hints) {
+          <div class="form-check rp-check">
+            <input class="form-check-input" type="checkbox" [id]="uid + '-hints'" [checked]="config.layout_hints === true"
+              (change)="setLayoutHints($any($event.target).checked)">
+            <label class="form-check-label" [for]="uid + '-hints'">Describe positions in the main prompt
+              <app-hint variant="regional" text="Adds sentences like 'On the left side of the image: ...' to the main prompt, which helps this model place each subject."></app-hint>
+            </label>
+          </div>
+          @if (config.layout_hints === true && layoutPreview) {
+            <p class="rp-preview"><span class="rp-preview-label">Adds:</span> {{ layoutPreview }}</p>
+          }
+        } @else if (family === 'anima' && layoutPreview) {
+          <p class="rp-preview"><span class="rp-preview-label">{{ modelName || 'This model' }} also reads the positions in words:</span> {{ layoutPreview }}</p>
+        }
+      </section>
+
+      <section class="rp-presets" aria-label="Presets">
+        <h6 class="rp-section-title">Presets</h6>
+        @if (presets().length) {
+          <ul class="rp-preset-list">
+            @for (preset of presets(); track preset.id) {
+              <li class="rp-preset">
+                <button type="button" class="rp-preset-apply" (click)="applyPreset(preset)" [title]="'Use the preset ' + preset.name">
+                  <app-regional-minimap class="rp-preset-map" [boxes]="preset.regions" [aspect]="ratio" [style.width.px]="mapWidth(30)"></app-regional-minimap>
+                  <span class="rp-preset-name">{{ preset.name }}</span>
+                </button>
+                <button type="button" class="rp-icon-btn rp-icon-sm" (click)="deletePreset(preset)" [attr.aria-label]="'Delete the preset ' + preset.name" title="Delete preset">
+                  <i class="bi bi-x-lg" aria-hidden="true"></i></button>
+              </li>
+            }
+          </ul>
+        }
+        <form class="rp-preset-form" (submit)="$event.preventDefault(); savePreset()">
+          <input class="form-control form-control-sm" [id]="uid + '-preset'" [value]="presetName" (input)="onPresetNameInput($event)"
+            maxlength="60" placeholder="Name this layout" aria-label="Preset name" autocomplete="off">
+          <button type="submit" class="rp-btn rp-btn-primary" [disabled]="!presetName.trim() || !regions.length || presetsLoading()">
+            {{ presetsLoading() ? 'Loading…' : 'Save preset' }}</button>
+        </form>
+        <p class="rp-help">{{ isLoggedIn ? 'Presets are saved to your account.' : 'Saved in this browser. Sign in to keep presets on your account.' }}</p>
+      </section>
+    </div>
+  </div>
 </section>
