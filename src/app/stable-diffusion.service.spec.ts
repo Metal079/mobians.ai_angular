@@ -34,11 +34,11 @@ describe('StableDiffusionService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('loads the public catalog without preflight-triggering headers even when signed in', () => {
-    const catalog = { default_model: 'test-model', models: [] };
+  it('loads the public LoRA catalog without preflight-triggering headers even when signed in', () => {
+    const catalog = [{ id: 1, trigger_words: ['original'] }];
     const received = jasmine.createSpy('received');
-    service.getGenerationModels().subscribe(received);
-    const request = http.expectOne(`${environment.apiBaseUrl}/models`);
+    service.getLoras().subscribe(received);
+    const request = http.expectOne(`${environment.apiBaseUrl}/get_loras/?status=active&fields=summary`);
     expect(request.request.method).toBe('GET');
     expect(request.request.headers.keys()).toEqual([]);
     expect(request.request.withCredentials).toBeFalse();
@@ -64,16 +64,14 @@ describe('StableDiffusionService', () => {
   });
 
   it('does not discard the session when a public catalog request fails', () => {
-    service.getGenerationModels().subscribe({ error: () => {} });
-    const request = http.expectOne(`${environment.apiBaseUrl}/models`);
+    service.getLoras().subscribe({ error: () => {} });
+    const request = http.expectOne(`${environment.apiBaseUrl}/get_loras/?status=active&fields=summary`);
     request.flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(localStorage.getItem('authToken')).toBe('test-session-token');
     expect(localStorage.getItem('userData')).not.toBeNull();
   });
   for (const [name, path, call] of [
     ['credit packages', '/credit-packages', () => service.getCreditPackages()],
-    ['credit costs', '/credits/costs', () => service.getCreditCosts()],
-    ['model credit cost', '/credits/cost/novaMobianXL_v20', () => service.getModelCreditCost('novaMobianXL_v20')],
     ['LoRA search', '/search_civitAi_loras_by_query/Sonic?show_nsfw=false', () => service.searchByQuery('Sonic')],
     ['LoRA ID lookup', '/search_civitAi_loras_by_id/123?show_nsfw=false', () => service.searchByID('123')],
     ['LoRA creator lookup', '/search_civitAi_loras_by_user/creator?show_nsfw=false', () => service.searchByUser('creator')],
@@ -120,12 +118,27 @@ describe('StableDiffusionService', () => {
     });
   }
 
-  it('returns image blobs unchanged without adding authentication', () => {
+  // Since AI image editing, the server answers these per account: the editing models and their
+  // prices are only listed for signed-in users, and an edit's images are only served to its owner.
+  for (const [name, path, call] of [
+    ['model catalog', '/models', () => service.getGenerationModels()],
+    ['credit costs', '/credits/costs', () => service.getCreditCosts()],
+    ['model credit cost', '/credits/cost/novaMobianXL_v20', () => service.getModelCreditCost('novaMobianXL_v20')],
+  ] as Array<[string, string, () => any]>) {
+    it('sends the session with the account-specific ' + name, () => {
+      call().subscribe();
+      const request = http.expectOne(environment.apiBaseUrl + path);
+      expect(request.request.headers.get('Authorization')).toBe('Bearer test-session-token');
+      request.flush({});
+    });
+  }
+
+  it('returns image blobs unchanged and sends the session that owns the job', () => {
     const blob = new Blob(['image'], { type: 'image/png' });
     const received = jasmine.createSpy();
     service.getJobImage('test-job', 2).subscribe(received);
     const request = http.expectOne(environment.apiBaseUrl + '/get_job_image/test-job/2');
-    expect(request.request.headers.has('Authorization')).toBeFalse();
+    expect(request.request.headers.get('Authorization')).toBe('Bearer test-session-token');
     expect(request.request.responseType).toBe('blob');
     request.flush(blob);
     expect(received).toHaveBeenCalledWith(blob);
