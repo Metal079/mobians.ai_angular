@@ -1274,6 +1274,27 @@ describe('OptionsComponent', () => {
     });
   });
 
+  it('shows the start instructions after removing the reference only when there are no results to go back to', () => {
+    const shared = TestBed.inject(SharedService) as any;
+    shared.enableInstructions = jasmine.createSpy('enableInstructions');
+    shared.images = [{ UUID: 'result-1' }];
+    component.images = [];   // this component's own list is emptied whenever a reference is set
+    component.removeReferenceImage();
+    expect(shared.enableInstructions).not.toHaveBeenCalled();
+    shared.images = [];
+    component.removeReferenceImage();
+    expect(shared.enableInstructions).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the page when finished images could not be stored, so the grid can offer Download', () => {
+    const changes: boolean[] = [];
+    component.historyRecoveryChange.subscribe(value => changes.push(value));
+    component.historyRecoveryPending = true;
+    component.historyRecoveryPending = true;
+    component.historyRecoveryPending = false;
+    expect(changes).toEqual([true, false]);
+  });
+
   it('keeps a pending image job when the route is destroyed and resumes polling immediately', fakeAsync(() => {
     const jobId = 'image-job-123';
     localStorage.setItem('mobians:pending-job', JSON.stringify({

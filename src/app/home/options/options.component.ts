@@ -549,7 +549,14 @@ export class OptionsComponent implements OnInit {
   jobID: string = "";
   // Add a simple flag to indicate a pending job
   hasPendingJob: boolean = false;
-  historyRecoveryPending = false;
+  private historyRecoveryPendingValue = false;
+  /** The results exist only as previews because history could not store them; the grid then offers Download. */
+  get historyRecoveryPending(): boolean { return this.historyRecoveryPendingValue; }
+  set historyRecoveryPending(pending: boolean) {
+    if (pending === this.historyRecoveryPendingValue) return;
+    this.historyRecoveryPendingValue = pending;
+    this.historyRecoveryChange.emit(pending);
+  }
   historyRecoveryInProgress = false;
   historyRecoveryUnsavedCount = 0;
   private pendingJobInMemory: PendingGenerationJob | null = null;
@@ -616,6 +623,7 @@ export class OptionsComponent implements OnInit {
   @Output() queueStatusMessageChange = new EventEmitter<string | undefined>();
   @Output() imageModalOpen = new EventEmitter<boolean>();
   @Output() etaChange = new EventEmitter<number | undefined>();
+  @Output() historyRecoveryChange = new EventEmitter<boolean>();
   private readonly destroyRef = inject(DestroyRef);
   private dynamicPromptLibraryRefreshTimer?: ReturnType<typeof setTimeout>;
   private readonly dynamicPromptLibraryRefreshDelayMs = 750;
@@ -2591,12 +2599,10 @@ export class OptionsComponent implements OnInit {
     this.sharedService.setReferenceImage(null);
     this.sharedService.setGenerationRequest(this.generationRequest);
 
-    // If there are no images to unexpand enable the instructions
-    if (this.images.length == 0) {
+    // With results, the grid shows them again; with none, it shows the start instructions.
+    // The shared results are asked, because this component's own list is emptied whenever a reference is set.
+    if (this.sharedService.getImagesValue().length == 0) {
       this.sharedService.enableInstructions();
-    }
-    else {
-
     }
   }
 

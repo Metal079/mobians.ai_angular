@@ -15,6 +15,8 @@ import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.co
 import { SignupNudgeComponent } from './signup-nudge/signup-nudge.component';
 import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 import { NotifyMeComponent } from 'src/app/notifications/notify-me.component';
+import { CharactersService, CharacterSaveSource } from 'src/app/characters/characters.service';
+import { supportsLocalHistory } from 'src/app/history-storage';
 
 
 @Component({
@@ -28,7 +30,34 @@ export class ImageGridComponent implements OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
   readonly imageEditor = inject(ImageEditorService);
   private readonly videoHandoff = inject(VideoHandoffService);
+  private readonly characters = inject(CharactersService);
   editWithAI(image: MobiansImage, event: Event) { event.stopPropagation(); this.imageEditor.open({ image }); }
+
+  /**
+   * The enlarged picture as something that can be saved as a character, or null when it cannot be:
+   * an uploaded file has no prompt, and a character's own reference picture is already a saved look.
+   * The enlarged copy carries no prompt or settings, so a result is looked up by its id.
+   */
+  get savableReference(): { image: MobiansImage; source: CharacterSaveSource } | null {
+    const reference = this.sharedService.getReferenceImageValue();
+    if (!reference || String(reference.UUID ?? '').startsWith('character-')) return null;
+    const result = this.sharedService.getImagesValue().find(image => image.UUID === reference.UUID);
+    const image = result ?? reference;
+    // The result's own file, not the enlarged copy: that one may be a much larger PNG conversion.
+    const blob = image.blob ?? reference.blob;
+    if (!image.prompt?.trim() || !blob) return null;
+    return { image: { ...image, blob }, source: result ? 'enlarged_result' : 'enlarged_history' };
+  }
+
+  saveCharacter(target: { image: MobiansImage; source: CharacterSaveSource }, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.characters.requestSave(target.image, target.image.characterId, undefined, target.source);
+  }
+
+  /** History cannot keep these images (unsupported browser, or a failed save), so downloading is the way to keep them. */
+  @Input() rescueDownload = false;
+  get showDownload(): boolean { return this.rescueDownload || !supportsLocalHistory(); }
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   imagesIDs: string[] = [];
@@ -157,8 +186,12 @@ export class ImageGridComponent implements OnDestroy {
         this.showReferenceImage = true;
         this.sharedService.disableInstructions();
       }
-      else {
-        console.log('Reference Image removed');
+      else if (this.showReferenceImage) {
+        // Removed from outside the grid (a character load, "Remove reference image"):
+        // show the results again instead of an empty frame.
+        this.showReferenceImage = false;
+        this.imageExpandedChange.emit(false);
+        this.cdr.markForCheck();
       }
     });
   }

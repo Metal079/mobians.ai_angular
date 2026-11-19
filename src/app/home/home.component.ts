@@ -58,6 +58,8 @@ export class HomeComponent {
   queueStatusMessage?: string;
   inpaintMask?: string;
   etaSeconds?: number;
+  /** Finished images could not be stored in history, so the grid offers Download for them. */
+  historyRecoveryPending = false;
   showRatingButtons: boolean = false;
   ratingButtonsEligibility: boolean = false;
   headerMessage: HeaderMessage[] = [{
@@ -153,6 +155,10 @@ export class HomeComponent {
 
   onEtaChange(eta: number | undefined) {
     this.etaSeconds = eta;
+  }
+
+  onHistoryRecoveryChange(pending: boolean) {
+    this.historyRecoveryPending = pending;
   }
 
   onInpaintMaskChange(inpaint_mask: string) {

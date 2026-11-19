@@ -24,6 +24,7 @@
       [queuePosition]="queuePosition"
       [queueStatusMessage]="queueStatusMessage"
       [etaSeconds]="etaSeconds"
+      [rescueDownload]="historyRecoveryPending"
       (inpaint_mask)="onInpaintMaskChange($event)"
       (imageExpandedChange)="onImageExpandedChange($event)"
       (ringsToSubmit)="onRingsToSubmit($event)"
@@ -40,6 +41,7 @@
     (queuePositionChange)="onQueuePositionChange($event)"
     (queueStatusMessageChange)="onQueueStatusMessageChange($event)"
     (etaChange)="onEtaChange($event)"
+    (historyRecoveryChange)="onHistoryRecoveryChange($event)"
     [inpaintMask]="inpaintMask"
     (imageModalOpen)="onImageModalOpenChange($event)"
   ></app-options>

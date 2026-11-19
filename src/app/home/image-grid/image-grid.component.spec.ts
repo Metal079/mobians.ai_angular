@@ -38,7 +38,7 @@ describe('ImageGridComponent', () => {
       imports: [ImageGridComponent],
       providers: [
         { provide: ImageEditorService, useValue: { available: () => false, pending: () => false, open: jasmine.createSpy('openEditor') } },
-        { provide: CharactersService, useValue: { requestSave: () => {} } },
+        { provide: CharactersService, useValue: { requestSave: jasmine.createSpy('requestSave') } },
         { provide: VideoHandoffService, useValue: { animate: jasmine.createSpy('animate').and.resolveTo('opened') } },
         {
           provide: SharedService,
@@ -160,6 +160,75 @@ describe('ImageGridComponent', () => {
     const blob = new Blob(['webp'], { type: 'image/webp' });
     spyOn(window, 'fetch').and.resolveTo(new Response(blob));
     expect((await animate.calls.mostRecent().args[1]()).type).toBe('image/webp');
+  });
+
+  describe('saving the enlarged image as a character', () => {
+    const resultBlob = new Blob(['result'], { type: 'image/webp' });
+    const enlargedBlob = new Blob(['a much larger png copy'], { type: 'image/png' });
+    const result = { UUID: 'job-1-0', prompt: 'blue fox, red scarf', model: 'novaMobianXL_v20', characterId: 'ash', blob: resultBlob, width: 512, height: 768 } as any;
+    const enlarge = (reference: any, results: any[] = [result]) => {
+      sharedServiceStub.getReferenceImageValue = () => reference;
+      sharedServiceStub.getImagesValue = () => results;
+    };
+
+    it('offers a fresh result with its own prompt, settings and file', () => {
+      // The enlarged copy has no prompt and may be a larger PNG conversion.
+      enlarge({ UUID: 'job-1-0', blob: enlargedBlob, width: 512, height: 768 });
+      const savable = component.savableReference!;
+      expect(savable.source).toBe('enlarged_result');
+      expect(savable.image.prompt).toBe('blue fox, red scarf');
+      expect(savable.image.characterId).toBe('ash');
+      expect(savable.image.blob).toBe(resultBlob);
+    });
+
+    it('offers an image opened from history, which carries its own prompt', () => {
+      enlarge({ UUID: 'history-7', prompt: 'green cat', blob: resultBlob });
+      expect(component.savableReference).toEqual({ image: jasmine.objectContaining({ UUID: 'history-7', prompt: 'green cat' }), source: 'enlarged_history' });
+    });
+
+    it('offers nothing for an uploaded file, a character’s own picture, an earlier batch or an empty grid', () => {
+      enlarge({ UUID: 'upload-1', blob: resultBlob });
+      expect(component.savableReference).toBeNull();
+      enlarge({ UUID: 'character-look-9', prompt: 'blue fox', blob: resultBlob });
+      expect(component.savableReference).toBeNull();
+      enlarge({ UUID: 'job-0-2', blob: enlargedBlob });
+      expect(component.savableReference).toBeNull();
+      enlarge(null);
+      expect(component.savableReference).toBeNull();
+    });
+
+    it('offers nothing when the image has a prompt but no file to save', () => {
+      enlarge({ UUID: 'job-1-0' }, [{ ...result, blob: undefined }]);
+      expect(component.savableReference).toBeNull();
+    });
+
+    it('opens the save dialog for that image without collapsing the enlarged view', () => {
+      const requestSave = (TestBed.inject(CharactersService) as any).requestSave as jasmine.Spy;
+      const click = new Event('click', { cancelable: true });
+      const stop = spyOn(click, 'stopPropagation');
+      component.saveCharacter({ image: result, source: 'enlarged_result' }, click);
+      expect(stop).toHaveBeenCalled();
+      expect(requestSave).toHaveBeenCalledOnceWith(result, 'ash', undefined, 'enlarged_result');
+    });
+  });
+
+  it('offers Download only when history cannot keep the images', () => {
+    expect(component.showDownload).toBeFalse();
+    component.rescueDownload = true;
+    expect(component.showDownload).toBeTrue();
+  });
+
+  it('shows the results again when the enlarged image is removed from outside the grid', () => {
+    const reference = new BehaviorSubject<MobiansImage | null>(null);
+    sharedServiceStub.getReferenceImage = () => reference.asObservable();
+    const expanded = spyOn(component.imageExpandedChange, 'emit');
+    component.ngOnInit();
+    expect(expanded).not.toHaveBeenCalled();
+    reference.next({ UUID: 'job-1-0', width: 512, height: 512, aspectRatio: 'square' } as MobiansImage);
+    expect(component.showReferenceImage).toBeTrue();
+    reference.next(null);
+    expect(component.showReferenceImage).toBeFalse();
+    expect(expanded).toHaveBeenCalledOnceWith(false);
   });
 
   it('getDownloadBlob should convert URL-backed WebP blobs to PNG when lossy downloads are disabled', async () => {
