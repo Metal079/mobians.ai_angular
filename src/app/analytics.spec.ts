@@ -20,13 +20,13 @@ describe('analytics', () => {
   });
 
   it('records a purchase in Analytics and, when configured, as an Ads conversion with its value', () => {
-    trackPurchase(purchase, 'AW-18584952340/label', browser);
+    trackPurchase(purchase, 'AW-18585020552/label', browser);
     expect(tag.calls.allArgs()).toEqual([
       ['event', 'purchase', {
         send_to: 'G-NQ1MYQTHLM', transaction_id: 'ORDER-1', value: 10, currency: 'USD',
         items: [{ item_id: 'popular', item_name: 'Popular Pack', price: 10, quantity: 1 }]
       }],
-      ['event', 'conversion', { send_to: 'AW-18584952340/label', transaction_id: 'ORDER-1', value: 10, currency: 'USD' }]
+      ['event', 'conversion', { send_to: 'AW-18585020552/label', transaction_id: 'ORDER-1', value: 10, currency: 'USD' }]
     ]);
   });
 

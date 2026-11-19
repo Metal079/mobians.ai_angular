@@ -35,7 +35,7 @@ export class CompletedSignupTracker {
     const pageLocation = this.browser.location.origin + this.browser.location.pathname;
     const events: [string, Record<string, unknown>][] = [
       ['sign_up', { send_to: 'G-NQ1MYQTHLM', method: provider, page_location: pageLocation }],
-      ['conversion', { send_to: 'AW-18584952340/mbY6CM_By7sdEJS8_51F', page_location: pageLocation }]
+      ['conversion', { send_to: 'AW-18585020552/rieICOCy2bsdEIjRg55F', page_location: pageLocation }]
     ];
     for (const [event, parameters] of events) {
       try {

@@ -22,7 +22,7 @@ describe('CompletedSignupTracker', () => {
       tracker.record(signup, provider, false);
       expect(tag.calls.allArgs()).toEqual([
         ['event', 'sign_up', { send_to: 'G-NQ1MYQTHLM', method: provider, page_location: 'https://mobians.ai/auth/callback' }],
-        ['event', 'conversion', { send_to: 'AW-18584952340/mbY6CM_By7sdEJS8_51F', page_location: 'https://mobians.ai/auth/callback' }]
+        ['event', 'conversion', { send_to: 'AW-18585020552/rieICOCy2bsdEIjRg55F', page_location: 'https://mobians.ai/auth/callback' }]
       ]);
       expect(JSON.stringify(tag.calls.allArgs())).not.toContain('private');
     });

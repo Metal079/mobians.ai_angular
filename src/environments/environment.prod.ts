@@ -11,7 +11,7 @@ export const environment = {
   isDevJob: false,
   // PayPal (live - replace with your live client ID)
   paypalClientId: 'Abvbwdl-mP9GbFTglLpJcyLF8ZYlIY-pSwRqry68WgLNOrr0L2LdBcxXND20CaFX0dRxHOmqT03fxf_1',
-  // Google Ads conversion for completed credit purchases, as 'AW-18584952340/<label>'.
+  // Google Ads conversion for completed credit purchases, as 'AW-18585020552/<label>'.
   // Empty disables it; the Analytics purchase event is sent either way.
-  googleAdsPurchaseSendTo: 'AW-18584952340/m9yWCLyU17sdEJS8_51F',
+  googleAdsPurchaseSendTo: 'AW-18585020552/hIJwCL7B2rsdEIjRg55F',
 };
