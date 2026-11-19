@@ -10,6 +10,7 @@ import { WhatsNewService } from '../whats-new/whats-new.service';
 /** Stands in for the service: records what the UI asked for and lets a test decide the outcome. */
 class FakeNotifications {
   supported = true;
+  needsHomeScreen = false;
   blockedByBrowser = false;
   enabled = signal(false);
   preferences = signal<PushPreferences | null>(null);
@@ -96,6 +97,19 @@ describe('notification controls', () => {
       expect(text(create())).toBe('');
     });
 
+    it('in an iPhone or iPad browser tab, says how to get notifications (Home Screen) instead of offering switches', () => {
+      notifications.supported = false;
+      notifications.needsHomeScreen = true;
+      notifications.enabled.set(true);                   // left over from before: still not claimed as on
+      const closed = create(true, true, false);
+      expect(text(closed)).toBe('Notifications Off');    // one line until opened; no streak-reminder offer either
+      closed.nativeElement.querySelector('.heading').click();
+      closed.detectChanges();
+      expect(text(closed)).toContain('Add to Home Screen');
+      expect(closed.nativeElement.querySelector('.turn-on')).toBeNull();
+      expect(boxes(closed).length).toBe(0);
+    });
+
     it('starts with a single Turn on button, which says what it turns on: finished jobs and new features', async () => {
       const fixture = create();
       expect(boxes(fixture).length).toBe(0);
@@ -104,6 +118,13 @@ describe('notification controls', () => {
       await settle(fixture);
       expect(notifications.asked).toEqual([['setEnabled', true, undefined]]);          // the service decides what "on" starts with
       expect(boxes(fixture).map(box => box.checked)).toEqual([true, false, true]);     // jobs and new features on; reminders stay off
+    });
+
+    it('before the server has answered, an on device shows what every device starts with: finished jobs and new features', () => {
+      notifications.enabled.set(true);
+      const fixture = create();
+      expect(boxes(fixture).map(box => box.checked)).toEqual([true, false, true]);
+      expect(text(fixture)).toContain('Notifications On');
     });
 
     it('says so when the browser blocks notifications instead of offering a button that cannot work', () => {

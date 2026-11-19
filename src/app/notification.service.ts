@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, NgZone, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
@@ -31,6 +31,84 @@ interface SubscribeResponse {
   preferences?: PushPreferences | null;
 }
 
+/**
+ * This browser's push subscription for the site, asked of the browser itself.
+ *
+ * Angular's SwPush only answers once its service worker controls the page, and a
+ * page opened with a hard refresh (Ctrl+Shift+R, Ctrl+F5) is never controlled.
+ * SwPush then waited forever: the Account panel showed guesses instead of the
+ * device's switches, the first click greyed them all out with nothing saved, and
+ * Logout did nothing (reported 2026-11-18). `navigator.serviceWorker.ready`
+ * answers whether or not the worker controls the page.
+ */
+@Injectable({ providedIn: 'root' })
+export class PushDevice {
+  /** Long enough for a first visit, where Angular registers the worker up to 30 s after the page starts (app.config.ts). */
+  private static readonly READY_TIMEOUT_MS = 40_000;
+  private readonly zone = inject(NgZone);
+
+  /** The browser can receive web push here. iPhone Safari has service workers, but push only in a Home Screen app. */
+  get available(): boolean {
+    return typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof PushManager !== 'undefined';
+  }
+
+  async subscription(): Promise<PushSubscription | null> {
+    return (await this.pushManager()).getSubscription();
+  }
+
+  async subscribe(serverPublicKey: string): Promise<PushSubscription> {
+    return (await this.pushManager()).subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(serverPublicKey) });
+  }
+
+  private async pushManager(): Promise<PushManager> {
+    const registration = await this.ready();
+    if (!registration.pushManager) throw new Error('This browser cannot receive push notifications.');
+    return registration.pushManager;
+  }
+
+  private ready(): Promise<ServiceWorkerRegistration> {
+    return new Promise((resolve, reject) => {
+      // Outside Angular's zone, so the wait does not hold up "registerWhenStable" for the worker itself.
+      const timer = this.zone.runOutsideAngular(() =>
+        setTimeout(() => reject(new Error('The service worker did not start.')), PushDevice.READY_TIMEOUT_MS));
+      navigator.serviceWorker.ready.then(
+        registration => { clearTimeout(timer); resolve(registration); },
+        error => { clearTimeout(timer); reject(error); });
+    });
+  }
+}
+
+/**
+ * iPhone and iPad allow web push only in a site added to the Home Screen (iOS 16.4 and later, using the
+ * manifest's "display": "standalone"), never in a Safari tab or an app's built-in browser. True in such a tab,
+ * so the Account panel can say how to get notifications instead of offering a button that cannot work.
+ * iPadOS asks for desktop sites by default and then names itself "Macintosh"; touch gives it away.
+ */
+export function pushNeedsHomeScreen(device: { userAgent: string; maxTouchPoints: number; standalone: boolean; pushAvailable: boolean }): boolean {
+  if (device.pushAvailable || device.standalone) return false;
+  const apple = /iPhone|iPad|iPod/.test(device.userAgent) || (/Macintosh/.test(device.userAgent) && device.maxTouchPoints > 1);
+  if (!apple) return false;
+  const version = /OS (\d+)_(\d+)/.exec(device.userAgent) ?? /Version\/(\d+)\.(\d+)/.exec(device.userAgent);
+  if (!version) return true;
+  const [major, minor] = [Number(version[1]), Number(version[2])];
+  return major > 16 || (major === 16 && minor >= 4);    // older iOS has no web push even from the Home Screen
+}
+
+/** Opened from the Home Screen (or as an installed app) rather than in a browser tab. */
+function openedAsApp(): boolean {
+  try {
+    return (navigator as Navigator & { standalone?: boolean }).standalone === true || matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/** A VAPID public key as the push service wants it (the same conversion SwPush.requestSubscription does). */
+function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -50,27 +128,17 @@ export class NotificationService {
   /** Set when the person tapped a reminder or news notification while the site was open: the opt-out bar shows for it. */
   readonly openedFrom = signal<MutableCategory | null>(null);
 
-  constructor(private http: HttpClient, private swPush: SwPush) {
+  constructor(private http: HttpClient, private swPush: SwPush, private pushDevice: PushDevice) {
     // Persist the anonymous id across reloads so the backend can keep
     // targeting the same browser until the user logs in (at which point
     // the subscription gets linked to their user_id server-side).
     this.userId = this.loadOrCreateUserId();
 
-    // If this browser already granted push permission in a previous session,
-    // re-POST the existing subscription so the backend (re)links it to the
-    // current auth context. The auth interceptor attaches the Bearer token
-    // automatically, so a logged-in user ends up with user_id attached to
-    // their subscription — which is what enables LoRA-ready notifications.
-    if (!this.swPush.isEnabled) {
+    if (!this.supported) {
       return;
     }
 
-    this.swPush.subscription.subscribe(subscription => {
-      if (subscription && this.hasCurrentVapidPublicKey()) {
-        void this.sendSubscriptionToServer(subscription);
-      }
-    });
-    if (this.enabled()) void this.restore();
+    void this.startUp();
 
     this.swPush.notificationClicks.subscribe(({ action, notification }) => {
       const category = notification?.data?.category;
@@ -85,9 +153,17 @@ export class NotificationService {
     });
   }
 
-  /** False where the browser or this build cannot do web push at all. */
+  /** False where the browser or this build cannot do web push at all (the switches are then not shown). */
   get supported(): boolean {
-    return this.swPush.isEnabled;
+    return this.swPush.isEnabled && this.pushDevice.available;
+  }
+
+  /** An iPhone or iPad browser tab: notifications are possible once the site is added to the Home Screen. */
+  get needsHomeScreen(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return pushNeedsHomeScreen({
+      userAgent: navigator.userAgent, maxTouchPoints: navigator.maxTouchPoints ?? 0, standalone: openedAsApp(), pushAvailable: this.supported,
+    });
   }
 
   /** The person blocked notifications for this site in the browser; only they can undo that, in browser settings. */
@@ -132,16 +208,27 @@ export class NotificationService {
   }
 
   /**
-   * On a visit: a device switched on here stays subscribed, and its switches stay
-   * as the person left them. A working subscription is re-posted by the
-   * constructor without any switches; this only replaces one the browser dropped
-   * or that was made with an old server key (a new subscription gets the
-   * server's defaults: finished jobs and news on, reminders off).
+   * On every visit. A subscribed device is re-posted without any switches: the
+   * backend (re)links it to whoever is signed in now (the auth interceptor adds
+   * the token, which is what enables LoRA-ready notifications) and answers with
+   * its switches, which stay as the person left them. A device switched on here
+   * whose subscription the browser dropped, or that was made with an old server
+   * key, is subscribed again (a new subscription gets the server's defaults:
+   * finished jobs and news on, reminders off).
    */
-  private async restore(): Promise<void> {
-    const existing = await firstValueFrom(this.swPush.subscription);
-    if (!this.enabled() || (existing && this.hasCurrentVapidPublicKey())) return;
-    if (!await this.subscribeToNotifications()) {
+  private async startUp(): Promise<void> {
+    // As the page found it: a "Turn on" pressed while this waits subscribes by itself, with the person's choices.
+    const switchedOnBefore = this.enabled();
+    let existing: PushSubscription | null;
+    try {
+      existing = await this.pushDevice.subscription();
+    } catch (error) {
+      console.error('Could not read the push subscription:', error);
+      return;                                   // change nothing; the next visit tries again
+    }
+    if (existing && this.hasCurrentVapidPublicKey()) {
+      await this.sendSubscriptionToServer(existing);
+    } else if (switchedOnBefore && this.enabled() && !await this.subscribeToNotifications()) {
       this.enabled.set(false);
       this.storeEnabled(false);
     }
@@ -165,9 +252,9 @@ export class NotificationService {
    * notifications off for the device (`enabled` becomes false).
    */
   async setPreferences(changes: Partial<PushPreferences>): Promise<boolean> {
-    if (!this.swPush.isEnabled) return false;
+    if (!this.supported) return false;
     try {
-      const subscription = await firstValueFrom(this.swPush.subscription);
+      const subscription = await this.pushDevice.subscription();
       if (!subscription?.endpoint) return false;
       const response = await firstValueFrom(this.http.post<SubscribeResponse>(`${this.apiBaseUrl}/push/preferences`, {
         endpoint: subscription.endpoint, ...changes, timezone: this.timeZone()
@@ -182,9 +269,9 @@ export class NotificationService {
 
   /** On sign-out: this device stops receiving the account's notifications. */
   async detachFromAccount(): Promise<void> {
-    if (!this.swPush.isEnabled) return;
+    if (!this.supported) return;
     try {
-      const subscription = await firstValueFrom(this.swPush.subscription);
+      const subscription = await this.pushDevice.subscription();
       if (!subscription?.endpoint) return;
       await firstValueFrom(this.http.post(`${this.apiBaseUrl}/push/detach`, { endpoint: subscription.endpoint }));
       const current = this.preferences();
@@ -307,7 +394,7 @@ export class NotificationService {
   private async removeExistingSubscription(subscription: PushSubscription | null): Promise<void> {
     const endpoint = subscription?.endpoint;
 
-    await this.swPush.unsubscribe().catch(() => { /* no-op if already gone */ });
+    await subscription?.unsubscribe().catch(() => false /* already gone */);
     this.clearStoredVapidPublicKey();
 
     if (endpoint) {
@@ -317,25 +404,23 @@ export class NotificationService {
 
   /** Subscribe this browser (asking for permission if needed). Returns whether it is subscribed afterwards. */
   async subscribeToNotifications(preferences?: Partial<PushPreferences>): Promise<boolean> {
-    if (!this.swPush.isEnabled) {
-      console.warn('Push notifications are unavailable in this build. Use the local push build or a production-like build so the service worker can register.');
+    if (!this.supported) {
+      console.warn('Push notifications are unavailable in this browser or build (a development build has no service worker; use the localpush or a production-like build).');
       return false;
     }
 
-    const existingSubscription = await firstValueFrom(this.swPush.subscription);
-
-    if (existingSubscription && this.hasCurrentVapidPublicKey()) {
-      return this.sendSubscriptionToServer(existingSubscription, preferences);
-    }
-
-    if (existingSubscription) {
-      await this.removeExistingSubscription(existingSubscription);
-    }
-
     try {
-      const subscription = await this.swPush.requestSubscription({
-        serverPublicKey: this.VAPID_PUBLIC_KEY
-      });
+      const existingSubscription = await this.pushDevice.subscription();
+
+      if (existingSubscription && this.hasCurrentVapidPublicKey()) {
+        return await this.sendSubscriptionToServer(existingSubscription, preferences);
+      }
+
+      if (existingSubscription) {
+        await this.removeExistingSubscription(existingSubscription);
+      }
+
+      const subscription = await this.pushDevice.subscribe(this.VAPID_PUBLIC_KEY);
       const sent = await this.sendSubscriptionToServer(subscription, preferences);
       if (sent) trackEvent('push_opt_in', { reminders: !!preferences?.reminders, news: !!preferences?.news });
       return sent;
@@ -350,13 +435,13 @@ export class NotificationService {
    * backend stops targeting it. Safe to call when there's no active subscription.
    */
   async unsubscribeFromNotifications(): Promise<void> {
-    if (!this.swPush.isEnabled) {
+    if (!this.supported) {
       this.clearStoredVapidPublicKey();
       return;
     }
 
     try {
-      const subscription = await firstValueFrom(this.swPush.subscription);
+      const subscription = await this.pushDevice.subscription();
       await this.removeExistingSubscription(subscription);
     } catch (err) {
       this.clearStoredVapidPublicKey();

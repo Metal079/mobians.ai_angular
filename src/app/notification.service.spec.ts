@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
 import { Observable, Subject, of } from 'rxjs';
 
-import { NotificationService } from './notification.service';
+import { NotificationService, PushDevice, pushNeedsHomeScreen } from './notification.service';
 import { environment } from '../environments/environment';
 
 describe('NotificationService', () => {
@@ -16,10 +16,13 @@ describe('NotificationService', () => {
   };
   let swPush: {
     isEnabled: boolean;
-    subscription: Observable<PushSubscription | null>;
     notificationClicks: Subject<{ action: string; notification: any }>;
-    requestSubscription: (options: { serverPublicKey: string }) => Promise<PushSubscription>;
-    unsubscribe: () => Promise<void>;
+  };
+  /** The browser's push subscription, as PushDevice reports it (it does not wait for the worker to control the page). */
+  let pushDevice: {
+    available: boolean;
+    subscription: () => Promise<PushSubscription | null>;
+    subscribe: (serverPublicKey: string) => Promise<PushSubscription>;
   };
   let postCalls: Array<{ url: string; body: unknown }>;
   let requestSubscriptionCalls: Array<{ serverPublicKey: string }>;
@@ -45,12 +48,21 @@ describe('NotificationService', () => {
           auth: 'test-auth',
         },
       }),
-      unsubscribe: async () => true,
+      unsubscribe: async () => {
+        unsubscribeCallCount += 1;
+        return true;
+      },
     } as unknown as PushSubscription;
   }
 
-  /** `firstResponse` is what the server answers while the service starts up (it re-registers an existing device). */
-  function setupService(subscription: PushSubscription | null, firstResponse: unknown = {}): void {
+  /** Lets the service finish what it starts on its own when it is created (re-posting the device, re-subscribing). */
+  const settle = () => new Promise(resolve => setTimeout(resolve));
+
+  /**
+   * `firstResponse` is what the server answers while the service starts up (it re-registers an existing device);
+   * `device` replaces parts of the browser's push access, before the service is created.
+   */
+  function setupService(subscription: PushSubscription | null, firstResponse: unknown = {}, device: Partial<typeof pushDevice> = {}): void {
     TestBed.resetTestingModule();
 
     postCalls = [];
@@ -70,24 +82,27 @@ describe('NotificationService', () => {
 
     swPush = {
       isEnabled: true,
-      subscription: of(subscription),
       notificationClicks: new Subject(),
-      requestSubscription: async (options: { serverPublicKey: string }) => {
-        requestSubscriptionCalls.push(options);
+    };
+
+    pushDevice = {
+      available: true,
+      subscription: async () => subscription,
+      subscribe: async (serverPublicKey: string) => {
+        requestSubscriptionCalls.push({ serverPublicKey });
         if (!requestSubscriptionResult) {
           throw new Error('No mock subscription configured');
         }
         return requestSubscriptionResult;
       },
-      unsubscribe: async () => {
-        unsubscribeCallCount += 1;
-      },
+      ...device,
     };
 
     TestBed.configureTestingModule({
       providers: [
         { provide: HttpClient, useValue: http },
-        { provide: SwPush, useValue: swPush }
+        { provide: SwPush, useValue: swPush },
+        { provide: PushDevice, useValue: pushDevice },
       ]
     });
 
@@ -108,10 +123,11 @@ describe('NotificationService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('does not repost a stale subscription from the constructor when the VAPID key changed', () => {
+  it('does not repost a stale subscription from the constructor when the VAPID key changed', async () => {
     localStorage.setItem(vapidStorageKey, 'old-vapid-key');
 
     setupService(createSubscription('https://fcm.googleapis.com/fcm/send/stale'));
+    await settle();
 
     expect(postCalls).toEqual([]);
   });
@@ -157,6 +173,7 @@ describe('NotificationService', () => {
 
     localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
     setupService(currentSubscription);
+    await settle();
     postCalls = [];
 
     await service.subscribeToNotifications();
@@ -241,10 +258,11 @@ describe('NotificationService', () => {
       expect(service.preferences()).toEqual({ jobs: true, reminders: false, news: true });
     });
 
-    it('an ordinary page load re-registers the device without sending any switches', () => {
+    it('an ordinary page load re-registers the device without sending any switches', async () => {
       localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
       postResponse = { preferences: { jobs: true, reminders: false, news: true } };
       setupService(current());
+      await settle();
       expect(postCalls.length).toBe(1);
       expect('preferences' in lastBody()).toBeFalse();
     });
@@ -330,6 +348,7 @@ describe('NotificationService', () => {
       localStorage.setItem('notifications-enabled', 'true');
       postResponse = { preferences: { jobs: false, reminders: false, news: true } };
       setupService(current());
+      await settle();
       expect(service.enabled()).toBeTrue();
       postResponse = { status: 'ok', preferences: { jobs: false, reminders: false, news: false } };
 
@@ -350,6 +369,43 @@ describe('NotificationService', () => {
       expect(unsubscribeCallCount).toBe(1);
       expect(service.enabled()).toBeFalse();
       expect(service.preferences()).toBeNull();
+    });
+
+    it('where the browser has no push (iPhone Safari outside a Home Screen app), nothing is offered or sent', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      setupService(current(), {}, { available: false });
+      await settle();
+      expect(service.supported).toBeFalse();
+      expect(postCalls).toEqual([]);
+      expect(await service.setPreferences({ news: false })).toBeFalse();
+    });
+
+    it('does not claim to be on when the browser cannot be asked for a subscription at all', async () => {
+      spyOn(console, 'error');
+      setupService(null, {}, { subscription: async () => { throw new TypeError('pushManager is undefined'); } });
+      expect(await service.setEnabled(true)).toBeFalse();
+      expect(service.enabled()).toBeFalse();
+      expect(localStorage.getItem('notifications-enabled')).toBe('false');
+    });
+
+    it('a visit where the subscription cannot be read changes nothing (the next visit tries again)', async () => {
+      localStorage.setItem(vapidStorageKey, environment.vapidPublicKey);
+      localStorage.setItem('notifications-enabled', 'true');
+      spyOn(console, 'error');
+      setupService(null, {}, { subscription: async () => { throw new Error('The service worker did not start.'); } });
+      await settle();
+      expect(postCalls).toEqual([]);
+      expect(requestSubscriptionCalls).toEqual([]);
+      expect(service.enabled()).toBeTrue();
+      expect(localStorage.getItem(vapidStorageKey)).toBe(environment.vapidPublicKey);
+    });
+
+    it('a switch that cannot be saved because the subscription cannot be read reports failure instead of waiting', async () => {
+      spyOn(console, 'error');
+      setupService(null, {}, { subscription: async () => { throw new Error('The service worker did not start.'); } });
+      expect(await service.setPreferences({ news: false })).toBeFalse();
+      await expectAsync(service.detachFromAccount()).toBeResolved();
     });
 
     it('cannot change switches on a device that is not subscribed', async () => {
@@ -375,6 +431,31 @@ describe('NotificationService', () => {
       service.sendPushNotification();
       expect(get).not.toHaveBeenCalled();
       expect(postCalls).toEqual([]);
+    });
+  });
+
+  describe('iPhone and iPad: push only from the Home Screen', () => {
+    const iphone = (version: string) => `Mozilla/5.0 (iPhone; CPU iPhone OS ${version} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1`;
+    const ipadAsDesktop = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+    const androidChrome = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+    const tab = { maxTouchPoints: 5, standalone: false, pushAvailable: false };
+
+    it('says so in an iPhone Safari tab, and on an iPad asking for desktop sites', () => {
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('17_5') })).toBeTrue();
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('16_4') })).toBeTrue();
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: ipadAsDesktop })).toBeTrue();
+    });
+
+    it('not once opened from the Home Screen, nor where push already works', () => {
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('17_5'), standalone: true })).toBeFalse();
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('17_5'), pushAvailable: true })).toBeFalse();
+    });
+
+    it('not where the Home Screen would not help: iOS before 16.4, a Mac, other phones', () => {
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('16_3') })).toBeFalse();
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: iphone('15_8') })).toBeFalse();
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: ipadAsDesktop, maxTouchPoints: 0 })).toBeFalse();   // a real Mac
+      expect(pushNeedsHomeScreen({ ...tab, userAgent: androidChrome })).toBeFalse();
     });
   });
 });

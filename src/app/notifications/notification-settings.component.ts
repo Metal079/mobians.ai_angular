@@ -10,7 +10,8 @@ import { NotificationService, PushPreferences } from '../notification.service';
  * notifications off for the device: there is no separate "turn all off".
  *
  * It is one line until opened, so it does not make the floating panel taller for
- * people who never touch it.
+ * people who never touch it. In an iPhone or iPad browser tab, where push works
+ * only from the Home Screen app, opening it says how to add the site there.
  */
 const OFFER_DISMISSED_KEY = 'reminder-offer-dismissed';
 
@@ -26,7 +27,7 @@ function readOfferDismissed(): boolean {
   selector: 'app-notification-settings',
   standalone: true,
   template: `
-    @if (notifications.supported) {
+    @if (notifications.supported || notifications.needsHomeScreen) {
       <section class="notification-settings" aria-label="Notifications on this device">
         <button type="button" class="heading" [attr.aria-expanded]="expanded()" (click)="expanded.set(!expanded())">
           <span><i class="bi bi-bell" aria-hidden="true"></i> Notifications <small>{{ anyOn() ? 'On' : 'Off' }}</small></span>
@@ -34,7 +35,12 @@ function readOfferDismissed(): boolean {
         </button>
 
         @if (expanded()) {
-          @if (!notifications.enabled()) {
+          @if (!notifications.supported) {
+            <!-- iPhone/iPad browser tab: push works only once the site is on the Home Screen. -->
+            <p class="note home-screen">On iPhone and iPad, notifications work from the Home Screen: open mobians.ai in Safari,
+              tap Share <i class="bi bi-box-arrow-up" aria-hidden="true"></i>, then <strong>Add to Home Screen</strong>,
+              and open Mobians from there.</p>
+          } @else if (!notifications.enabled()) {
             @if (notifications.blockedByBrowser) {
               <p class="note">Notifications are blocked for this site in your browser's settings.</p>
             } @else {
@@ -60,7 +66,7 @@ function readOfferDismissed(): boolean {
         }
 
         <!-- Shown without opening the section: it is offered at the one moment it is relevant. -->
-        @if (offerReminder && signedIn && !value('reminders') && !notifications.blockedByBrowser && !offerDismissed()) {
+        @if (offerReminder && signedIn && notifications.supported && !value('reminders') && !notifications.blockedByBrowser && !offerDismissed()) {
           <div class="offer" role="status">
             <span>Don't lose your streak.</span>
             <button type="button" class="remind" [disabled]="busy()" (click)="remindMe()">Remind me before it resets</button>
@@ -77,6 +83,8 @@ function readOfferDismissed(): boolean {
       color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
     .heading small { margin-left: .3rem; font-weight: 400; opacity: .7; }
     .note { margin: 0; font-size: .75rem; opacity: .8; }
+    .note.home-screen { line-height: 1.4; }
+    .note strong { font-weight: 600; }
     .switch-row { display: flex; align-items: flex-start; gap: .5rem; margin: 0; cursor: pointer; }
     .switch-row input { margin-top: .2rem; flex: none; width: 1rem; height: 1rem; }
     .switch-row small { display: block; font-size: .72rem; opacity: .75; line-height: 1.3; }
@@ -103,15 +111,18 @@ export class NotificationSettingsComponent {
   /** The person closed the reminder offer. Remembered in this browser, because it would otherwise come back after every claim. */
   readonly offerDismissed = signal(readOfferDismissed());
 
-  /** Until the server has answered, a subscribed device is assumed to have what every device starts with. */
+  /**
+   * Until the server has answered, a subscribed device is assumed to have what every device starts with:
+   * finished jobs and new features on, reminders off (NotificationService.ON_WHEN_TURNED_ON).
+   */
   value(name: keyof PushPreferences): boolean {
     const preferences = this.notifications.preferences();
-    return preferences ? preferences[name] : name === 'jobs';
+    return preferences ? preferences[name] : !!NotificationService.ON_WHEN_TURNED_ON[name];
   }
 
   /** Something is actually switched on for this device (a subscribed device with every switch off counts as off). */
   anyOn(): boolean {
-    return this.notifications.enabled() && (this.value('jobs') || (this.signedIn && this.value('reminders')) || this.value('news'));
+    return this.notifications.supported && this.notifications.enabled() && (this.value('jobs') || (this.signedIn && this.value('reminders')) || this.value('news'));
   }
 
   async turnOn(): Promise<void> {
