@@ -24,8 +24,7 @@
 
 .video-header h1,
 .section-heading h2,
-.history-picker h2,
-.login-wall h2 {
+.history-picker h2 {
   margin: 0;
   letter-spacing: -0.025em;
 }
@@ -125,7 +124,7 @@
 
 .composer-card,
 .gallery-card,
-.login-wall {
+.video-intro {
   border: 1px solid var(--theme-border-strong);
   border-radius: 22px;
   background: color-mix(in srgb, var(--theme-surface-bg) 94%, white 6%);
@@ -966,15 +965,11 @@
 .cancel-button { color: #b4232f !important; }
 :host-context(body.theme-navy) .cancel-button { color: #ff9da5 !important; }
 
-.empty-gallery,
-.login-wall {
+.empty-gallery {
   display: grid;
   justify-items: center;
-  text-align: center;
-}
-
-.empty-gallery {
   padding: 4rem 1rem;
+  text-align: center;
   opacity: 0.75;
 }
 
@@ -990,28 +985,6 @@
 .empty-gallery p {
   margin: 0;
   font-size: 0.78rem;
-}
-
-.login-wall {
-  width: min(540px, calc(100% - 1rem));
-  margin: 3rem auto;
-  padding: 3rem 2rem;
-}
-
-.login-wall p {
-  max-width: 400px;
-  opacity: 0.78;
-}
-
-.login-icon {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  margin-bottom: 1rem;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--theme-primary) 25%, var(--theme-surface-alt-bg));
-  font-size: 1.8rem;
 }
 
 .spinner {

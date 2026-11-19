@@ -22,7 +22,7 @@ import { CharacterDisclosureComponent } from './character-disclosure.component';
 @Component({
   selector: 'app-characters', standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, DialogModule, GenerationModeSwitchComponent, ImageHistoryPanelComponent, CharacterLookSettingsComponent, CharacterBrowserComponent, CharacterDisclosureComponent],
-  templateUrl: './characters.component.html', styleUrls: ['./characters.shared.css', './characters.component.css'],
+  templateUrl: './characters.component.html', styleUrls: ['./characters.shared.css', './characters.component.css', '../auth/signed-out-intro.css'],
 })
 export class CharactersComponent {
   readonly imageEditor = inject(ImageEditorService);

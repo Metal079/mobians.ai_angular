@@ -781,3 +781,56 @@ describe('VideoComponent length slider rendering', () => {
     fixture.destroy();
   });
 });
+
+describe('VideoComponent signed-out introduction', () => {
+  let accountCta: jasmine.SpyObj<AccountCtaService>;
+
+  async function render(signedIn: boolean): Promise<HTMLElement> {
+    accountCta = jasmine.createSpyObj<AccountCtaService>('AccountCtaService', ['requestLogin']);
+    await TestBed.configureTestingModule({
+      imports: [VideoComponent],
+      providers: [provideRouter([]),
+        { provide: CharactersService, useValue: { takeVideoHandoff: () => null } },
+        { provide: VideoHandoffService, useValue: { take: () => null, takePickerRequest: () => false } },
+        { provide: VideoGenerationService, useValue: jasmine.createSpyObj('VideoGenerationService', ['getQuote']) },
+        { provide: AuthService, useValue: { isLoggedIn: () => signedIn } },
+        { provide: AccountCtaService, useValue: accountCta },
+      ],
+    }).compileComponents();
+    spyOn(VideoComponent.prototype, 'ngOnInit').and.stub();
+    const fixture = TestBed.createComponent(VideoComponent);
+    fixture.componentInstance.configLoading = false;
+    fixture.componentInstance.config = {
+      durations: [5, 10, 20], prices: { '5': 70 }, generation_modes: ['fl2v', 'ref2v'],
+      service: { accepting_jobs: true, effective_state: 'available' },
+    } as any;
+    fixture.detectChanges();
+    return fixture.nativeElement;
+  }
+
+  it('tells a signed-out visitor what video does and how it works, and asks them to sign in', async () => {
+    const page = await render(false);
+    const intro = page.querySelector('.signed-out-intro') as HTMLElement;
+    expect(intro).not.toBeNull();
+    expect(page.querySelector('.workspace-grid')).toBeNull();
+    expect(intro.querySelector('.intro-title')!.textContent).toBe('Turn a picture into a short AI video');
+    expect(intro.querySelector('.intro-summary')!.textContent).toContain('5 to 20 seconds');
+    expect(intro.querySelector('.intro-bonus')!.textContent).toContain('Sign up with Discord or Google for 200 free credits!');
+    expect(intro.querySelectorAll('.intro-steps li').length).toBe(3);
+    const examples = Array.from(intro.querySelectorAll('.intro-example-pair img')) as HTMLImageElement[];
+    expect(examples.map(image => image.getAttribute('src'))).toEqual([
+      'assets/image-edit-tutorial/mica-before.webp', 'assets/image-edit-tutorial/mica-after.webp',
+    ]);
+    expect(examples.every(image => !!image.alt)).toBeTrue();
+
+    (intro.querySelector('.primary-action') as HTMLButtonElement).click();
+    expect(accountCta.requestLogin).toHaveBeenCalledOnceWith(jasmine.objectContaining({ title: 'Sign in to create videos' }));
+  });
+
+  it('shows a signed-in user the workspace with no introduction', async () => {
+    const page = await render(true);
+    expect(page.querySelector('.signed-out-intro')).toBeNull();
+    expect(page.querySelector('.workspace-grid')).not.toBeNull();
+    expect(page.textContent).not.toContain('200 free credits');
+  });
+});

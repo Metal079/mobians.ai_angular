@@ -90,6 +90,38 @@ describe('CharactersComponent', () => {
     component.requestCollectionDelete();
   }
 
+  it('tells a signed-out visitor what characters are for and how they work, and asks them to sign in', async () => {
+    service.owner = ''; user.next(null); params.next(convertToParamMap({}));
+    await fixture.whenStable(); fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    const intro = page.querySelector('.signed-out-intro') as HTMLElement;
+    expect(intro).not.toBeNull();
+    expect(page.querySelector('.collection-header')).toBeNull();
+    expect(intro.querySelector('h1')!.textContent).toBe('Keep your characters close.');
+    expect(intro.querySelector('.intro-summary')!.textContent).toContain('new images and videos of them in a click');
+    expect(intro.querySelector('.intro-bonus')!.textContent).toContain('Sign up with Discord or Google for 200 free credits!');
+    expect(intro.querySelectorAll('.intro-steps li').length).toBe(3);
+    expect(intro.querySelector('.intro-steps a')!.getAttribute('routerLink')).toBe('/');
+    const examples = Array.from(intro.querySelectorAll('.intro-example-pair img')) as HTMLImageElement[];
+    expect(examples.map(image => image.getAttribute('src'))).toEqual([
+      'assets/image-edit-tutorial/juniper-reference.webp', 'assets/image-edit-tutorial/juniper-replacement.webp',
+    ]);
+    expect(examples.every(image => !!image.alt)).toBeTrue();
+
+    (intro.querySelector('.primary-action') as HTMLButtonElement).click();
+    expect(TestBed.inject(AccountCtaService).requestLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a signed-in user their characters with no introduction', async () => {
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('.signed-out-intro')).toBeNull();          // one character open
+    expect(page.querySelector('.detail-header h1')!.textContent).toBe('Ash');
+    params.next(convertToParamMap({})); await fixture.whenStable(); fixture.detectChanges();
+    expect(page.querySelector('.signed-out-intro')).toBeNull();          // the collection
+    expect(page.querySelector('.collection-header h1')!.textContent).toBe('My Characters');
+    expect(page.textContent).not.toContain('200 free credits');
+  });
+
   it('requires selection and confirmation, keeping selection when confirmation is canceled', async () => {
     await selectCollection();
     expect(component.deleteMode()).toBeNull();

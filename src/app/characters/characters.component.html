@@ -1,10 +1,33 @@
 <main class="character-ui characters-page">
   <app-generation-mode-switch active="characters"></app-generation-mode-switch>
   @if (!signedIn()) {
-    <section class="welcome panel">
-      <span class="hero-icon"><i class="bi bi-person-heart" aria-hidden="true"></i></span><h1>Keep your characters close.</h1>
-      <p>Save a favorite image and its prompts. Next time, choose your character in the generator and try something new.</p>
-      <button class="primary-action" (click)="login()">Sign in to save characters <i class="bi bi-arrow-right" aria-hidden="true"></i></button><small><i class="bi bi-lock" aria-hidden="true"></i> Private to you. Free to save.</small>
+    <!-- Signed out: say what characters are for and how they work. Layout: ../auth/signed-out-intro.css -->
+    <section class="signed-out-intro panel" aria-labelledby="characters-intro-title">
+      <div class="intro-hero">
+        <div>
+          <h1 class="intro-title" id="characters-intro-title">Keep your characters close.</h1>
+          <p class="intro-summary">Save your original characters and their looks in one place, then make new images and videos of them in a click.</p>
+          <button type="button" class="primary-action" (click)="login()">Sign in to save characters <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+          <p class="intro-bonus">🎁 Sign up with Discord or Google for 200 free credits!</p>
+          <small class="intro-note"><i class="bi bi-lock" aria-hidden="true"></i> Private to you. Free to save.</small>
+        </div>
+        <div>
+          <div class="intro-example-pair">
+            <figure><img src="assets/image-edit-tutorial/juniper-reference.webp" width="1024" height="1024" alt="Juniper, an original lavender rabbit with white hair and teal overalls, on a plain background."><figcaption>A saved look</figcaption></figure>
+            <i class="bi bi-arrow-right intro-example-arrow" aria-hidden="true"></i>
+            <figure><img src="assets/image-edit-tutorial/juniper-replacement.webp" width="1024" height="1024" alt="Juniper again, in a red jacket and yellow scarf, holding a telescope in a sunlit observatory."><figcaption>A new image</figcaption></figure>
+          </div>
+          <p class="intro-example-note">Example: Juniper, an original character, in two pictures.</p>
+        </div>
+      </div>
+      <div class="intro-how">
+        <h2 class="intro-how-title">How it works</h2>
+        <ol class="intro-steps">
+          <li><span class="intro-step-number" aria-hidden="true">1</span><div><strong>Make an image you like</strong><p>Create your character in the <a routerLink="/">image generator</a>. You can try it without an account.</p></div></li>
+          <li><span class="intro-step-number" aria-hidden="true">2</span><div><strong>Save it as a character</strong><p>Give your character a name. Each look keeps a picture with the prompt and settings that made it.</p></div></li>
+          <li><span class="intro-step-number" aria-hidden="true">3</span><div><strong>Use it again in a click</strong><p>Choose a look to make a new image, or animate it into a video.</p></div></li>
+        </ol>
+      </div>
     </section>
   } @else {
     @if (error() && !renameOpen() && !deleteMode() && !editingOpen()) { <div class="notice error" role="alert">{{ error() }} @if (!busy() && !character()) { <button type="button" class="quiet-button" (click)="load()">Reload</button> }</div> }

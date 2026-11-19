@@ -1,0 +1,194 @@
+/*
+ * What a signed-out visitor sees on /video and /characters in place of the workspace:
+ * what the feature does, the sign-in button, an example, and how it works.
+ * Shared layout only. Each page keeps its own copy in its template, and supplies the
+ * card look (its panel class) and its own .primary-action button.
+ */
+
+.signed-out-intro {
+  box-sizing: border-box;
+  width: min(1180px, 100%);
+  margin: 1.25rem auto 2rem;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+}
+
+/* Headline, summary and sign-in on one side; the example on the other. */
+
+.intro-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+}
+
+.signed-out-intro .intro-title {
+  margin: 0 0 .75rem;
+  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+
+.signed-out-intro .intro-summary {
+  max-width: 520px;
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.signed-out-intro .primary-action {
+  min-height: 50px;
+  padding-inline: 1.4rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.signed-out-intro .intro-bonus {
+  margin: .9rem 0 0;
+  font-size: .92rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.signed-out-intro .intro-note {
+  display: block;
+  margin: .45rem 0 0;
+  font-size: .82rem;
+  line-height: 1.55;
+  opacity: .85;
+}
+
+/* Example: two pictures with an arrow between them. */
+
+.intro-example-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: .5rem;
+}
+
+/* Both pictures stay the same height when one caption wraps. */
+.intro-example-pair figure {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 14px;
+  background: var(--theme-image-bg);
+}
+
+.intro-example-pair img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.intro-example-pair figcaption {
+  flex: 1;
+  padding: .45rem .7rem;
+  background: var(--theme-surface-alt-bg);
+  color: var(--theme-surface-text);
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.intro-example-arrow {
+  align-self: center;
+  font-size: 1.2rem;
+  opacity: .7;
+}
+
+.signed-out-intro .intro-example-note {
+  margin: .6rem 0 0;
+  font-size: .8rem;
+  line-height: 1.5;
+  text-align: center;
+  opacity: .85;
+}
+
+/* How it works: three numbered steps. */
+
+.intro-how {
+  margin-top: clamp(1.5rem, 3vw, 2.25rem);
+  padding-top: clamp(1.25rem, 2.5vw, 1.75rem);
+  border-top: 1px solid color-mix(in srgb, var(--theme-surface-text) 18%, transparent);
+}
+
+.signed-out-intro .intro-how-title {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  letter-spacing: -.02em;
+}
+
+.intro-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intro-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: .7rem;
+  padding: .9rem;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 14px;
+  background: var(--theme-surface-alt-bg);
+}
+
+.intro-step-number {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--theme-primary);
+  color: var(--theme-primary-text);
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.intro-steps strong {
+  display: block;
+  line-height: 1.4;
+}
+
+.signed-out-intro .intro-steps p {
+  margin: .25rem 0 0;
+  font-size: .88rem;
+  line-height: 1.5;
+}
+
+.signed-out-intro .intro-steps a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+/* Narrow screens: one column, sign-in first, then the example and the steps. */
+
+@media (max-width: 760px) {
+  .signed-out-intro {
+    margin-top: .75rem;
+  }
+
+  .intro-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signed-out-intro .primary-action {
+    width: 100%;
+  }
+
+  .intro-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .6rem;
+  }
+}

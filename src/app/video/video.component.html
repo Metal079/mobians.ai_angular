@@ -32,11 +32,33 @@
   }
 
   @if (!isLoggedIn) {
-    <section class="login-wall">
-      <div class="login-icon"><i class="bi bi-cloud-arrow-up"></i></div>
-      <h2>Your video queue follows you</h2>
-      <p>Sign in to queue up to three videos and see their progress from your desktop or phone.</p>
-      <button type="button" class="primary-action" (click)="openLogin()">Sign in to continue</button>
+    <!-- Signed out: say what video does and how it works. Layout: ../auth/signed-out-intro.css -->
+    <section class="signed-out-intro video-intro" aria-labelledby="video-intro-title">
+      <div class="intro-hero">
+        <div>
+          <h2 class="intro-title" id="video-intro-title">Turn a picture into a short AI video</h2>
+          <p class="intro-summary">Start from your own image or one you made on Mobians, say what should happen, and pick a length from 5 to 20 seconds. Extend the clips you like.</p>
+          <button type="button" class="primary-action" (click)="openLogin()">Sign in to create a video</button>
+          <p class="intro-bonus">🎁 Sign up with Discord or Google for 200 free credits!</p>
+          <small class="intro-note">Queue up to three videos and see their progress from your desktop or phone.</small>
+        </div>
+        <div>
+          <div class="intro-example-pair">
+            <figure><img src="assets/image-edit-tutorial/mica-before.webp" width="1024" height="1024" alt="Mica, a raccoon astronomer in a red jacket, holding a telescope in her sunlit observatory."><figcaption>First frame</figcaption></figure>
+            <i class="bi bi-arrow-right intro-example-arrow" aria-hidden="true"></i>
+            <figure><img src="assets/image-edit-tutorial/mica-after.webp" width="1024" height="1024" alt="Mica in the same pose, with a starry night outside and warm lamplight inside the observatory."><figcaption>Ending image</figcaption></figure>
+          </div>
+          <p class="intro-example-note">Example pictures. A video starts on your first frame. Add an ending image if you want it to finish there.</p>
+        </div>
+      </div>
+      <div class="intro-how">
+        <h3 class="intro-how-title">How it works</h3>
+        <ol class="intro-steps">
+          <li><span class="intro-step-number" aria-hidden="true">1</span><div><strong>Pick a picture</strong><p>Upload your own image, or choose one you made on Mobians.</p></div></li>
+          <li><span class="intro-step-number" aria-hidden="true">2</span><div><strong>Describe what happens</strong><p>Say how the scene should move, then pick a length from 5 to 20 seconds.</p></div></li>
+          <li><span class="intro-step-number" aria-hidden="true">3</span><div><strong>Extend the clips you like</strong><p>Download your video, or extend it to continue the story.</p></div></li>
+        </ol>
+      </div>
     </section>
   } @else {
     <div class="workspace-grid">

@@ -56,7 +56,7 @@ interface CameraMotionOption {
   standalone: true,
   imports: [CommonModule, FormsModule, CdkTextareaAutosize, GenerationModeSwitchComponent, ImageHistoryPanelComponent, ReferenceInputsComponent, ExtensionComposerComponent],
   templateUrl: './video.component.html',
-  styleUrls: ['./video.component.css', './video-original-audio.css'],
+  styleUrls: ['./video.component.css', './video-original-audio.css', '../auth/signed-out-intro.css'],
 })
 export class VideoComponent implements OnInit, OnDestroy {
   private readonly characters = inject(CharactersService);
