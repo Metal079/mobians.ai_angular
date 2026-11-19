@@ -64,7 +64,9 @@
       <label for="prompt-input">Prompt</label>
       <div class="prompt-header-tools">
         <app-regional-status-chip [status]="regionalChipStatus" [disabled]="!modelSettings.length" (open)="openRegionalEditor()"></app-regional-status-chip>
-        <app-character-picker [disabled]="hasPendingJob || !modelSettings.length" [loadedName]="loadedCharacterName" [canUndo]="canUndoCharacter" (undo)="undoCharacter()" (detach)="dismissCharacter()"></app-character-picker>
+        <app-character-picker [disabled]="hasPendingJob || !modelSettings.length" [loadedName]="loadedCharacterName" [canUndo]="canUndoCharacter"
+          [currentPrompt]="generationRequest.prompt || ''" [regionsActive]="regionsShareMainPrompt"
+          (undo)="undoCharacter()" (detach)="dismissCharacter('manual')"></app-character-picker>
       </div>
       <span class="visually-hidden" role="status">{{ loadedCharacterName ? loadedCharacterName + ' loaded' : '' }}</span>
     </div>

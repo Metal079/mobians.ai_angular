@@ -179,7 +179,7 @@ export class CharactersComponent {
   }
 
   onImagePicked(image: MobiansImage): void {
-    this.pickerOpen.set(false); this.service.requestSave(image, this.addTargetId);
+    this.pickerOpen.set(false); this.service.requestSave(image, this.addTargetId, undefined, 'characters_page');
   }
 
   selectImage(image: CharacterImage): void {

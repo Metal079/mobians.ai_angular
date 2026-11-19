@@ -22,10 +22,16 @@
     @if (loading()) {
       <div class="picker-loading" role="status"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Loading your characters…</div>
     } @else if (characters().length) {
+      <div class="picker-mode" role="radiogroup" aria-label="How to use the character">
+        <button type="button" role="radio" [attr.aria-checked]="mode() === 'add'" [class.selected]="mode() === 'add'" (click)="setMode('add')" [disabled]="!!busyId() || disabled"><i class="bi" [class.bi-check-circle-fill]="mode() === 'add'" [class.bi-circle]="mode() !== 'add'" aria-hidden="true"></i> Add to my prompt</button>
+        <button type="button" role="radio" [attr.aria-checked]="mode() === 'replace'" [class.selected]="mode() === 'replace'" (click)="setMode('replace')" [disabled]="!!busyId() || disabled"><i class="bi" [class.bi-check-circle-fill]="mode() === 'replace'" [class.bi-circle]="mode() !== 'replace'" aria-hidden="true"></i> Replace my prompt</button>
+      </div>
+      <p class="picker-mode-hint" role="status">{{ modeHint }}</p>
+      @if (regionsActive && mode() === 'add') { <p class="picker-mode-hint">Regions are on, so the main prompt is shared with every box. To put a character in one box, use “Use a character” inside that region.</p> }
       <app-character-browser [disabled]="!!busyId() || disabled" (chosen)="useChoice($event)"></app-character-browser>
     } @else if (!error()) {
       <div class="picker-empty"><i class="bi bi-person-heart" aria-hidden="true"></i><h3>Your favorites, ready to use</h3><p>Save a character once, then bring them into any new scene from here.</p><a routerLink="/characters" (click)="close()">Save your first character <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div>
     }
-    <footer class="picker-footer"><span>Your prompt stays editable.</span>@if (!busyId() && characters().length) { <a routerLink="/characters" (click)="close()">Manage characters <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a> }</footer>
+    <footer class="picker-footer">@if (!busyId() && characters().length) { <a routerLink="/characters" (click)="close()">Manage characters <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a> }</footer>
   </div>
 </p-dialog>

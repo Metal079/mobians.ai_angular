@@ -24,6 +24,9 @@ describe('CharacterPickerComponent', () => {
       list: jasmine.createSpy('list').and.resolveTo({ characters: [ash, amy] }),
       get: jasmine.createSpy('get').and.resolveTo({ id: ash.id, name: ash.name, images: [{ id: 'default' }, { id: 'other' }] }),
       useImage: jasmine.createSpy('useImage').and.resolveTo(),
+      loadMode: jasmine.createSpy('loadMode').and.returnValue('add'),
+      setLoadMode: jasmine.createSpy('setLoadMode'),
+      recordEvent: jasmine.createSpy('recordEvent'),
     };
     account = { requestLogin: jasmine.createSpy('requestLogin') };
     await TestBed.configureTestingModule({
@@ -92,8 +95,79 @@ describe('CharacterPickerComponent', () => {
     service.get.and.resolveTo({ id:'amy', name:'Amy Rose', default_image_id:'default', images:[{id:'default'}, {id:'beach'}] });
     await component.useChoice({ characterId:'amy', imageId:'beach', name:'Amy Rose' });
     expect(service.get).toHaveBeenCalledOnceWith('amy', 'beach');
-    expect(service.useImage).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id:'amy' }), jasmine.objectContaining({ id:'beach' }), 'create');
+    expect(service.useImage).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id:'amy' }), jasmine.objectContaining({ id:'beach' }), 'create', { mode: 'add', source: 'generator_add' });
     expect(component.opened()).toBeFalse();
+  });
+
+  describe('add or replace', () => {
+    const modeButtons = (): HTMLButtonElement[] => Array.from(fixture.nativeElement.querySelectorAll('.picker-mode button'));
+    const hint = (): string => fixture.nativeElement.querySelector('.picker-mode-hint').textContent.trim();
+
+    it('opens on "Add to my prompt" and says what will be kept', async () => {
+      fixture.componentRef.setInput('currentPrompt', 'sitting in a cafe, rain outside, warm light through the window, cup of coffee');
+      await component.open();
+      fixture.detectChanges();
+      expect(modeButtons().map(button => button.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+      expect(hint()).toBe('Goes in front of: “sitting in a cafe, rain outside, warm light thro…”');
+      expect(service.recordEvent).toHaveBeenCalledOnceWith('picker_opened', 'generator');
+    });
+
+    it('says an empty prompt box is simply filled', async () => {
+      fixture.componentRef.setInput('currentPrompt', '   ');
+      await component.open();
+      fixture.detectChanges();
+      expect(hint()).toBe('Your prompt box is empty, so the character’s prompt fills it.');
+    });
+
+    it('switches to replace, remembers it, and loads the character that way', async () => {
+      await component.open();
+      fixture.detectChanges();
+      modeButtons()[1].click();
+      fixture.detectChanges();
+      expect(service.setLoadMode).toHaveBeenCalledOnceWith('replace');
+      expect(modeButtons().map(button => button.getAttribute('aria-checked'))).toEqual(['false', 'true']);
+      expect(hint()).toBe('Replaces your prompt and switches regions off. Undo brings it back.');
+      await component.use(ash);
+      expect(service.useImage.calls.mostRecent().args[3]).toEqual({ mode: 'replace', source: 'generator_replace' });
+    });
+
+    it('opens on the remembered choice', async () => {
+      service.loadMode.and.returnValue('replace');
+      await component.open();
+      expect(component.mode()).toBe('replace');
+    });
+
+    it('points to the per-region picker when regions share the main prompt, only while adding', async () => {
+      fixture.componentRef.setInput('regionsActive', true);
+      await component.open();
+      fixture.detectChanges();
+      const hints = () => Array.from(fixture.nativeElement.querySelectorAll('.picker-mode-hint')).map((item: any) => item.textContent);
+      expect(hints().some(text => text.includes('inside that region'))).toBeTrue();
+      component.setMode('replace');
+      fixture.detectChanges();
+      expect(hints().some(text => text.includes('inside that region'))).toBeFalse();
+    });
+
+    it('does not change the choice while a look is loading', async () => {
+      await component.open();
+      component.busyId.set('ash');
+      component.setMode('replace');
+      expect(component.mode()).toBe('add');
+      expect(service.setLoadMode).not.toHaveBeenCalled();
+    });
+
+    it('keeps the prompts-only recovery in the chosen mode', async () => {
+      await component.open();
+      await component.useChoice({ characterId: 'ash', name: 'Ash' }, true);
+      expect(service.useImage.calls.mostRecent().args[3]).toEqual({ mode: 'add', source: 'generator_add', promptsOnly: true });
+    });
+
+    it('offers no choice before there are characters to pick', async () => {
+      service.list.and.resolveTo({ characters: [] });
+      await component.open();
+      fixture.detectChanges();
+      expect(modeButtons().length).toBe(0);
+    });
   });
 
   it('ignores a late list response after the picker was closed', async () => {

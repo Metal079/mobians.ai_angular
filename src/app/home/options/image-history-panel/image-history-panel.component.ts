@@ -49,7 +49,7 @@ export class ImageHistoryPanelComponent implements OnInit, OnDestroy {
       this.messageService.add({ severity: 'warn', summary: 'Image unavailable', detail: 'Open this image from history and try again.' });
       return;
     }
-    this.characters.requestSave({ ...image, blob }, image.characterId);
+    this.characters.requestSave({ ...image, blob }, image.characterId, undefined, 'history');
   }
   private readonly videoHandoff = inject(VideoHandoffService);
   /** Open the video page with this image as the first frame (signing in first if needed). */

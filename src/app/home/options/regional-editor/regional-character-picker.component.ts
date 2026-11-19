@@ -80,6 +80,7 @@ export class RegionalCharacterPickerComponent {
     }
     this.reset();
     this.opened.set(true);
+    this.characters.recordEvent('picker_opened', 'region');
     if (this.regionLoras) this.loraCatalog.ensureLoaded();
   }
 
@@ -176,7 +177,7 @@ export class RegionalCharacterPickerComponent {
     if (chosen.length) region.loras = chosen.map(lora => ({ ...lora }));
     else delete region.loras;
     this.changed.emit();
-    this.characters.recordLoaded(pick.characterId, pick.imageId);
+    this.characters.recordLoaded(pick.characterId, pick.imageId, 'region');
     this.close(true);
     const added = chosen.length
       ? `Its prompt and ${chosen.length} ${chosen.length === 1 ? 'LoRA' : 'LoRAs'} now fill this box.`

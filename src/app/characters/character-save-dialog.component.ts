@@ -1,11 +1,11 @@
 import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DialogModule } from 'primeng/dialog';
 import { catchError, firstValueFrom, of, timeout } from 'rxjs';
-import { CharactersService, CharacterSummary, CharacterRecipe, characterError, recipeFromImage } from './characters.service';
+import { CharactersService, CharacterSaveSource, CharacterSummary, CharacterRecipe, characterError, recipeFromImage } from './characters.service';
 import { GenerationModelSettings, StableDiffusionService } from '../stable-diffusion.service';
 import { SharedService } from '../shared.service';
 import { MobiansImage } from 'src/_shared/mobians-image.interface';
@@ -26,6 +26,7 @@ export class CharacterSaveDialogComponent {
   private readonly sd = inject(StableDiffusionService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly shared = inject(SharedService);
+  private readonly router = inject(Router);
   visible = signal(false); loading = signal(false); saving = signal(false); error = signal(''); savedId = signal('');
   openingGenerator = signal(false); loadingModels = signal(false); modelsError = signal(false);
   characters: CharacterSummary[] = []; models: GenerationModelSettings[] = [];
@@ -51,6 +52,8 @@ export class CharacterSaveDialogComponent {
       this.recipe.loras.length <= 3 && this.recipe.loras.every(l => Number.isFinite(l.strength) && l.strength >= 0 && l.strength <= 2);
   }
   private image: MobiansImage | null = null;
+  /** Where this save started (results, history, …), recorded with the opening and with the save. */
+  private source?: CharacterSaveSource;
   private loadVersion = 0;
   private previewObjectUrl = '';
   private owner = '';
@@ -58,17 +61,18 @@ export class CharacterSaveDialogComponent {
   constructor() {
     const unregister = inject(CharacterDraftsService).register(() => this.hasUnsavedChanges);
     this.destroyRef.onDestroy(unregister);
-    this.service.saveRequests.pipe(takeUntilDestroyed()).subscribe(request => void this.open(request.image, request.characterId, request.recipe));
+    this.service.saveRequests.pipe(takeUntilDestroyed()).subscribe(request => void this.open(request.image, request.characterId, request.recipe, request.source));
     this.shared.getUserData().pipe(takeUntilDestroyed()).subscribe(() => {
       if (this.owner && this.owner !== this.service.owner) this.close();
     });
     this.destroyRef.onDestroy(() => this.close());
   }
 
-  async open(image: MobiansImage, characterId?: string, sourceRecipe?: CharacterRecipe): Promise<void> {
+  async open(image: MobiansImage, characterId?: string, sourceRecipe?: CharacterRecipe, source?: CharacterSaveSource): Promise<void> {
     this.close();
     const version = ++this.loadVersion;
-    this.owner = this.service.owner; this.image = image;
+    this.owner = this.service.owner; this.image = image; this.source = source;
+    this.service.recordEvent('save_opened', source);
     this.recipe = sourceRecipe ? { ...structuredClone(sourceRecipe), label: 'Edited look' } : recipeFromImage(image, false); this.models = [];
     this.hasRegions = !!image.regional_prompting?.enabled;
     this.targetId = characterId || image.characterId || ''; this.destinationRequired = false; this.destinationOpen = false; this.name = ''; this.savedName = ''; this.savedId.set(''); this.savedImageId = ''; this.error.set('');
@@ -166,7 +170,7 @@ export class CharacterSaveDialogComponent {
       if (version !== this.loadVersion || this.owner !== this.service.owner) return;
       const signature = JSON.stringify([name, recipe, targetId, encoded]);
       if (signature !== this.requestSignature) { this.requestId = crypto.randomUUID(); this.requestSignature = signature; }
-      const result = await this.service.save(name, recipe, encoded, targetId || undefined, this.requestId, this.image.editProvenance);
+      const result = await this.service.save(name, recipe, encoded, targetId || undefined, this.requestId, this.image.editProvenance, this.source);
       if (version !== this.loadVersion || this.owner !== this.service.owner) return;
       this.savedName = savedName; this.savedImageId = (result as { image_id?: string }).image_id || '';
       this.savedId.set(result.id); this.service.saved.next(result.id);
@@ -183,7 +187,10 @@ export class CharacterSaveDialogComponent {
       if (version !== this.loadVersion || this.owner !== this.service.owner) return;
       const look = this.savedImageId ? character.images.find(image => image.id === this.savedImageId) : character.images.length === 1 ? character.images[0] : undefined;
       if (!look) throw new Error('Open your character to choose the look you want to use.');
-      await this.service.useImage(character, look, 'create');
+      // On the generator page the person's own prompt is in front of them, so their picker choice applies;
+      // from any other page the saved setup opens whole.
+      const mode = this.router.url.split(/[?#]/)[0] === '/' ? this.service.loadMode() : 'replace';
+      await this.service.useImage(character, look, 'create', { mode, source: mode === 'add' ? 'save_dialog_add' : 'save_dialog_replace' });
       if (version === this.loadVersion) this.close();
     } catch (error) { if (version === this.loadVersion) this.error.set(characterError(error)); }
     finally { if (version === this.loadVersion) this.openingGenerator.set(false); }

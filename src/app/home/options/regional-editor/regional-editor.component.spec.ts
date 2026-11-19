@@ -45,6 +45,7 @@ describe('RegionalEditorComponent', () => {
     } }] }),
     defaultLook: (detail: any) => detail.images[0],
     recordLoaded: () => {},
+    recordEvent: () => {},
   };
 
   beforeEach(async () => {

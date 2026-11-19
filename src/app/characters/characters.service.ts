@@ -32,11 +32,27 @@ export interface CharacterImage {
 export interface CharacterDetail {
   id: string; name: string; images: CharacterImage[]; default_image_id?: string; image_count?: number; next_cursor?: string | null;
 }
+/** How a picked character meets the prompt box: put in front of what is typed, or replace the whole setup. */
+export type CharacterLoadMode = 'add' | 'replace';
+/** Where a load, a save or a picker opening started. Recorded with the usage event; the server keeps only known values. */
+export type CharacterLoadSource = 'generator_add' | 'generator_replace' | 'save_dialog_add' | 'save_dialog_replace' | 'character_page' | 'reference' | 'region';
+export type CharacterSaveSource = 'enlarged_result' | 'enlarged_history' | 'history' | 'characters_page' | 'editor';
+export type CharacterUnlinkReason = 'undo' | 'manual' | 'reference' | 'prompt_load' | 'reset';
+export type CharacterClientEvent = 'picker_opened' | 'save_opened' | 'animate_handoff' | 'unlinked';
+export interface CharacterLink {
+  id: string; name: string; imageId: string;
+  /** The character text an "add to my prompt" load wrote, so the next pick can swap it. */
+  inserted?: string;
+}
+export interface CharacterSaveRequest { image: MobiansImage; characterId?: string; recipe?: CharacterRecipe; source?: CharacterSaveSource; }
 export interface CharacterHandoff {
   name: string; recipe: CharacterRecipe; image?: MobiansImage;
   characterId?: string; imageId?: string;
   currentModel?: string; currentLoras?: any[];
+  /** Absent means replace, which is what every caller outside the generator picker wants. */
+  mode?: CharacterLoadMode; source?: CharacterLoadSource;
 }
+const LOAD_MODE_KEY = 'mobians:character-load-mode';
 
 export function characterPrompt(recipe: CharacterRecipe): string {
   return [recipe.appearance.trim(), recipe.scene.trim()].filter(Boolean).join(', ');
@@ -76,13 +92,15 @@ export class CharactersService {
   private readonly shared = inject(SharedService);
   private readonly accountCta = inject(AccountCtaService);
   private readonly base = `${environment.apiBaseUrl}/characters`;
-  readonly saveRequests = new Subject<{ image: MobiansImage; characterId?: string; recipe?: CharacterRecipe }>();
+  readonly saveRequests = new Subject<CharacterSaveRequest>();
   readonly saved = new Subject<string>();
   readonly imageHandoffReady = new Subject<void>();
-  readonly activeCharacter = signal<{ id: string; name: string; imageId: string } | null>(null);
+  readonly activeCharacter = signal<CharacterLink | null>(null);
   private imageHandoff: CharacterHandoff | null = null;
   private videoHandoff: MobiansImage | null = null;
   private lastOwner = '';
+  /** Set once the server says it has no events route (an older backend), so the session stops asking. */
+  private eventsUnavailable = false;
 
   constructor() {
     this.shared.getUserData().subscribe(() => {
@@ -98,12 +116,20 @@ export class CharactersService {
 
   get owner(): string { return this.shared.getUserDataValue()?.token || ''; }
 
-  requestSave(image: MobiansImage, characterId?: string, recipe?: CharacterRecipe): void {
+  requestSave(image: MobiansImage, characterId?: string, recipe?: CharacterRecipe, source?: CharacterSaveSource): void {
     if (!this.owner) {
       this.accountCta.requestLogin({ reason: 'generic', message: 'Sign in to save private characters and use them across your devices.' });
       return;
     }
-    this.saveRequests.next({ image, characterId, recipe });
+    this.saveRequests.next({ image, characterId, recipe, source });
+  }
+
+  /** The picker's remembered choice between adding to the prompt and replacing it. */
+  loadMode(): CharacterLoadMode {
+    try { return localStorage.getItem(LOAD_MODE_KEY) === 'replace' ? 'replace' : 'add'; } catch { return 'add'; }
+  }
+  setLoadMode(mode: CharacterLoadMode): void {
+    try { localStorage.setItem(LOAD_MODE_KEY, mode); } catch { /* storage blocked: the choice lasts for this dialog only */ }
   }
 
   list(q = '', cursor?: string) {
@@ -126,9 +152,10 @@ export class CharactersService {
   defaultLook(character: CharacterDetail): CharacterImage | undefined {
     return character.images.find(i => i.id === character.default_image_id) || character.images[0];
   }
-  save(name: string, recipe: CharacterRecipe, image_base64: string, id?: string, requestId?: string, editProvenance?: MobiansImage['editProvenance']) {
+  save(name: string, recipe: CharacterRecipe, image_base64: string, id?: string, requestId?: string, editProvenance?: MobiansImage['editProvenance'], source?: CharacterSaveSource) {
+    const extras = { ...(editProvenance ? { edit_provenance: editProvenance } : {}), ...(requestId ? { request_id: requestId } : {}), ...(source ? { source } : {}) };
     return firstValueFrom(this.http.post<{ id: string; image_id?: string }>(id ? `${this.base}/${id}/images` : this.base,
-      id ? { recipe, image_base64, ...(editProvenance ? { edit_provenance: editProvenance } : {}), ...(requestId ? { request_id: requestId } : {}) } : { name, recipe, image_base64, ...(editProvenance ? { edit_provenance: editProvenance } : {}), ...(requestId ? { request_id: requestId } : {}) }).pipe(timeout(30000)));
+      id ? { recipe, image_base64, ...extras } : { name, recipe, image_base64, ...extras }).pipe(timeout(30000)));
   }
   rename(id: string, name: string) { return firstValueFrom(this.http.patch(`${this.base}/${id}`, { name }).pipe(timeout(15000))); }
   setDefault(id: string, imageId: string) {
@@ -143,7 +170,8 @@ export class CharactersService {
     return firstValueFrom(this.http.get(`${this.base}/${id}/images/${imageId}/media`, { responseType: 'blob' }).pipe(timeout(20000)));
   }
 
-  async useImage(character: CharacterDetail, selected: CharacterImage, action: 'create' | 'edit' | 'animate', options?: { scene?: string; promptsOnly?: boolean }): Promise<void> {
+  async useImage(character: CharacterDetail, selected: CharacterImage, action: 'create' | 'edit' | 'animate',
+    options?: { scene?: string; promptsOnly?: boolean; mode?: CharacterLoadMode; source?: CharacterLoadSource }): Promise<void> {
     if (action !== 'animate' && localStorage.getItem('mobians:pending-job')) {
       throw new Error('Finish or cancel your current image job before loading a character setup.');
     }
@@ -167,7 +195,12 @@ export class CharactersService {
       cfg: recipe.guidance_scale, loras: recipe.loras,
     } : undefined;
     if (action === 'animate') this.videoHandoff = image!;
-    else this.imageHandoff = { name: character.name, characterId: character.id, imageId: selected.id, recipe, image, currentModel, currentLoras };
+    else this.imageHandoff = {
+      name: character.name, characterId: character.id, imageId: selected.id, recipe, image, currentModel, currentLoras,
+      // A reference picture always comes with the whole saved setup, so only "create" can add to the prompt.
+      mode: action === 'create' ? options?.mode ?? 'replace' : 'replace',
+      source: options?.source ?? (action === 'edit' ? 'reference' : 'character_page'),
+    };
     const target = action === 'animate' ? '/video' : '/';
     const sameImageRoute = action !== 'animate' && this.router.url?.split(/[?#]/)[0] === '/';
     let navigated: boolean;
@@ -182,10 +215,24 @@ export class CharactersService {
       throw new Error('Your account changed. Open My Characters again.');
     }
     if (action !== 'animate') this.imageHandoffReady.next();
+    else this.recordEvent('animate_handoff', 'character_page', { characterId: character.id, imageId: selected.id });
   }
-  recordLoaded(characterId: string, imageId: string): void {
+
+  // Usage records. All are fire and forget: a lost or refused record must never interrupt the user.
+  recordLoaded(characterId: string, imageId: string, source?: CharacterLoadSource): void {
     if (!characterId || !imageId) return;
-    void firstValueFrom(this.http.post(`${this.base}/${characterId}/images/${imageId}/used`, { event_id: crypto.randomUUID() }).pipe(timeout(10000), retry({ count: 1, delay: 500 }))).catch(() => {});
+    void firstValueFrom(this.http.post(`${this.base}/${characterId}/images/${imageId}/used`, { event_id: crypto.randomUUID(), ...(source ? { source } : {}) }).pipe(timeout(10000), retry({ count: 1, delay: 500 }))).catch(() => {});
+  }
+  /** Things only the browser knows happened: a picker or save dialog opening, a video hand-off, an unlink. */
+  recordEvent(type: CharacterClientEvent, source?: string, ids?: { characterId?: string; imageId?: string }): void {
+    if (!this.owner || this.eventsUnavailable) return;
+    const linked = ids?.characterId && ids.imageId ? { character_id: ids.characterId, image_id: ids.imageId } : {};
+    void firstValueFrom(this.http.post(`${this.base}/events`, { event_id: crypto.randomUUID(), event_type: type, ...(source ? { source } : {}), ...linked }).pipe(timeout(10000)))
+      .catch((error: any) => { if (error?.status === 404 || error?.status === 405) this.eventsUnavailable = true; });
+  }
+  /** Notes why a character stops being linked. Call it before the link is cleared. */
+  recordUnlinked(reason: CharacterUnlinkReason, link: CharacterLink | null = this.activeCharacter()): void {
+    if (link?.id) this.recordEvent('unlinked', reason, { characterId: link.id, imageId: link.imageId });
   }
 
   clearActiveCharacter(): void { this.activeCharacter.set(null); }

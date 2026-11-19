@@ -51,6 +51,7 @@ describe('RegionalCharacterPickerComponent', () => {
       get: jasmine.createSpy('get').and.callFake(async (id: string) => structuredClone(characters[id])),
       defaultLook: (detail: any) => detail.images.find((image: any) => image.id === detail.default_image_id) || detail.images[0],
       recordLoaded: jasmine.createSpy('recordLoaded'),
+      recordEvent: jasmine.createSpy('recordEvent'),
     };
     await TestBed.configureTestingModule({
       imports: [RegionalCharacterPickerComponent],
@@ -87,6 +88,12 @@ describe('RegionalCharacterPickerComponent', () => {
     component.open();
     expect(login).toHaveBeenCalled();
     expect(component.opened()).toBeFalse();
+    expect(service.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('records that the region picker was opened', () => {
+    component.open();
+    expect(service.recordEvent).toHaveBeenCalledOnceWith('picker_opened', 'region');
   });
 
   it('fills the box with the default look: its prompt and its LoRAs, replacing the old ones, as one undo step', async () => {
@@ -96,7 +103,7 @@ describe('RegionalCharacterPickerComponent', () => {
     expect(region().prompt).toBe('amy rose, pink fur, red dress');
     expect(region().loras!.map(lora => [lora.id, lora.strength])).toEqual([[11, 0.9], [14, 0.6]]);
     expect(changed).toHaveBeenCalledTimes(1);
-    expect(service.recordLoaded).toHaveBeenCalledWith('amy', 'amy-1');
+    expect(service.recordLoaded).toHaveBeenCalledWith('amy', 'amy-1', 'region');
     expect(component.opened()).toBeFalse();
     const toast = messages.add.calls.mostRecent().args[0];
     expect(toast.summary).toBe('Amy Rose is in Region 1');
@@ -112,7 +119,7 @@ describe('RegionalCharacterPickerComponent', () => {
     await component.choose({ characterId: 'amy', imageId: 'amy-2', name: 'Amy Rose' });
     expect(region().prompt).toBe('amy rose, winter coat');
     expect(region().loras!.map(lora => lora.id)).toEqual([11]);
-    expect(service.recordLoaded).toHaveBeenCalledWith('amy', 'amy-2');
+    expect(service.recordLoaded).toHaveBeenCalledWith('amy', 'amy-2', 'region');
   });
 
   it('lets the user choose which LoRAs to keep when the look has more than the box takes', async () => {

@@ -188,7 +188,7 @@ describe('OptionsComponent', () => {
       providers: [
         { provide: HistoryDiagnosticsService, useValue: { report: jasmine.createSpy('report') } },
         { provide: ImageEditorService, useValue: { available: signal(true), pending: signal(false), open: jasmine.createSpy('openEditor') } },
-        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: jasmine.createSpy('clearActiveCharacter').and.callFake(function(this: any) { this.activeCharacter.set(null); }) } },
+        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: jasmine.createSpy('recordLoaded'), recordEvent: jasmine.createSpy('recordEvent'), recordUnlinked: jasmine.createSpy('recordUnlinked'), takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: jasmine.createSpy('clearActiveCharacter').and.callFake(function(this: any) { this.activeCharacter.set(null); }) } },
         { provide: StableDiffusionService, useClass: StableDiffusionServiceStub },
         { provide: SharedService, useClass: SharedServiceStub },
         { provide: MessageService, useClass: MessageServiceStub },
@@ -1048,6 +1048,232 @@ describe('OptionsComponent', () => {
     expect(characters.clearActiveCharacter).toHaveBeenCalled();
   });
 
+  describe('adding a character to the prompt', () => {
+    let characters: any;
+    let messages: jasmine.Spy;
+    const look = (overrides: any = {}) => ({
+      label: 'Default', model: '', appearance: 'blue fox, red scarf', scene: '', negative_prompt: 'blurry',
+      width: 512, height: 768, guidance_scale: 5, loras: [], ...overrides,
+    });
+    const handoff = (overrides: any = {}) => ({
+      name: 'Ash', characterId: 'ash', imageId: 'ash-look', mode: 'add', source: 'generator_add', recipe: look(), ...overrides,
+    });
+    const add = (pending: any) => {
+      spyOn(characters, 'takeImageHandoff').and.returnValue(pending);
+      (component as any).applyCharacterHandoff();
+      characters.takeImageHandoff.calls.reset();
+      (characters.takeImageHandoff as jasmine.Spy).and.stub();
+    };
+    const addAgain = (pending: any) => {
+      (characters.takeImageHandoff as jasmine.Spy).and.returnValue(pending);
+      (component as any).applyCharacterHandoff();
+    };
+
+    beforeEach(() => {
+      characters = TestBed.inject(CharactersService);
+      messages = spyOn(TestBed.inject(MessageService), 'add');
+      spyOn(component, 'saveSettings');
+      // Hi-res is a signed-in feature; signed out, any price update switches it off.
+      spyOn(TestBed.inject(AuthService), 'isLoggedIn').and.returnValue(true);
+    });
+
+    it('puts the character in front of what was typed and leaves everything else alone', () => {
+      const reference = { UUID: 'ref', aspectRatio: 'square' } as any;
+      component.referenceImage = reference;
+      component.hiresEnabled = true;
+      component.generationRequest = {
+        ...component.generationRequest, prompt: 'sitting in a cafe, rain outside', negative_prompt: 'my own negative',
+        seed: 123, job_type: 'img2img', mask_image: 'mask', guidance_scale: 7, width: 768, height: 512,
+        regional_prompting: { enabled: true, version: 2, regions: [{ id: 'r', prompt: 'left', x: 0, y: 0, width: 0.5, height: 1 }] },
+        loras: [{ id: 5, name: 'My style', strength: .5 }],
+      };
+      const before = structuredClone(component.generationRequest);
+      const loras = component.generationRequest.loras;
+
+      add(handoff());
+
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf, sitting in a cafe, rain outside');
+      expect({ ...component.generationRequest, prompt: before.prompt }).toEqual(before);
+      expect(component.generationRequest.loras).toBe(loras);
+      expect(component.referenceImage).toBe(reference);
+      expect(component.hiresEnabled).toBeTrue();
+      expect(characters.activeCharacter()).toEqual({ id: 'ash', imageId: 'ash-look', name: 'Ash', inserted: 'blue fox, red scarf' });
+      expect(characters.recordLoaded).toHaveBeenCalledOnceWith('ash', 'ash-look', 'generator_add');
+      expect(messages.calls.mostRecent().args[0].summary).toBe('Ash added to your prompt');
+      expect(component.canUndoCharacter).toBeTrue();
+    });
+
+    it('fills an empty prompt box with the character alone and takes its negative prompt when there is none', () => {
+      component.generationRequest.prompt = '';
+      component.generationRequest.negative_prompt = '   ';
+      add(handoff());
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf');
+      expect(component.generationRequest.negative_prompt).toBe('blurry');
+    });
+
+    it('does not repeat tags the user already has, and says so', () => {
+      component.generationRequest.prompt = 'masterpiece, Red Scarf, walking';
+      add(handoff({ recipe: look({ appearance: 'masterpiece, blue fox, red scarf' }) }));
+      expect(component.generationRequest.prompt).toBe('masterpiece, blue fox, red scarf, walking');
+      expect(messages.calls.mostRecent().args[0].detail).toContain('2 tags you already had were not repeated.');
+    });
+
+    it('keeps a dynamic prompt dynamic and does not look for repeated tags inside it', () => {
+      component.generationRequest.prompt = '{blue fox|green cat}, blue fox, _mobian/poses_';
+      add(handoff());
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf, {blue fox|green cat}, blue fox, _mobian/poses_');
+      expect(component.generationRequest.dynamic_prompting.enabled).toBeTrue();
+      expect(component.generationRequest.dynamic_prompting.template).toBe(component.generationRequest.prompt);
+    });
+
+    it('warns when the character text would break a dynamic prompt', () => {
+      component.generationRequest.prompt = 'walking, {day|night}';
+      add(handoff({ recipe: look({ appearance: 'blue fox, long_hair_between_eyes' }) }));
+      expect(component.generationRequest.prompt).toBe('blue fox, long_hair_between_eyes, walking, {day|night}');
+      expect(messages.calls.mostRecent().args[0].detail).toContain('between underscores');
+    });
+
+    for (const scenario of [
+      { name: 'a plain prompt past 8,000 characters', typed: 'x'.repeat(7990), limit: '8,000' },
+      { name: 'a dynamic prompt past 3,000 characters', typed: '{a|b}, ' + 'x'.repeat(2990), limit: '3,000' },
+    ]) {
+      it(`refuses ${scenario.name} and changes nothing`, () => {
+        const earlier = { id: 'amy', imageId: 'amy-look', name: 'Amy' };
+        characters.activeCharacter.set(earlier);
+        component.generationRequest.prompt = scenario.typed;
+        const request = component.generationRequest;
+        const before = structuredClone(request);
+
+        add(handoff());
+
+        expect(component.generationRequest).toBe(request);
+        expect(component.generationRequest).toEqual(before);
+        expect(characters.activeCharacter()).toEqual(earlier);
+        expect(characters.recordLoaded).not.toHaveBeenCalled();
+        expect(component.canUndoCharacter).toBeFalse();
+        const toast = messages.calls.mostRecent().args[0];
+        expect(toast.severity).toBe('warn');
+        expect(toast.detail).toContain(scenario.limit);
+      });
+    }
+
+    it('swaps an earlier character instead of piling a second one on top', () => {
+      component.generationRequest.prompt = 'walking in the rain';
+      add(handoff());
+      addAgain(handoff({ name: 'Amy', characterId: 'amy', imageId: 'amy-look', recipe: look({ appearance: 'pink hedgehog, red dress' }) }));
+      expect(component.generationRequest.prompt).toBe('pink hedgehog, red dress, walking in the rain');
+      expect(characters.activeCharacter()).toEqual({ id: 'amy', imageId: 'amy-look', name: 'Amy', inserted: 'pink hedgehog, red dress' });
+      expect(messages.calls.mostRecent().args[0].summary).toBe('Amy replaced Ash in your prompt');
+    });
+
+    it('swaps out a character that was loaded with "replace", keeping the one-time extra details', () => {
+      add(handoff({ mode: 'replace', source: 'character_page', recipe: look({ scene: 'reading in a library' }) }));
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf, reading in a library');
+      expect(characters.activeCharacter().inserted).toBe('blue fox, red scarf');
+      addAgain(handoff({ name: 'Amy', characterId: 'amy', imageId: 'amy-look', recipe: look({ appearance: 'pink hedgehog' }) }));
+      expect(component.generationRequest.prompt).toBe('pink hedgehog, reading in a library');
+    });
+
+    it('switches to a pinned model as a manual change does, with the look’s guidance and LoRAs first', () => {
+      component.generationRequest.model = 'novaMobianXL_v20';
+      component.generationRequest.guidance_scale = 7;
+      component.generationRequest.prompt = 'walking';
+      component.generationRequest.loras = [{ id: 5, version_id: 50, name: 'Mine A' }, { id: 6, version_id: 60, name: 'Mine B' }, { id: 7, version_id: 70, name: 'Mine C' }];
+      component.hiresEnabled = true;
+      add(handoff({ recipe: look({ model: 'Anima-baseV1', guidance_scale: 4.5, loras: [{ id: 9, version_id: 90, name: 'Fox', strength: .7 }] }) }));
+      expect(component.generationRequest.model).toBe('Anima-baseV1');
+      expect(component.generationRequest.guidance_scale).toBe(4.5);
+      expect(component.generationRequest.loras.map((lora: any) => lora.id)).toEqual([9, 5, 6]);
+      expect(component.generationRequest.loras[0].strength).toBe(.7);
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf, walking');
+      expect(component.hiresEnabled).toBeTrue();
+      const detail = messages.calls.mostRecent().args[0].detail;
+      expect(detail).toContain('Model switched to');
+      expect(detail).toContain('1 of your LoRAs did not fit and was left out.');
+    });
+
+    it('keeps the current guidance for a look pinned to the model already selected, and does not double a shared LoRA', () => {
+      component.generationRequest.model = 'novaMobianXL_v20';
+      component.generationRequest.guidance_scale = 7;
+      component.generationRequest.loras = [{ id: 9, version_id: 90, name: 'Fox', strength: .4 }, { id: 5, version_id: 50, name: 'Mine' }];
+      add(handoff({ recipe: look({ model: 'novaMobianXL_v20', guidance_scale: 4.5, loras: [{ id: 9, version_id: 90, name: 'Fox', strength: .7 }] }) }));
+      expect(component.generationRequest.model).toBe('novaMobianXL_v20');
+      expect(component.generationRequest.guidance_scale).toBe(7);
+      expect(component.generationRequest.loras.map((lora: any) => [lora.id, lora.strength])).toEqual([[9, .7], [5, 1]]);
+    });
+
+    it('undoes back to exactly the earlier setup and links the earlier character again', () => {
+      const earlier = { id: 'amy', imageId: 'amy-look', name: 'Amy', inserted: 'pink hedgehog' };
+      characters.activeCharacter.set(earlier);
+      component.generationRequest.prompt = 'pink hedgehog, walking';
+      component.generationRequest.loras = [{ id: 5, name: 'Mine', strength: .5 }];
+      const before = structuredClone(component.generationRequest);
+
+      add(handoff({ recipe: look({ model: 'Anima-baseV1', loras: [{ id: 9, version_id: 90, name: 'Fox', strength: .7 }] }) }));
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf, walking');
+      component.undoCharacter();
+
+      expect(component.generationRequest).toEqual(before);
+      expect(characters.activeCharacter()).toEqual(earlier);
+      expect(characters.recordUnlinked).toHaveBeenCalledOnceWith('undo', jasmine.objectContaining({ id: 'ash' }));
+      expect(characters.clearActiveCharacter).not.toHaveBeenCalled();
+      expect(component.canUndoCharacter).toBeFalse();
+    });
+
+    it('undoes to no character when none was linked before', () => {
+      component.generationRequest.prompt = 'walking';
+      const before = structuredClone(component.generationRequest);
+      add(handoff());
+      component.undoCharacter();
+      expect(component.generationRequest).toEqual(before);
+      expect(characters.activeCharacter()).toBeNull();
+      expect(characters.recordUnlinked).toHaveBeenCalledOnceWith('undo');
+    });
+
+    it('treats a look opened as a reference picture as a replace even if "add" was asked for', () => {
+      component.generationRequest.prompt = 'walking';
+      add(handoff({ image: { UUID: 'character-ash-look', aspectRatio: 'portrait' } }));
+      expect(component.generationRequest.prompt).toBe('blue fox, red scarf');
+    });
+
+    it('keeps the added text with a pending job so a refresh can still swap it', async () => {
+      component.generationRequest.prompt = 'walking';
+      add(handoff());
+      const sd = TestBed.inject(StableDiffusionService) as any;
+      const reply = new Subject<any>(); sd.submitJob = jasmine.createSpy().and.returnValue(reply);
+      spyOn(component, 'getJob');
+      component.queueType = 'free';
+      await component.submitJob();
+      reply.next({ job_id: 'job-1', character_id: 'ash', character_look_id: 'ash-look' }); reply.complete();
+      const pending = JSON.parse(localStorage.getItem('mobians:pending-job')!);
+      expect(pending.characterInserted).toBe('blue fox, red scarf');
+      expect(pending.request.characterInserted).toBeUndefined();
+    });
+  });
+
+  describe('the character link', () => {
+    it('records why a character was unlinked, and nothing when the account itself went away', () => {
+      const characters = TestBed.inject(CharactersService) as any;
+      characters.activeCharacter.set({ id: 'amy', imageId: 'amy-look', name: 'Amy' });
+      component.dismissCharacter('manual');
+      expect(characters.recordUnlinked).toHaveBeenCalledOnceWith('manual');
+      expect(characters.activeCharacter()).toBeNull();
+      characters.recordUnlinked.calls.reset();
+      component.dismissCharacter();
+      expect(characters.recordUnlinked).not.toHaveBeenCalled();
+    });
+
+    it('goes when an uploaded picture becomes the reference', async () => {
+      const characters = TestBed.inject(CharactersService) as any;
+      const shared = TestBed.inject(SharedService) as any;
+      await component.ngOnInit();
+      shared.images = [{ UUID: 'made-with-amy', characterId: 'amy' }];
+      characters.activeCharacter.set({ id: 'amy', imageId: 'amy-look', name: 'Amy' });
+      shared.referenceImage.next({ UUID: 'upload-1', aspectRatio: 'square' });
+      expect(characters.activeCharacter()).toBeNull();
+    });
+  });
+
   it('keeps a pending image job when the route is destroyed and resumes polling immediately', fakeAsync(() => {
     const jobId = 'image-job-123';
     localStorage.setItem('mobians:pending-job', JSON.stringify({
@@ -1784,7 +2010,7 @@ describe('OptionsComponent asynchronous initial state', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: ImageEditorService, useValue: { available: signal(true), pending: signal(false), open: jasmine.createSpy('openEditor') } },
-        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: () => {} } },
+        { provide: CharactersService, useValue: { activeCharacter: signal(null), recordLoaded: () => {}, recordEvent: () => {}, recordUnlinked: () => {}, takeImageHandoff: () => null, imageHandoffReady: new Subject<void>(), clearActiveCharacter: () => {} } },
         { provide: StableDiffusionService, useValue: sd },
         { provide: SharedService, useClass: SharedServiceStub },
         { provide: MessageService, useClass: MessageServiceStub },

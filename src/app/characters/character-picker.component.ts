@@ -6,7 +6,7 @@ import { DialogModule } from 'primeng/dialog';
 import { AccountCtaService } from '../auth/account-cta.service';
 import { SharedService } from '../shared.service';
 import { CharacterBrowserComponent } from './character-browser.component';
-import { CharactersService, CharacterSummary, CharacterChoice, CharacterDetail, CharacterImage, characterError } from './characters.service';
+import { CharactersService, CharacterSummary, CharacterChoice, CharacterDetail, CharacterImage, CharacterLoadMode, characterError } from './characters.service';
 
 @Component({
   selector: 'app-character-picker', standalone: true,
@@ -22,9 +22,25 @@ export class CharacterPickerComponent {
   @Input() disabled = false;
   @Input() loadedName = '';
   @Input() canUndo = false;
+  /** What is in the prompt box now, so the picker can say what "add" will keep. */
+  @Input() currentPrompt = '';
+  /** Regions are switched on: the main prompt is then shared with every box. */
+  @Input() regionsActive = false;
   @Output() undo = new EventEmitter<void>();
   @Output() detach = new EventEmitter<void>();
   readonly opened = signal(false);
+  /** Add the character to the prompt (default) or replace the whole setup; remembered per browser. */
+  readonly mode = signal<CharacterLoadMode>('add');
+  setMode(mode: CharacterLoadMode): void {
+    if (this.busyId() || this.disabled) return;
+    this.mode.set(mode); this.service.setLoadMode(mode);
+  }
+  get modeHint(): string {
+    if (this.mode() === 'replace') return 'Replaces your prompt and switches regions off. Undo brings it back.';
+    const typed = this.currentPrompt.trim();
+    if (!typed) return 'Your prompt box is empty, so the character’s prompt fills it.';
+    return `Goes in front of: “${typed.length > 48 ? typed.slice(0, 48).trimEnd() + '…' : typed}”`;
+  }
   readonly loading = signal(false);
   readonly busyId = signal('');
   readonly error = signal('');
@@ -60,6 +76,8 @@ export class CharacterPickerComponent {
     }
     this.opened.set(true);
     this.search.set('');
+    this.mode.set(this.service.loadMode());
+    this.service.recordEvent('picker_opened', 'generator');
     await this.load();
   }
 
@@ -91,8 +109,8 @@ export class CharacterPickerComponent {
       if (!this.current(version, owner) || this.disabled) return;
       look = choice.imageId ? detail.images.find(i => i.id === choice.imageId) : detail.images.find(i => i.id === detail!.default_image_id) || detail.images[0];
       if (!look) throw new Error('This saved look is no longer available. Open My Characters to choose another.');
-      if (promptsOnly) await this.service.useImage(detail, look, 'create', { promptsOnly: true });
-      else await this.service.useImage(detail, look, 'create');
+      const mode = this.mode();
+      await this.service.useImage(detail, look, 'create', { mode, source: mode === 'add' ? 'generator_add' : 'generator_replace', ...(promptsOnly ? { promptsOnly: true } : {}) });
       if (this.current(version, owner)) this.close(true);
     } catch (error: any) {
       if (this.current(version, owner)) {

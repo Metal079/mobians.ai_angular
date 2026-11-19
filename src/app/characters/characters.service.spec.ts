@@ -90,6 +90,10 @@ describe('Character workflows', () => {
     await pending;
     expect(router.navigateByUrl).toHaveBeenCalledWith('/video');
     expect(service.takeVideoHandoff()?.blob).toBe(blob); expect(service.takeVideoHandoff()).toBeNull();
+    // The hand-off is recorded, once the video page has opened.
+    const event = http.expectOne(req => req.url.endsWith('/characters/events'));
+    expect(event.request.body).toEqual(jasmine.objectContaining({ event_type: 'animate_handoff', source: 'character_page', character_id: 'character', image_id: 'look' }));
+    event.flush(null);
   });
 
   it('does not replace a pending image job', async () => {
@@ -183,6 +187,7 @@ describe('Character workflows', () => {
     await pending;
     expect(service.takeVideoHandoff()?.prompt).toBe('blue fox, sunny beach');
     expect(recipe.scene).toBe('sunny beach');
+    http.expectOne(req => req.url.endsWith('/characters/events')).flush(null);
   });
 
   it('does not signal a handoff until navigation has finished', async () => {
@@ -268,5 +273,106 @@ describe('Character workflows', () => {
     expect(request.request.body).toEqual({ recipe: saved.recipe, image_base64: 'data:image/webp;base64,AAAA' });
     request.flush({ id: 'character', image_id: 'new-look' });
     expect((await pending).image_id).toBe('new-look');
+  });
+
+  describe('add to my prompt', () => {
+    afterEach(() => localStorage.removeItem('mobians:character-load-mode'));
+
+    it('adds by default, remembers a choice, and survives blocked storage', () => {
+      expect(service.loadMode()).toBe('add');
+      service.setLoadMode('replace'); expect(service.loadMode()).toBe('replace');
+      service.setLoadMode('add'); expect(service.loadMode()).toBe('add');
+      const read = spyOn(Storage.prototype, 'getItem').and.throwError('blocked');
+      const write = spyOn(Storage.prototype, 'setItem').and.throwError('blocked');
+      expect(() => service.setLoadMode('replace')).not.toThrow();
+      expect(service.loadMode()).toBe('add');
+      read.and.callThrough(); write.and.callThrough();
+    });
+
+    it('hands the chosen mode and where it came from to the generator', async () => {
+      const pending = service.useImage(character, saved, 'create', { mode: 'add', source: 'generator_add' });
+      http.expectOne(req => req.url.endsWith('/prepare')).flush({ recipe: saved.recipe }); await pending;
+      expect(service.takeImageHandoff()).toEqual(jasmine.objectContaining({ mode: 'add', source: 'generator_add' }));
+    });
+
+    it('replaces unless a caller asks to add, and a reference picture always replaces', async () => {
+      const fromPage = service.useImage(character, saved, 'create');
+      http.expectOne(req => req.url.endsWith('/prepare')).flush({ recipe: saved.recipe }); await fromPage;
+      expect(service.takeImageHandoff()).toEqual(jasmine.objectContaining({ mode: 'replace', source: 'character_page' }));
+      const asReference = service.useImage(character, saved, 'edit', { mode: 'add' });
+      http.expectOne(req => req.url.endsWith('/prepare')).flush({ recipe: saved.recipe });
+      await Promise.resolve();
+      http.expectOne(req => req.url.endsWith('/media')).flush(new Blob(['image'], { type: 'image/webp' }));
+      await asReference;
+      expect(service.takeImageHandoff()).toEqual(jasmine.objectContaining({ mode: 'replace', source: 'reference' }));
+    });
+  });
+
+  describe('usage records', () => {
+    it('says where a load came from, and stays as before when it is not told', () => {
+      service.recordLoaded('character', 'look', 'generator_add');
+      const request = http.expectOne(req => req.url.endsWith('/characters/character/images/look/used'));
+      expect(request.request.body).toEqual({ event_id: jasmine.any(String), source: 'generator_add' });
+      request.flush(null);
+      service.recordLoaded('character', 'look');
+      const plain = http.expectOne(req => req.url.endsWith('/used'));
+      expect(Object.keys(plain.request.body)).toEqual(['event_id']);
+      plain.flush(null);
+    });
+
+    it('sends where a save started as its own field, outside the saved setup', async () => {
+      const pending = service.save('Ash', saved.recipe, 'data:image/webp;base64,AAAA', undefined, 'request-1', undefined, 'enlarged_result');
+      const request = http.expectOne(req => req.url.endsWith('/characters'));
+      expect(request.request.body).toEqual({ name: 'Ash', recipe: saved.recipe, image_base64: 'data:image/webp;base64,AAAA', request_id: 'request-1', source: 'enlarged_result' });
+      expect((request.request.body.recipe as any).source).toBeUndefined();
+      request.flush({ id: 'character', image_id: 'look' }); await pending;
+    });
+
+    it('passes the save source to the dialog that opens', () => {
+      const received = jasmine.createSpy('saveRequest'); service.saveRequests.subscribe(received);
+      service.requestSave(image as any, 'character', undefined, 'enlarged_result');
+      expect(received).toHaveBeenCalledOnceWith({ image, characterId: 'character', recipe: undefined, source: 'enlarged_result' });
+    });
+
+    it('records a browser-only event with the look it concerns', () => {
+      service.recordEvent('unlinked', 'undo', { characterId: 'character', imageId: 'look' });
+      const request = http.expectOne(req => req.url.endsWith('/characters/events'));
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ event_id: jasmine.any(String), event_type: 'unlinked', source: 'undo', character_id: 'character', image_id: 'look' });
+      request.flush(null);
+      service.recordEvent('picker_opened', 'generator');
+      const opened = http.expectOne(req => req.url.endsWith('/characters/events'));
+      expect(opened.request.body).toEqual({ event_id: jasmine.any(String), event_type: 'picker_opened', source: 'generator' });
+      opened.flush(null);
+    });
+
+    it('stops asking for the rest of the visit when the server has no events route', async () => {
+      service.recordEvent('picker_opened', 'generator');
+      http.expectOne(req => req.url.endsWith('/characters/events')).flush(null, { status: 405, statusText: 'Method Not Allowed' });
+      await Promise.resolve(); await Promise.resolve();
+      service.recordEvent('picker_opened', 'generator');
+      http.expectNone(req => req.url.endsWith('/characters/events'));
+    });
+
+    it('keeps trying after a passing failure, and records nothing for a signed-out visitor', async () => {
+      service.recordEvent('picker_opened', 'generator');
+      http.expectOne(req => req.url.endsWith('/characters/events')).flush(null, { status: 503, statusText: 'Unavailable' });
+      await Promise.resolve(); await Promise.resolve();
+      service.recordEvent('picker_opened', 'generator');
+      http.expectOne(req => req.url.endsWith('/characters/events')).flush(null);
+      user.next(null);
+      service.recordEvent('picker_opened', 'generator');
+      http.expectNone(req => req.url.endsWith('/characters/events'));
+    });
+
+    it('notes why the linked character is dropped, and nothing when none is linked', () => {
+      service.recordUnlinked('reference');
+      http.expectNone(req => req.url.endsWith('/characters/events'));
+      service.activeCharacter.set({ id: 'character', name: 'Ash', imageId: 'look' });
+      service.recordUnlinked('reference');
+      const request = http.expectOne(req => req.url.endsWith('/characters/events'));
+      expect(request.request.body).toEqual(jasmine.objectContaining({ event_type: 'unlinked', source: 'reference', character_id: 'character', image_id: 'look' }));
+      request.flush(null);
+    });
   });
 });

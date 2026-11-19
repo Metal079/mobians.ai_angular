@@ -32,7 +32,14 @@ button:not(:disabled):hover { filter: brightness(1.08); }
 .picker-empty { padding: 1.5rem .75rem; text-align: center; border: 1px solid var(--theme-border-strong); border-radius: 16px; background: var(--theme-surface-alt-bg); }
 .picker-empty > i { font-size: 2rem; }.picker-empty h3 { font-size: 1.2rem; margin: 1rem 0 .5rem; }.picker-empty p { max-width: 320px; margin: 0 auto 1rem; font-size: .9rem; line-height: 1.5; }
 .picker-empty a { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .55rem .85rem; border-radius: 12px; background: var(--theme-primary); color: var(--theme-primary-text); font-weight: 700; text-decoration: none; }
-.picker-footer { display: flex; align-items: center; justify-content: space-between; gap: .5rem 1rem; flex-wrap: wrap; margin-top: .85rem; font-size: .8rem; }
+/* Add to my prompt / Replace my prompt */
+.picker-mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-bottom: .5rem; }
+.picker-mode button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-width: 0; min-height: 44px; padding: .4rem .6rem; border: 1px solid color-mix(in srgb, var(--theme-surface-text) 45%, transparent); border-radius: 10px; background: transparent; color: inherit; font-size: .86rem; font-weight: 700; line-height: 1.2; text-align: left; cursor: pointer; }
+/* The chosen one is filled with the text colour: the themes' primary colour is too close to the dialog background. */
+.picker-mode button.selected { border-color: var(--theme-surface-text); background: var(--theme-surface-text); color: var(--theme-surface-bg); }
+.picker-mode button > i { flex-shrink: 0; }
+.picker-mode-hint { margin: 0 0 .75rem; font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
+.picker-footer { display: flex; align-items: center; justify-content: flex-end; gap: .5rem 1rem; flex-wrap: wrap; margin-top: .85rem; font-size: .8rem; }
 .picker-footer a { display: inline-flex; min-height: 44px; align-items: center; gap: .25rem; color: inherit; font-weight: 700; text-underline-offset: 3px; }
 .picker-empty-search { text-align: center; margin: 1.5rem 0; font-size: .9rem; }
 @media (max-width: 480px) { .picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }.picker-name { padding: .6rem; }.picker-intro { font-size: .86rem; } }

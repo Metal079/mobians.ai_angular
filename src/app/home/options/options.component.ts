@@ -24,7 +24,7 @@ import { RegionalPromptingConfig } from 'src/_shared/regional-prompting.interfac
 import { RegionalEditorService, RegionalReuseRequest } from './regional-editor/regional-editor.service';
 import { RegionalStatusChipComponent } from './regional-editor/regional-status-chip.component';
 import { RegionalLoraCatalogService } from './regional-editor/regional-lora-catalog.service';
-import { findCatalogLora, loraKeys } from './regional-editor/regional-loras';
+import { findCatalogLora, loraKeys, sameLora } from './regional-editor/regional-loras';
 import {
   buildRegionalPayload, describeRegionLoraSkips, describeRegionNumbers, emptyRegionalConfig, normaliseRegionalConfig,
   RegionalPayloadOptions, RegionalPayloadReport, regionalJobLabel, regionalStatus, RegionalStatus, resolveRegionalCapability,
@@ -42,7 +42,9 @@ import { HintComponent } from 'src/app/hint/hint.component';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { AccountCtaService } from 'src/app/auth/account-cta.service';
 import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library-state.service';
-import { CharactersService, characterPrompt } from 'src/app/characters/characters.service';
+import { CharacterHandoff, CharacterLink, CharactersService, CharacterUnlinkReason, characterPrompt } from 'src/app/characters/characters.service';
+import { addCharacterText, insertableCharacterText } from 'src/app/characters/character-prompt-merge';
+import { MAX_DYNAMIC_TEMPLATE_CHARS, MAX_PROMPT_CHARS } from './prompt-limits';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { IMAGE_EDIT_MODELS, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 import { CharacterPickerComponent } from 'src/app/characters/character-picker.component';
@@ -54,6 +56,8 @@ import { StableTextareaAutosizeDirective } from './stable-textarea-autosize.dire
 interface PendingGenerationJob {
   job_id: string;
   request?: any;
+  /** The linked character's added prompt text. Kept beside `request`, which is spread into later submits. */
+  characterInserted?: string;
   createdAt?: number;
   savedGeneratedImages?: string[];
   phase?: 'saving';
@@ -97,6 +101,8 @@ export class OptionsComponent implements OnInit {
   private characterUndo: {
     request: any; referenceImage?: MobiansImage; aspectRatio: AspectRatio;
     hiresEnabled: boolean; mask: string;
+    /** The character that was linked before this load; Undo links it again. */
+    link?: CharacterLink | null;
   } | null = null;
   get canUndoCharacter(): boolean { return !!this.characterUndo; }
   private subscription!: Subscription;
@@ -728,7 +734,7 @@ export class OptionsComponent implements OnInit {
 
   async ngOnInit() {
     this.subscription = this.sharedService.getPrompt().subscribe(value => {
-      if (value !== this.generationRequest.prompt && !this.applyingCharacter) this.dismissCharacter();
+      if (value !== this.generationRequest.prompt && !this.applyingCharacter) this.dismissCharacter('prompt_load');
       this.generationRequest.prompt = value;
     });
 
@@ -758,7 +764,7 @@ export class OptionsComponent implements OnInit {
     // History and uploads must update the reference controls even while models load.
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
-        if (!this.applyingCharacter) this.dismissCharacter();
+        if (!this.applyingCharacter) this.dismissCharacter('reference');
         this.generationRequest.job_type = "img2img";
         // Only set image data if base64 is present; submitJob() will convert from blob if needed
         if (image.base64) {
@@ -814,7 +820,10 @@ export class OptionsComponent implements OnInit {
         // Rehydrate minimal request context if available
         if (pending.request) {
           if (pending.request.character_owner === this.sharedService.getUserDataValue()?.user_id && pending.request.character_id && pending.request.character_name) {
-            this.characters.activeCharacter.set({ id: pending.request.character_id, imageId: pending.request.character_look_id, name: pending.request.character_name });
+            this.characters.activeCharacter.set({
+              id: pending.request.character_id, imageId: pending.request.character_look_id, name: pending.request.character_name,
+              ...(pending.characterInserted ? { inserted: pending.characterInserted } : {}),
+            });
           }
           this.restorePendingRequest(pending.request);
           this.sharedService.setGenerationRequest(this.generationRequest);
@@ -851,6 +860,8 @@ export class OptionsComponent implements OnInit {
   }
 
   private applyCharacterHandoff(): void {
+    // takeImageHandoff() links the new character at once, so note who was linked before it.
+    const previousLink = this.characters.activeCharacter();
     const pending = this.characters.takeImageHandoff();
     if (!pending) return;
     if (this.hasPendingJob || localStorage.getItem(this.pendingJobKey)) {
@@ -866,13 +877,11 @@ export class OptionsComponent implements OnInit {
       this.messageService.add({ severity: 'error', summary: 'Saved model unavailable', detail: 'Your character setup was not loaded. Return to My Characters and choose another look.' });
       return;
     }
-    this.characterUndo = {
-      request: structuredClone(this.generationRequest),
-      referenceImage: this.referenceImage,
-      aspectRatio: { ...this.aspectRatio },
-      hiresEnabled: this.hiresEnabled,
-      mask: this.characterMask.getCurrentCanvasData(),
-    };
+    if (pending.mode === 'add' && !pending.image) {
+      this.addCharacterToPrompt(pending, previousLink, currentLoras);
+      return;
+    }
+    this.characterUndo = this.characterUndoSnapshot(previousLink);
     this.applyingCharacter = true;
     this.characterMask.clearCanvasData();
     this.sharedService.setReferenceImage(null);
@@ -894,16 +903,95 @@ export class OptionsComponent implements OnInit {
       this.changeAspectRatio(recipe.width > recipe.height ? 'landscape' : recipe.height > recipe.width ? 'portrait' : 'square');
     }
     if (pending.image) this.sharedService.setReferenceImage(pending.image);
-    this.characters.activeCharacter.set({ id: pending.characterId || '', imageId: pending.imageId || '', name: pending.name });
+    // The saved prompt is remembered (not the one-time extra details), so a later "add" swaps this character out.
+    this.characters.activeCharacter.set({
+      id: pending.characterId || '', imageId: pending.imageId || '', name: pending.name, inserted: insertableCharacterText(recipe.appearance),
+    });
     this.applyingCharacter = false;
-    this.characters.recordLoaded(pending.characterId || '', pending.imageId || '');
+    this.characters.recordLoaded(pending.characterId || '', pending.imageId || '', pending.source);
     this.updateSharedPrompt(); this.sharedService.setGenerationRequest(this.generationRequest);
     this.updateCreditCost(); this.saveSettings();
+  }
+
+  /** "Add to my prompt": the character's text goes in front of what is typed; regions, reference, seed and size stay. */
+  private addCharacterToPrompt(pending: CharacterHandoff, previousLink: CharacterLink | null, currentLoras: any[] | undefined): void {
+    const recipe = pending.recipe;
+    const typed = String(this.generationRequest.prompt ?? '');
+    // Repeated tags are only looked for in plain prompts: inside {a|b} a comma is not a tag boundary.
+    const merged = addCharacterText(typed, characterPrompt(recipe), previousLink?.inserted, !this.hasDynamicPromptSyntax(typed));
+    const dynamic = this.hasDynamicPromptSyntax(merged.prompt);
+    const limit = dynamic ? MAX_DYNAMIC_TEMPLATE_CHARS : MAX_PROMPT_CHARS;
+    if (merged.prompt.length > limit) {
+      this.characters.activeCharacter.set(previousLink);
+      this.messageService.add({
+        severity: 'warn', summary: 'Prompt would be too long', life: 9000,
+        detail: `With ${pending.name} added the prompt would be ${merged.prompt.length.toLocaleString()} characters; ${dynamic ? 'a prompt with dynamic parts' : 'a prompt'} can have ${limit.toLocaleString()}. Shorten your prompt, or choose “Replace my prompt”.`,
+      });
+      return;
+    }
+    this.characterUndo = this.characterUndoSnapshot(previousLink);
+    this.applyingCharacter = true;
+    const notes: string[] = [];
+    let loras = this.generationRequest.loras;
+    let guidance = this.generationRequest.guidance_scale;
+    if (recipe.model) {
+      if (recipe.model !== this.generationRequest.model) {
+        // The same steps as choosing the model by hand: regions notice, text-only handling, price.
+        this.changeModel(recipe.model);
+        guidance = recipe.guidance_scale;
+        notes.push(`Model switched to ${this.selectedModelSettings?.display_name || recipe.model}.`);
+      }
+      // The look's LoRAs first, then the ones already chosen; the LoRA panel keeps those made for the model.
+      const combined = [...recipe.loras, ...(currentLoras ?? []).filter((lora: any) => !recipe.loras.some(saved => sameLora(saved, lora)))];
+      const cap = this.selectedModelSettings?.max_loras ?? 3;
+      if (combined.length > cap) notes.push(`${combined.length - cap} of your LoRAs did not fit and ${combined.length - cap === 1 ? 'was' : 'were'} left out.`);
+      loras = this.snapshotLoras(combined.slice(0, cap));
+    }
+    if (merged.dropped) notes.push(`${merged.dropped} ${merged.dropped === 1 ? 'tag you already had was' : 'tags you already had were'} not repeated.`);
+    if (this.regionsShareMainPrompt) notes.push('Regions are on, so every box shares this prompt.');
+    if (dynamic && this.dynamicPromptLibraryState.loaded() && this.dynamicPromptLibraryState.hasUnknownWildcardToken(merged.inserted)) {
+      notes.push(`Your prompt has dynamic parts, and ${pending.name}’s text has a word between underscores that is not a wildcard. Replace those underscores with spaces, or the job will be refused.`);
+    }
+    const ownNegative = String(this.generationRequest.negative_prompt ?? '').trim();
+    this.generationRequest = {
+      ...this.generationRequest, prompt: merged.prompt, loras, guidance_scale: guidance,
+      negative_prompt: ownNegative ? this.generationRequest.negative_prompt : recipe.negative_prompt || this.generationRequest.negative_prompt,
+    };
+    this.applyDynamicPromptState(merged.prompt);
+    this.characters.activeCharacter.set({ id: pending.characterId || '', imageId: pending.imageId || '', name: pending.name, inserted: merged.inserted });
+    this.applyingCharacter = false;
+    this.characters.recordLoaded(pending.characterId || '', pending.imageId || '', pending.source);
+    this.messageService.add({
+      severity: 'success', life: notes.length ? 9000 : 4000,
+      summary: merged.swapped && previousLink ? `${pending.name} replaced ${previousLink.name} in your prompt` : `${pending.name} added to your prompt`,
+      detail: notes.join(' ') || 'Your own text follows it. Undo is under the character’s name.',
+    });
+    this.updateSharedPrompt(); this.sharedService.setGenerationRequest(this.generationRequest);
+    this.updateCreditCost(); this.saveSettings();
+  }
+
+  /** Regions are switched on with at least one box, so the main prompt reaches every box. */
+  get regionsShareMainPrompt(): boolean {
+    const status = this.regionalChipStatus;
+    return (status.kind === 'on' || status.kind === 'warning') && status.count > 0;
+  }
+
+  /** Everything a character load may change, taken just before it. */
+  private characterUndoSnapshot(link: CharacterLink | null) {
+    return {
+      request: structuredClone(this.generationRequest),
+      referenceImage: this.referenceImage,
+      aspectRatio: { ...this.aspectRatio },
+      hiresEnabled: this.hiresEnabled,
+      mask: this.characterMask.getCurrentCanvasData(),
+      link,
+    };
   }
 
   undoCharacter(): void {
     const previous = this.characterUndo;
     if (!previous || this.hasPendingJob || localStorage.getItem(this.pendingJobKey)) return;
+    const undone = this.characters.activeCharacter();
     this.applyingCharacter = true;
     // Reference-image subscribers adjust size and job type; restore the exact request afterwards.
     this.sharedService.setReferenceImage(previous.referenceImage || null);
@@ -914,14 +1002,23 @@ export class OptionsComponent implements OnInit {
     this.aspectRatioChange.emit(this.aspectRatio);
     this.hiresEnabled = previous.hiresEnabled;
     this.applyingCharacter = false;
-    this.dismissCharacter();
+    if (previous.link) {
+      // The character linked before this load is linked again; this load's own undo step is used up.
+      this.characterUndo = null;
+      this.characters.recordUnlinked('undo', undone);
+      this.characters.activeCharacter.set(previous.link);
+    } else {
+      this.dismissCharacter('undo');
+    }
     this.updateSharedPrompt();
     this.sharedService.setGenerationRequest(this.generationRequest);
     this.updateCreditCost();
     this.saveSettings();
   }
 
-  dismissCharacter(): void {
+  /** Drops the link. `reason` says why, for the usage record; leave it out when the account itself went away. */
+  dismissCharacter(reason?: CharacterUnlinkReason): void {
+    if (reason) this.characters.recordUnlinked(reason);
     this.characterUndo = null;
     this.characters.clearActiveCharacter();
     delete this.generationRequest.character_id; delete this.generationRequest.character_look_id;
@@ -1424,7 +1521,7 @@ export class OptionsComponent implements OnInit {
     if (!confirm('Are you sure you want to reset all saved options? This will clear your saved preferences.')) {
       return;
     }
-    this.dismissCharacter();
+    this.dismissCharacter('reset');
     localStorage.removeItem("prompt-input");
     localStorage.removeItem(this.negativePromptKey);
     localStorage.removeItem(this.legacyNegativePromptKey);
@@ -1873,7 +1970,7 @@ export class OptionsComponent implements OnInit {
             loras: this.snapshotLoras(requestToSend.loras),
             regional_prompting: this.withExpandedRegions(requestToSend.regional_prompting, response.regional?.expanded_regions),
             dynamic_prompting: requestToSend.dynamic_prompting,
-          });
+          }, response.character_id ? activeCharacter?.inserted : undefined);
 
           this.jobID = response.job_id;
           if (this.cancelInProgress) {
@@ -2751,11 +2848,11 @@ export class OptionsComponent implements OnInit {
     }
   }
 
-  private savePendingJob(job_id: string, request?: any) {
+  private savePendingJob(job_id: string, request?: any, characterInserted?: string) {
     this.historySaveDeferred = false;
     this.recoveryAttempts = 0;
     this.lastAutomaticRecoveryAt = 0;
-    this.persistPendingJob({ job_id, request, createdAt: Date.now() });
+    this.persistPendingJob({ job_id, request, createdAt: Date.now(), ...(characterInserted ? { characterInserted } : {}) });
   }
 
   private removePendingJob() {

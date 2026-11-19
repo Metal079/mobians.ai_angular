@@ -269,7 +269,7 @@ export class ImageEditorComponent {
   async editAgain() { if (this.result()) { await this.choose(this.result()!, 'base'); this.prompt = ''; this.comparison = 'before'; } }
   saveLook() {
     const image = this.result(); if (!image) return;
-    this.characters.requestSave({ ...image, prompt: this.context.recipe?.appearance || this.base()?.image.prompt || image.prompt }, this.context.characterId, this.context.recipe);
+    this.characters.requestSave({ ...image, prompt: this.context.recipe?.appearance || this.base()?.image.prompt || image.prompt }, this.context.characterId, this.context.recipe, 'editor');
   }
   download() { const image = this.result(); if (!image) return; const link = document.createElement('a'); link.href = image.url!; link.download = `${image.UUID}.png`; link.click(); }
   close() { if (!this.busy) { this.editor.close(); this.reset(); } }

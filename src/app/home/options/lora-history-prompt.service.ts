@@ -16,6 +16,7 @@ export class LoraHistoryPromptService {
   readonly requests$ = this.requestsSubject.asObservable();
 
   requestLoad(request: HistoryLoadRequest) {
+    this.characters.recordUnlinked('prompt_load');
     this.characters.clearActiveCharacter();
     this.requestsSubject.next(request);
   }

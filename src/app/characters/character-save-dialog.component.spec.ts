@@ -1,6 +1,6 @@
 ﻿import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { BehaviorSubject, Subject, of } from 'rxjs';
 import { CharacterSaveDialogComponent } from './character-save-dialog.component';
 import { CharactersService, recipeFromImage } from './characters.service';
@@ -19,7 +19,8 @@ describe('Saving a character', () => {
     user = new BehaviorSubject({ token: 'account' });
     service = { owner: 'account', saveRequests: new Subject(), saved: new Subject(),
       list: jasmine.createSpy().and.resolveTo({ characters: [] }), save: jasmine.createSpy().and.resolveTo({ id: 'character', image_id: 'new-look' }),
-      get: jasmine.createSpy(), useImage: jasmine.createSpy().and.resolveTo() };
+      get: jasmine.createSpy(), useImage: jasmine.createSpy().and.resolveTo(),
+      loadMode: jasmine.createSpy('loadMode').and.returnValue('add'), recordEvent: jasmine.createSpy('recordEvent') };
     sd = { getGenerationModels: jasmine.createSpy().and.returnValue(of({ models: [{ model_id: 'novaMobianXL_v20', is_active: true }] })), getLoras: () => of([]) };
     await TestBed.configureTestingModule({ imports: [CharacterSaveDialogComponent], providers: [
       provideRouter([]), provideNoopAnimations(),
@@ -155,7 +156,33 @@ describe('Saving a character', () => {
     const newLook = { ...oldLook, id: 'new-look' };
     const character = { id: 'character', name: 'Amy', images: [oldLook, newLook] };
     service.get.and.resolveTo(character); await component.save(); await component.createFromSaved();
-    expect(service.useImage).toHaveBeenCalledWith(character, newLook, 'create'); expect(component.visible()).toBeFalse();
+    // The test router sits on the generator page, where the picker's remembered choice applies.
+    expect(service.useImage).toHaveBeenCalledWith(character, newLook, 'create', { mode: 'add', source: 'save_dialog_add' }); expect(component.visible()).toBeFalse();
+  });
+
+  it('opens the whole saved setup when the success action is used away from the generator', async () => {
+    spyOnProperty(TestBed.inject(Router), 'url').and.returnValue('/characters/character?look=new-look');
+    const look = { id: 'new-look', recipe: recipeFromImage(image), thumbnail: '', created_at: '' };
+    const character = { id: 'character', name: 'Amy', images: [look] };
+    service.get.and.resolveTo(character); await component.save(); await component.createFromSaved();
+    expect(service.useImage).toHaveBeenCalledWith(character, look, 'create', { mode: 'replace', source: 'save_dialog_replace' });
+    expect(service.loadMode).not.toHaveBeenCalled();
+  });
+
+  it('follows a remembered "replace" choice on the generator page', async () => {
+    service.loadMode.and.returnValue('replace');
+    const look = { id: 'new-look', recipe: recipeFromImage(image), thumbnail: '', created_at: '' };
+    service.get.and.resolveTo({ id: 'character', name: 'Amy', images: [look] }); await component.save(); await component.createFromSaved();
+    expect(service.useImage.calls.mostRecent().args[3]).toEqual({ mode: 'replace', source: 'save_dialog_replace' });
+  });
+
+  it('records that the dialog opened and sends where the save started with the save', async () => {
+    expect(service.recordEvent).toHaveBeenCalledOnceWith('save_opened', undefined);
+    service.recordEvent.calls.reset();
+    await component.open(image, undefined, undefined, 'enlarged_result'); component.name = 'Amy Rose';
+    expect(service.recordEvent).toHaveBeenCalledOnceWith('save_opened', 'enlarged_result');
+    await component.save();
+    expect(service.save.calls.mostRecent().args[6]).toBe('enlarged_result');
   });
 
   it('keeps the saved result available if opening the generator fails', async () => {
