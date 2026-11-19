@@ -1263,6 +1263,23 @@ describe('OptionsComponent', () => {
       expect(characters.recordUnlinked).not.toHaveBeenCalled();
     });
 
+    it('stays when a picture made with that character is enlarged, and goes when another picture becomes the reference', async () => {
+      const characters = TestBed.inject(CharactersService) as any;
+      const shared = TestBed.inject(SharedService) as any;
+      await component.ngOnInit();
+      shared.images = [{ UUID: 'made-with-amy', characterId: 'amy' }, { UUID: 'made-without', characterId: undefined }];
+      characters.activeCharacter.set({ id: 'amy', imageId: 'amy-look', name: 'Amy' });
+
+      shared.referenceImage.next({ UUID: 'made-with-amy', aspectRatio: 'square' });
+      expect(characters.activeCharacter()?.id).toBe('amy');
+      expect(characters.recordUnlinked).not.toHaveBeenCalled();
+      expect(component.generationRequest.job_type).toBe('img2img');
+
+      shared.referenceImage.next({ UUID: 'made-without', aspectRatio: 'square' });
+      expect(characters.activeCharacter()).toBeNull();
+      expect(characters.recordUnlinked).toHaveBeenCalledOnceWith('reference');
+    });
+
     it('goes when an uploaded picture becomes the reference', async () => {
       const characters = TestBed.inject(CharactersService) as any;
       const shared = TestBed.inject(SharedService) as any;

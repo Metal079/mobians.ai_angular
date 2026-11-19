@@ -772,7 +772,8 @@ export class OptionsComponent implements OnInit {
     // History and uploads must update the reference controls even while models load.
     this.referenceImageSubscription = this.sharedService.getReferenceImage().subscribe(image => {
       if (image) {
-        if (!this.applyingCharacter) this.dismissCharacter('reference');
+        // Enlarging a picture made with the linked character is still work with that character.
+        if (!this.applyingCharacter && !this.isLinkedCharacterResult(image)) this.dismissCharacter('reference');
         this.generationRequest.job_type = "img2img";
         // Only set image data if base64 is present; submitJob() will convert from blob if needed
         if (image.base64) {
@@ -994,6 +995,12 @@ export class OptionsComponent implements OnInit {
       mask: this.characterMask.getCurrentCanvasData(),
       link,
     };
+  }
+
+  /** A picture from the current results that was made with the linked character (enlarging one keeps the link). */
+  private isLinkedCharacterResult(image: MobiansImage): boolean {
+    const link = this.characters.activeCharacter();
+    return !!link?.id && this.sharedService.getImagesValue().some(result => result.UUID === image.UUID && result.characterId === link.id);
   }
 
   undoCharacter(): void {
