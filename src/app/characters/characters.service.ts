@@ -36,7 +36,7 @@ export interface CharacterDetail {
 export type CharacterLoadMode = 'add' | 'replace';
 /** Where a load, a save or a picker opening started. Recorded with the usage event; the server keeps only known values. */
 export type CharacterLoadSource = 'generator_add' | 'generator_replace' | 'save_dialog_add' | 'save_dialog_replace' | 'character_page' | 'reference' | 'region';
-export type CharacterSaveSource = 'enlarged_result' | 'enlarged_history' | 'history' | 'characters_page' | 'editor';
+export type CharacterSaveSource = 'enlarged_result' | 'enlarged_history' | 'result_tile' | 'history' | 'characters_page' | 'editor';
 export type CharacterUnlinkReason = 'undo' | 'manual' | 'reference' | 'prompt_load' | 'reset';
 export type CharacterClientEvent = 'picker_opened' | 'save_opened' | 'animate_handoff' | 'unlinked';
 export interface CharacterLink {

@@ -31,6 +31,7 @@ import {
   restoreRegionalConfig,
 } from './regional-editor/regional-state';
 import { ImageHistoryPanelComponent } from './image-history-panel/image-history-panel.component';
+import { ResultImageActionsService } from '../image-grid/result-image-actions.service';
 import { GenerationOptionsPanelComponent } from './generation-options-panel/generation-options-panel.component';
 import { LorasPanelComponent } from './loras-panel/loras-panel.component';
 import { DynamicPromptApplyEvent, DynamicPromptHelperComponent } from './dynamic-prompt-helper/dynamic-prompt-helper.component';
@@ -94,6 +95,7 @@ export class OptionsComponent implements OnInit {
   private readonly historyDiagnostics = inject(HistoryDiagnosticsService);
   private readonly characters = inject(CharactersService);
   private readonly characterMask = inject(InpaintingMaskService);
+  private readonly resultImageActions = inject(ResultImageActionsService);
   get loadedCharacterName(): string { return this.characters.activeCharacter()?.name || ''; }
   private applyingCharacter = false;
   private readonly characterEffect = effect(() => { if (!this.characters.activeCharacter()) this.characterUndo = null; });
@@ -1551,6 +1553,7 @@ export class OptionsComponent implements OnInit {
     localStorage.removeItem('mobians:lora-sort');
     localStorage.removeItem('mobians:lora-favorites-only');
     localStorage.removeItem('lossy-images');
+    this.resultImageActions.reset();
     // Notifications are not reset here: they belong to the Account panel, and the browser id
     // ('notifications-user-id') is what finds this browser's finished jobs and first visit.
     localStorage.removeItem('hires-enabled');
@@ -2655,6 +2658,15 @@ export class OptionsComponent implements OnInit {
 
   async deleteAllImages() {
     await this.historyPanel?.deleteAllImages();
+  }
+
+  /** The favorite star on a result tile (image grid). History owns favorites, so it makes the change. */
+  async toggleResultFavorite(image: MobiansImage): Promise<void> {
+    const favorite = await this.historyPanel?.toggleFavoriteByUuid(image.UUID);
+    if (favorite == null) {
+      this.messageService.add({ severity: 'warn', summary: 'Not in your history',
+        detail: 'Only images saved to your history can be favorited.', life: 5000 });
+    }
   }
 
   async downloadAllImages() {

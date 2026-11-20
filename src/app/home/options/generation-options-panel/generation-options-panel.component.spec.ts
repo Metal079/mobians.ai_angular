@@ -67,6 +67,25 @@ describe('GenerationOptionsPanelComponent', () => {
     expect(saved).toEqual([0, null]);
   });
 
+  it('lets the visitor choose the buttons on their images', async () => {
+    const key = 'mobians:result-image-buttons:v1';
+    try {
+      const box = (id: string) => fixture.nativeElement.querySelector('#resultButton-' + id) as HTMLInputElement;
+      await fixture.whenStable();
+      expect(['favorite', 'character', 'edit', 'video', 'download'].map(id => box(id).checked))
+        .toEqual([false, false, false, true, true]);
+
+      box('favorite').click();
+      box('video').click();
+      fixture.detectChanges(); await fixture.whenStable();
+
+      expect(component.resultImageActions.enabled()).toEqual({ favorite: true, character: false, edit: false, video: false, download: true });
+      expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ favorite: true, video: false });
+    } finally {
+      component.resultImageActions.reset();
+    }
+  });
+
   // Regional prompting lives only in the full-screen dialog (appended to body), opened by the Regions button beside
   // the prompt; the Options panel has no inline copy (owner request 2026-11-18).
   const openRegions = async () => {

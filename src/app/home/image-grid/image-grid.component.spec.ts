@@ -7,6 +7,7 @@ import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { SharedService } from 'src/app/shared.service';
 
 import { ImageGridComponent } from './image-grid.component';
+import { ResultImageActionsService } from './result-image-actions.service';
 import { VideoHandoffService } from 'src/app/video/video-handoff.service';
 
 describe('ImageGridComponent', () => {
@@ -31,8 +32,11 @@ describe('ImageGridComponent', () => {
     };
 
     blobMigrationServiceStub = {
-      convertWebPToPNG: async (blob: Blob) => blob
+      convertWebPToPNG: async (blob: Blob) => blob,
+      embedPngTextMetadata: async (blob: Blob) => blob
     };
+    // The visitor's button choice is kept in this browser; every test starts from the defaults.
+    localStorage.removeItem('mobians:result-image-buttons:v1');
 
     await TestBed.configureTestingModule({
       imports: [ImageGridComponent],
@@ -212,10 +216,90 @@ describe('ImageGridComponent', () => {
     });
   });
 
-  it('offers Download only when history cannot keep the images', () => {
-    expect(component.showDownload).toBeFalse();
-    component.rescueDownload = true;
-    expect(component.showDownload).toBeTrue();
+  describe('the buttons on a result tile', () => {
+    const tile = { UUID: 'job-1-0', prompt: 'blue fox, red scarf', model: 'novaMobianXL_v20', seed: 7, characterId: 'ash',
+      blob: new Blob(['result'], { type: 'image/webp' }), width: 512, height: 768 } as any;
+    const actions = () => TestBed.inject(ResultImageActionsService);
+
+    it('shows Download and Make a video by default', () => {
+      expect(component.showDownload).toBeTrue();
+      expect(component.showVideo).toBeTrue();
+      expect(component.showFavorite).toBeFalse();
+      expect(component.showEdit).toBeFalse();
+      expect(component.showSaveCharacter(tile)).toBeFalse();
+      expect(component.tileActionCount(tile)).toBe(2);
+    });
+
+    it('shows only the buttons the visitor switched on', () => {
+      actions().set('video', false);
+      actions().set('download', false);
+      expect(component.tileActionCount(tile)).toBe(0);
+
+      actions().set('favorite', true);
+      actions().set('character', true);
+      actions().set('edit', true);
+      expect(component.showFavorite).toBeTrue();
+      expect(component.showSaveCharacter(tile)).toBeTrue();
+      // The editor is not available in this test, so its button stays away.
+      expect(component.showEdit).toBeFalse();
+      expect(component.tileActionCount(tile)).toBe(2);
+    });
+
+    it('keeps Download while history cannot keep the images, and offers no favorite for them', () => {
+      actions().set('download', false);
+      actions().set('favorite', true);
+      expect(component.showDownload).toBeFalse();
+      component.rescueDownload = true;
+      expect(component.showDownload).toBeTrue();
+      expect(component.showFavorite).toBeFalse();
+    });
+
+    it('offers Save as a character only for an image with a prompt and a file', () => {
+      actions().set('character', true);
+      expect(component.showSaveCharacter({ ...tile, prompt: '  ' })).toBeFalse();
+      expect(component.showSaveCharacter({ ...tile, blob: undefined })).toBeFalse();
+      const requestSave = (TestBed.inject(CharactersService) as any).requestSave as jasmine.Spy;
+      component.saveTileAsCharacter(tile, new Event('click'));
+      expect(requestSave).toHaveBeenCalledOnceWith(tile, 'ash', undefined, 'result_tile');
+    });
+
+    it('asks history to change a favorite without enlarging the image', () => {
+      const asked = spyOn(component.favoriteToggle, 'emit');
+      const click = new Event('click', { cancelable: true });
+      const stop = spyOn(click, 'stopPropagation');
+      component.toggleFavorite(tile, click);
+      expect(stop).toHaveBeenCalled();
+      expect(asked).toHaveBeenCalledOnceWith(tile);
+    });
+
+    it('reads the favorite star from the shared result, not from an older copy on the tile', () => {
+      expect(component.isFavorite(tile)).toBeFalse();
+      sharedServiceStub.getImagesValue = () => [{ ...tile, favorite: true }];
+      expect(component.isFavorite(tile)).toBeTrue();
+    });
+
+    it('opens the editor with the file a download would give', async () => {
+      const open = (TestBed.inject(ImageEditorService) as any).open as jasmine.Spy;
+      const png = new Blob(['png'], { type: 'image/png' });
+      sharedServiceStub.getGenerationRequestValue.and.returnValue({ lossy_images: false });
+      spyOn(blobMigrationServiceStub, 'convertWebPToPNG').and.resolveTo(png);
+      await component.editTileWithAI(tile, new Event('click'));
+      expect(open).toHaveBeenCalledOnceWith({ image: jasmine.objectContaining({ UUID: 'job-1-0', blob: png }) });
+    });
+
+    it('writes the prompt and settings into a downloaded PNG', async () => {
+      const png = new Blob(['png'], { type: 'image/png' });
+      sharedServiceStub.getGenerationRequestValue.and.returnValue({ lossy_images: false });
+      spyOn(blobMigrationServiceStub, 'convertWebPToPNG').and.resolveTo(png);
+      const embed = spyOn(blobMigrationServiceStub, 'embedPngTextMetadata').and.callThrough();
+      spyOn(HTMLAnchorElement.prototype, 'click');
+
+      await component.downloadImage(tile, new Event('click'));
+
+      expect(embed).toHaveBeenCalledOnceWith(png, jasmine.objectContaining({
+        prompt: 'blue fox, red scarf', seed: '7', model: 'Mobians.ai / novaMobianXL_v20',
+      }));
+    });
   });
 
   it('shows the results again when the enlarged image is removed from outside the grid', () => {

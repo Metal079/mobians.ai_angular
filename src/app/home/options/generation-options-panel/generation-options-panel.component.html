@@ -72,6 +72,24 @@
       </div>
     </div>
 
+    <!-- Which shortcut buttons sit on the generated images (image grid). Saved in this browser. -->
+    <div class="result-image-buttons mb-3" role="group" aria-labelledby="resultImageButtonsLabel">
+      <span id="resultImageButtonsLabel" class="result-image-buttons-label">Buttons on your images
+        <app-hint text="Choose which shortcut buttons appear on the images you generate. Your choice is saved in this browser."></app-hint>
+      </span>
+      <div class="result-image-buttons-list">
+        @for (action of resultImageActionOptions; track action.id) {
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" [id]="'resultButton-' + action.id"
+              [ngModel]="resultImageActions.isOn(action.id)" (ngModelChange)="resultImageActions.set(action.id, $event)">
+            <label class="form-check-label" [for]="'resultButton-' + action.id">
+              <i class="bi" [ngClass]="action.icon" aria-hidden="true"></i> {{ action.label }}
+            </label>
+          </div>
+        }
+      </div>
+    </div>
+
     <!-- Negative Prompt -->
     @if (selectedModel?.supports_negative_prompt !== false) {
     <div class="mb-3">

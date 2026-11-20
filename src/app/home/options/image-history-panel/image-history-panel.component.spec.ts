@@ -7,6 +7,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AuthService } from 'src/app/auth/auth.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
+import { buildImageMetadata } from 'src/app/image-metadata';
 import { ImageSyncService } from 'src/app/image-sync.service';
 import { SharedService } from 'src/app/shared.service';
 import { ImageTag, MobiansImage } from 'src/_shared/mobians-image.interface';
@@ -33,8 +34,10 @@ class BlobMigrationServiceStub {
 }
 
 class SharedServiceStub {
+  results: MobiansImage[] = [];
   setReferenceImage() {}
   setPrompt() {}
+  getImagesValue() { return this.results; }
 }
 
 class AuthServiceStub {
@@ -838,7 +841,7 @@ describe('ImageHistoryPanelComponent', () => {
       await component.searchImages();
       expect(component.currentPageImages[0].editProvenance).toEqual(provenance);
       expect(migration.convertToWebP).not.toHaveBeenCalled();
-      expect(JSON.parse((component as any).buildImageMetadataDict(component.currentPageImages[0]).edit_provenance)).toEqual(provenance);
+      expect(JSON.parse(buildImageMetadata(component.currentPageImages[0])['edit_provenance'])).toEqual(provenance);
     } finally {
       db.close();
       await new Promise<void>((resolve, reject) => {
@@ -926,6 +929,58 @@ describe('ImageHistoryPanelComponent', () => {
 
     expect(component.imageHistoryMetadata[0].favorite).toBeFalse();
     expect(component.favoritePageImages[0].favorite).toBeFalse();
+  });
+
+  describe('favoriting a result tile from the image grid', () => {
+    beforeEach(() => {
+      spyOn(component, 'updateFavoriteImages').and.resolveTo();
+      spyOn(component, 'updateTagCounts').and.resolveTo();
+      authService.isLoggedIn.and.returnValue(false);
+    });
+
+    it('changes the saved copy, so tags added since the result was made are kept', async () => {
+      const tag = 'tag-keepers';
+      const saved = createImage({ UUID: 'job-1-0', favorite: false, tags: [tag] });
+      const result = createImage({ UUID: 'job-1-0', favorite: false });
+      (TestBed.inject(SharedService) as unknown as SharedServiceStub).results = [result];
+      spyOn(component as any, 'getLocalImage').and.resolveTo(saved);
+      const write = spyOn(component as any, 'updateImageInDB').and.resolveTo(true);
+
+      expect(await component.toggleFavoriteByUuid('job-1-0')).toBeTrue();
+
+      expect(write).toHaveBeenCalledOnceWith(saved);
+      expect(saved.tags).toEqual([tag]);
+      // The tile's star follows.
+      expect(result.favorite).toBeTrue();
+    });
+
+    it('uses the copy already on screen in history', async () => {
+      const shown = createImage({ UUID: 'job-1-1', favorite: true });
+      component.currentPageImages = [shown];
+      const read = spyOn(component as any, 'getLocalImage');
+      spyOn(component as any, 'updateImageInDB').and.resolveTo(true);
+
+      expect(await component.toggleFavoriteByUuid('job-1-1')).toBeFalse();
+      expect(shown.favorite).toBeFalse();
+      expect(read).not.toHaveBeenCalled();
+    });
+
+    it('reports an image that history does not have', async () => {
+      spyOn(component as any, 'getLocalImage').and.resolveTo(null);
+      const write = spyOn(component as any, 'updateImageInDB');
+      expect(await component.toggleFavoriteByUuid('never-saved')).toBeNull();
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it('takes the star back off the tile when the favorite cannot be saved', async () => {
+      const result = createImage({ UUID: 'job-1-2', favorite: false });
+      (TestBed.inject(SharedService) as unknown as SharedServiceStub).results = [result];
+      spyOn(component as any, 'getLocalImage').and.resolveTo(createImage({ UUID: 'job-1-2', favorite: false }));
+      spyOn(component as any, 'updateImageInDB').and.resolveTo(false);
+
+      expect(await component.toggleFavoriteByUuid('job-1-2')).toBeFalse();
+      expect(result.favorite).toBeFalse();
+    });
   });
 
   it('merges local and cloud history by UUID and keeps local changes', async () => {

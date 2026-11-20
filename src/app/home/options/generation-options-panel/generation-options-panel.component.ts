@@ -13,6 +13,7 @@ import { AprilFoolsService } from 'src/app/april-fools.service';
 import { RegionalEditorComponent } from '../regional-editor/regional-editor.component';
 import { RegionalEditorService } from '../regional-editor/regional-editor.service';
 import { normaliseRegionalConfig } from '../regional-editor/regional-state';
+import { RESULT_IMAGE_ACTIONS, ResultImageActionsService } from '../../image-grid/result-image-actions.service';
 
 type PanelTheme = 'sonic' | 'navy' | '606' | 'eggman';
 
@@ -44,6 +45,10 @@ export class GenerationOptionsPanelComponent {
   @Output() panelThemeChange = new EventEmitter<PanelTheme>();
   @Input() darkInputFields = false;
   @Output() darkInputFieldsChange = new EventEmitter<boolean>();
+
+  /** "Buttons on your images": the choice is the service's, which the image grid reads too. */
+  readonly resultImageActions = inject(ResultImageActionsService);
+  readonly resultImageActionOptions = RESULT_IMAGE_ACTIONS;
 
   @Input() currentSeed?: number;
 

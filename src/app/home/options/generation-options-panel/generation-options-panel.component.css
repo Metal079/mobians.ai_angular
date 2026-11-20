@@ -121,6 +121,22 @@
   color: var(--theme-input-text);
 }
 
+/* "Buttons on your images": a row of checkboxes that wraps onto more lines on a phone. */
+.result-image-buttons-label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.result-image-buttons-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+
+.result-image-buttons-list .form-check {
+  margin: 0;
+}
+
 .history-maintenance-actions {
   margin-top: 0.5rem;
   display: flex;

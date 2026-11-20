@@ -16,6 +16,7 @@ import { DynamicPromptLibraryStateService } from 'src/app/dynamic-prompt-library
 import { HistoryDiagnosticsService } from 'src/app/history-diagnostics.service';
 
 import { OptionsComponent } from './options.component';
+import { ResultImageActionsService } from '../image-grid/result-image-actions.service';
 import { RegionalLoraCatalogService } from './regional-editor/regional-lora-catalog.service';
 import { IMAGE_EDIT_MODEL, ImageEditorService } from 'src/app/image-editor/image-editor.service';
 
@@ -1569,6 +1570,32 @@ describe('OptionsComponent', () => {
     await component.loadSettings();
     expect(component.generationRequest.seed).toBeUndefined();
     expect(JSON.parse(localStorage.getItem(seedPreferenceKey)!)).toEqual({ seed: null });
+  });
+
+  it('puts the default buttons back on result images when resetting saved options', async () => {
+    const buttons = TestBed.inject(ResultImageActionsService);
+    buttons.set('download', false);
+    buttons.set('favorite', true);
+    await component.loadSettings();
+    spyOn(window, 'confirm').and.returnValue(true);
+    component.resetSessionStorage();
+    expect(buttons.enabled()).toEqual({ favorite: false, character: false, edit: false, video: true, download: true });
+    expect(localStorage.getItem('mobians:result-image-buttons:v1')).toBeNull();
+  });
+
+  it('asks history to favorite a result tile, and says so when history does not have the image', async () => {
+    const image = { UUID: 'job-1-0' } as MobiansImage;
+    const toggle = jasmine.createSpy('toggleFavoriteByUuid').and.resolveTo(true);
+    component.historyPanel = { toggleFavoriteByUuid: toggle } as any;
+    const message = spyOn(TestBed.inject(MessageService), 'add');
+
+    await component.toggleResultFavorite(image);
+    expect(toggle).toHaveBeenCalledOnceWith('job-1-0');
+    expect(message).not.toHaveBeenCalled();
+
+    toggle.and.resolveTo(null);
+    await component.toggleResultFavorite(image);
+    expect(message).toHaveBeenCalledOnceWith(jasmine.objectContaining({ summary: 'Not in your history' }));
   });
 
   it('retains the seed migration when resetting saved options', async () => {

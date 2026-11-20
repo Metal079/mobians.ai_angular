@@ -9,6 +9,8 @@ import { SharedService } from 'src/app/shared.service';
 import { Subscription } from 'rxjs';
 import { InpaintingMaskService } from 'src/app/inpainting-mask.service';
 import { BlobMigrationService } from 'src/app/blob-migration.service';
+import { buildImageMetadata } from 'src/app/image-metadata';
+import { ResultImageActionsService } from './result-image-actions.service';
 import { AprilFoolsService } from 'src/app/april-fools.service';
 import { RingGameComponent } from './ring-game/ring-game.component';
 import { RingLeaderboardComponent } from './ring-leaderboard/ring-leaderboard.component';
@@ -55,9 +57,51 @@ export class ImageGridComponent implements OnDestroy {
     this.characters.requestSave(target.image, target.image.characterId, undefined, target.source);
   }
 
+  // --- Buttons on the result tiles. The visitor picks which ones show: Options > "Buttons on your images". ---
+  private readonly resultActions = inject(ResultImageActionsService);
   /** History cannot keep these images (unsupported browser, or a failed save), so downloading is the way to keep them. */
   @Input() rescueDownload = false;
-  get showDownload(): boolean { return this.rescueDownload || !supportsLocalHistory(); }
+  /** Favorites belong to the history panel, so the grid only asks for the change. */
+  @Output() favoriteToggle = new EventEmitter<MobiansImage>();
+
+  /** Download cannot be switched off while it is the only way to keep the images. */
+  get showDownload(): boolean { return this.resultActions.isOn('download') || this.rescueDownload || !supportsLocalHistory(); }
+  get showVideo(): boolean { return this.resultActions.isOn('video'); }
+  get showEdit(): boolean { return this.resultActions.isOn('edit') && this.imageEditor.available(); }
+  /** A favorite is a saved history image: nothing to favorite while history does not have it. */
+  get showFavorite(): boolean { return this.resultActions.isOn('favorite') && !this.rescueDownload && supportsLocalHistory(); }
+  /** Same rule as the enlarged image: a character needs the prompt and the file. */
+  showSaveCharacter(image: MobiansImage): boolean {
+    return this.resultActions.isOn('character') && !!image.prompt?.trim() && !!image.blob;
+  }
+  /** How many buttons this tile shows. The stylesheet uses it to shrink them on a narrow tile. */
+  tileActionCount(image: MobiansImage): number {
+    return [this.showFavorite, this.showSaveCharacter(image), this.showEdit, this.showVideo, this.showDownload].filter(Boolean).length;
+  }
+
+  /** Looked up by id: the shared results are copied whenever the list changes, so a tile may hold an older copy. */
+  isFavorite(image: MobiansImage): boolean {
+    return !!(this.sharedService.getImagesValue().find(result => result.UUID === image.UUID) ?? image).favorite;
+  }
+
+  toggleFavorite(image: MobiansImage, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.favoriteToggle.emit(image);
+  }
+
+  saveTileAsCharacter(image: MobiansImage, event: Event): void {
+    this.saveCharacter({ image, source: 'result_tile' }, event);
+  }
+
+  /** The editor gets the same file a download would, as it does from the history menu. */
+  async editTileWithAI(image: MobiansImage, event: Event): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    const blob = await this.getDownloadBlob(image);
+    if (blob) this.imageEditor.open({ image: { ...image, blob } });
+  }
+
   @ViewChild('imageCanvas') imageCanvas!: ElementRef<HTMLCanvasElement>;
   showImages: boolean[] = [];
   imagesIDs: string[] = [];
@@ -485,8 +529,10 @@ export class ImageGridComponent implements OnDestroy {
       event.stopPropagation();
     }
 
-    const blob = await this.getDownloadBlob(image);
+    let blob = await this.getDownloadBlob(image);
     if (!blob) return;
+    // Converting to PNG drops the text chunks, so the prompt and settings are written back, as history downloads do.
+    blob = await this.blobMigrationService.embedPngTextMetadata(blob, buildImageMetadata(image));
 
     const filename = this.buildDownloadFilename(image, blob.type);
     const url = URL.createObjectURL(blob);

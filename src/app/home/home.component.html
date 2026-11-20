@@ -26,6 +26,7 @@
       [etaSeconds]="etaSeconds"
       [rescueDownload]="historyRecoveryPending"
       (inpaint_mask)="onInpaintMaskChange($event)"
+      (favoriteToggle)="options.toggleResultFavorite($event)"
       (imageExpandedChange)="onImageExpandedChange($event)"
       (ringsToSubmit)="onRingsToSubmit($event)"
     ></app-image-grid>
@@ -33,7 +34,7 @@
       <app-signup-nudge variant="result"></app-signup-nudge>
     }
   </div>
-  <app-options
+  <app-options #options
     (imagesChange)="onImagesChange($event)"
     (loadingChange)="onShowLoadingChange($event)"
     (aspectRatioChange)="onAspectRatioChange($event)"
